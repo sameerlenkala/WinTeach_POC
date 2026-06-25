@@ -1,0 +1,616 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================================
+   WINNIFY DESIGN SYSTEM  — v3 (matches Standalone v3 prototype spec)
+
+   Light mode:
+     Canvas    #EFEEFC  lavender
+     Cards     #FFFFFF  white
+     Sidebar   #FFFFFF  white (only active nav item is violet-filled)
+     Brand     #6C5CE7  brand-bright (filled buttons / active nav)
+
+   Dark mode:
+     Canvas    #1D2127  charcoal
+     Cards     #252830
+     Brand     #F6A623  orange
+
+   Fonts: Fredoka (display/headings/nav/buttons) · DM Sans (body)
+   ============================================================================ */
+
+/* ── Tailwind @theme ──────────────────────────────────────────────────────── */
+@theme {
+  --font-display: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    'DM Sans',  ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-heading: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+
+  /* Tailwind color utilities */
+  --color-background:          #EFEEFC;
+  --color-foreground:          #1A1A22;
+  --color-card:                #FFFFFF;
+  --color-card-foreground:     #1A1A22;
+  --color-border:              #E6E5F0;
+  --color-input:               #F1F2F7;
+  --color-ring:                #6C5CE7;
+  --color-primary:             #6C5CE7;
+  --color-primary-foreground:  #FFFFFF;
+  --color-secondary:           #F1F2F7;
+  --color-secondary-foreground:#1A1A22;
+  --color-muted:               #F1F2F7;
+  --color-muted-foreground:    rgba(26,26,34,0.55);
+  --color-accent:              #F2F1FC;
+  --color-accent-foreground:   #1A1A22;
+  --color-destructive:         #DC2133;
+  --color-destructive-foreground:#FFFFFF;
+  --color-popover:             #FFFFFF;
+  --color-popover-foreground:  #1A1A22;
+
+  /* Brand & status colors for Tailwind utilities */
+  --color-w-purple:   #5B4BDB;
+  --color-w-blue:     #49A9BE;
+  --color-w-green:    #3DA35D;
+  --color-w-orange:   #F6A623;
+  --color-w-amber:    #E4853B;
+  --color-w-red:      #DC2133;
+  --color-w-pink:     #D9446C;
+  --color-w-indigo:   #4C44AF;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(60,50,140,0.12);
+  --shadow-pop:  0 12px 32px -8px rgba(60,50,140,0.22);
+}
+
+/* ── Design-system CSS custom properties ─────────────────────────────────── */
+:root {
+  /* Fonts */
+  --font-display: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    'DM Sans',  ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Brand */
+  --brand:          #6C5CE7;          /* brand-bright — buttons, active nav */
+  --brand-base:     #5B4BDB;          /* core brand violet */
+  --brand-fg:       #FFFFFF;
+  --brand-hover:    color-mix(in oklab, #6C5CE7 88%, black);
+  --brand-pressed:  color-mix(in oklab, #6C5CE7 82%, black);
+  --wordmark:       #F6A623;          /* always orange — logo only */
+
+  /* Canvas & surfaces */
+  --app-bg:         #EFEEFC;          /* lavender canvas */
+  --app-bg-grad:    linear-gradient(135deg, #E9E7FB, #F6F5FF, #FBFAFF);
+  --card:           #FFFFFF;
+  --sidebar-bg:     #FFFFFF;          /* sidebar is WHITE */
+  --surface-muted:  #F1F2F7;
+  --college-pill:   #E5E2FB;
+  --streak-bg:      #FBE7DA;
+
+  /* Text */
+  --text:           #1A1A22;
+  --text-2:         rgba(26,26,34,0.66);
+  --text-3:         rgba(26,26,34,0.45);
+  --text-muted:     rgba(26,26,34,0.60);
+  --text-subtle:    rgba(26,26,34,0.45);
+  --text-inverse:   #FFFFFF;
+  --nav-fg:         #4B4B57;          /* inactive nav label + icon */
+
+  /* Borders & interaction */
+  --border:         #E6E5F0;
+  --border-strong:  #D8D7E6;
+  --input-bg:       #F1F2F7;
+  --input-fg:       #1A1A22;
+  --input-ph:       rgba(26,26,34,0.45);
+  --nav-hover:      #F2F1FC;
+  --row-hover:      #F4F3FD;
+  --ring:           #6C5CE7;
+
+  /* Status palette */
+  --status-green:   #3DA35D;   --status-green-bg:  #E5F4E9;
+  --status-orange:  #E4853B;   --status-orange-bg: rgba(228,133,59,0.14);
+  --status-info:    #49A9BE;   --status-info-bg:   rgba(73,169,190,0.14);
+  --status-red:     #DC2133;   --status-red-bg:    rgba(220,33,51,0.12);
+  --status-pink:    #D9446C;   --status-pink-bg:   rgba(217,68,108,0.14);
+  --status-blue:    #2563EB;   --status-blue-bg:   rgba(37,99,235,0.12);
+
+  /* Radius scale */
+  --w-r2: 4px;
+  --w-r3: 8px;
+  --w-r4: 12px;
+  --w-r5: 20px;
+  --w-r6: 48px;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(60,50,140,0.12);
+  --shadow-pop:  0 12px 32px -8px rgba(60,50,140,0.22);
+}
+
+/* ── Dark mode overrides ──────────────────────────────────────────────────── */
+.dark {
+  color-scheme: dark;
+
+  /* Tailwind layer */
+  --color-background:         #1D2127;
+  --color-foreground:         #EEEEF6;
+  --color-card:               #252830;
+  --color-card-foreground:    #EEEEF6;
+  --color-border:             rgba(255,255,255,0.10);
+  --color-input:              #2E3340;
+  --color-ring:               #F6A623;
+  --color-primary:            #F6A623;
+  --color-primary-foreground: #121212;
+  --color-secondary:          #2E3340;
+  --color-secondary-foreground:#EEEEF6;
+  --color-muted:              #2E3340;
+  --color-muted-foreground:   rgba(255,255,255,0.50);
+  --color-accent:             #2E3340;
+  --color-accent-foreground:  #EEEEF6;
+  --color-destructive:        #DC2133;
+  --color-destructive-foreground:#FFFFFF;
+  --color-popover:            #252830;
+  --color-popover-foreground: #EEEEF6;
+
+  /* Custom properties */
+  --brand:         #F6A623;
+  --brand-base:    #F6A623;
+  --brand-fg:      #121212;
+  --brand-hover:   color-mix(in oklab, #F6A623 90%, white);
+  --brand-pressed: color-mix(in oklab, #F6A623 80%, black);
+  --wordmark:      #F6A623;
+
+  --app-bg:        #1D2127;
+  --app-bg-grad:   linear-gradient(135deg, #1D2127, #212733, #1D2127);
+  --card:          #252830;
+  --sidebar-bg:    #252830;
+  --surface-muted: #2E3340;
+  --college-pill:  #2E3340;
+  --streak-bg:     rgba(246,166,35,0.15);
+
+  --text:          #EEEEF6;
+  --text-2:        rgba(238,238,246,0.72);
+  --text-3:        rgba(238,238,246,0.45);
+  --text-muted:    rgba(238,238,246,0.60);
+  --text-subtle:   rgba(238,238,246,0.45);
+  --text-inverse:  #121212;
+  --nav-fg:        rgba(238,238,246,0.70);
+
+  --border:        rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
+  --input-bg:      #2E3340;
+  --input-fg:      #EEEEF6;
+  --input-ph:      rgba(238,238,246,0.40);
+  --nav-hover:     rgba(255,255,255,0.06);
+  --row-hover:     rgba(255,255,255,0.04);
+  --ring:          #F6A623;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.20), 0 8px 24px -12px rgba(0,0,0,0.30);
+  --shadow-pop:  0 12px 32px -8px rgba(0,0,0,0.40);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--app-bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+
+::selection {
+  background-color: color-mix(in oklab, var(--brand) 20%, transparent);
+  color: var(--brand);
+}
+
+/* ── Focus ring ───────────────────────────────────────────────────────────── */
+:where(button, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+input, textarea, select {
+  background-color: var(--input-bg);
+  color: var(--input-fg);
+  border-color: var(--border);
+}
+input::placeholder, textarea::placeholder { color: var(--input-ph); }
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 15%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SIDEBAR  — White sidebar, Fredoka nav labels, violet active item
+   Spec: §3.7 of design system document
+   Width: 284px · Nav items 48px tall · 13px radius · Fredoka 15/500
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.ws-shell {
+  width: 284px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  padding: 20px 16px 11px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Nav scrolls if too many items, logo stays pinned at bottom */
+.ws-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Profile header ── */
+.ws-user-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 46px circular gradient avatar */
+.ws-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-base) 100%);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  box-shadow: 0 2px 8px rgba(108,92,231,0.30);
+}
+
+.ws-user-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-user-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-user-email {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── College pill ── */
+.ws-college-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: var(--w-r6);
+  background: var(--college-pill);
+  color: var(--brand);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding: 0 14px;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Nav list ── */
+.ws-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Nav item — inactive  (48px tall, 13px radius, Fredoka 15/500, --nav-fg) */
+.ws-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 13px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--nav-fg);
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Hover */
+.ws-nav-item:hover {
+  background: var(--nav-hover);
+  color: var(--text);
+}
+
+/* Active — brand-bright fill, white text, glow shadow */
+.ws-nav-item--active,
+.ws-nav-item[aria-current="page"] {
+  background: var(--brand) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  box-shadow: 0 8px 18px -6px rgba(108,92,231,0.55) !important;
+}
+.ws-nav-item--active:hover,
+.ws-nav-item[aria-current="page"]:hover {
+  background: var(--brand-hover) !important;
+  color: #FFFFFF !important;
+}
+
+/* Icons — 21px outline, stroke-width 2 */
+.ws-nav-icon {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+
+.ws-nav-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Nav section group label (WinTeach / academic portals) ── */
+.ws-nav-group-label {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 10px 12px 6px;
+}
+
+/* ── Logo / wordmark row (bottom) ── */
+.ws-logo-row {
+  flex-shrink: 0;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+
+.ws-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+  opacity: 0.9;
+  display: block;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGE TOP BAR  — 78px, sits on lavender canvas, no bottom border
+   Left: page title Fredoka 20/600  ·  Right: outlined icon buttons (44×44px)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.ws-topbar {
+  height: 78px;
+  background: transparent;              /* sits on lavender canvas */
+  border-bottom: none;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0 36px;
+}
+
+.ws-topbar-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Outlined 44×44 icon buttons (notifications, theme toggle) */
+.ws-topbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  text-decoration: none;
+}
+.ws-topbar-icon:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ws-topbar-user {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  padding: 6px 10px;
+}
+.ws-topbar-user:hover {
+  border-color: var(--border-strong);
+}
+
+.ws-topbar-btn {
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 120ms ease;
+}
+.ws-topbar-btn:hover {
+  border-color: var(--border-strong) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HOME PAGE CARDS
+   ════════════════════════════════════════════════════════════════════════════ */
+.h-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--w-r5);     /* 20px */
+  padding: 18px 20px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+.h-card--hover:hover {
+  box-shadow: 0 8px 24px -8px rgba(60,50,140,0.16);
+  transform: translateY(-1px);
+}
+.h-card--compact {
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+/* ── Design-system section label (Fredoka 14/600, gray) ── */
+.ds-section-label {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.01em;
+}
+
+/* ── Tailwind override: bg-card + border + correct radius for content cards ── */
+.ws-content-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--w-r5);   /* 20px */
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NAVBAR / DROPDOWN helpers
+   ════════════════════════════════════════════════════════════════════════════ */
+.navbar-icon-btn:hover  { background: var(--surface-muted); color: var(--text); }
+.navbar-search:hover    { background: var(--input-bg); }
+.navbar-menu-item { display: block; width: 100%; text-align: left; }
+.navbar-menu-item:hover { background: var(--nav-hover); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CHALLENGE TIMELINE  (Journey page)
+   ════════════════════════════════════════════════════════════════════════════ */
+.challenge-timeline {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.challenge-timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px; top: 8px; bottom: 8px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 12px;
+}
+.timeline-item:last-child { padding-bottom: 0; }
+
+.timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  position: relative;
+  z-index: 2;
+}
+.marker-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 10px;
+  border: 2px solid var(--card);
+  transition: transform 0.2s ease;
+}
+.marker-dot.locked    { background: var(--surface-muted); border-color: var(--border); }
+.marker-dot.active    { background: var(--brand); width: 16px; height: 16px; margin-top: 8px; border: 3px solid var(--card); box-shadow: 0 0 0 2px var(--brand); }
+.marker-dot.completed { background: var(--brand); border-color: var(--card); box-shadow: 0 0 0 1.5px var(--brand); }
+.marker-dot.missed    { background: var(--status-red); border-color: var(--card); box-shadow: 0 0 0 1.5px var(--status-red); }
+
+.marker-line { flex: 1; width: 2px; min-height: 20px; margin-top: 4px; }
+.timeline-item.completed .marker-line { background: var(--brand); }
+.timeline-item.active    .marker-line { background: linear-gradient(to bottom, var(--brand) 0%, var(--border) 100%); }
+.timeline-item.missed    .marker-line { background: var(--status-red); }
+.timeline-item.locked    .marker-line { background: transparent; }
+.timeline-item:last-child .marker-line { display: none; }
+
+.timeline-content { flex: 1; padding-top: 2px; }
+.timeline-content > div { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.timeline-content > div:hover { transform: translateY(-1px); }
+
+@media (max-width: 640px) {
+  .challenge-timeline::before { left: 13px; }
+  .timeline-item { gap: 10px; }
+  .timeline-marker { width: 28px; }
+  .marker-dot { width: 10px; height: 10px; margin-top: 12px; }
+  .marker-dot.active { width: 14px; height: 14px; margin-top: 10px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — card & background overrides for legacy Tailwind classes
+   ════════════════════════════════════════════════════════════════════════════ */
+.dark [class*="bg-white"]:not([class*="bg-white/"]) {
+  background-color: var(--card) !important;
+  color: var(--text) !important;
+}
+.dark .bg-background { background-color: var(--app-bg); }

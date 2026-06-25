@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinTeach Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --w-brand:#5B4BDB; --w-brand-bright:#6C5CE7; --w-brand-fg:#FFFFFF; --w-wordmark:#F6A623;
+  --w-bg:#EFEEFC; --w-bg-grad:linear-gradient(135deg,#E9E7FB,#F6F5FF,#FBFAFF);
+  --w-card:#FFFFFF; --w-sidebar:#FFFFFF; --w-surface-muted:#F1F2F7;
+  --w-college-pill:#E5E2FB; --w-streak-bg:#FBE7DA;
+  --w-text:#1A1A22; --w-text-2:rgba(26,26,34,.66); --w-text-3:rgba(26,26,34,.45);
+  --w-nav-fg:#4B4B57; --w-text-inverse:#FFFFFF;
+  --w-border:#E6E5F0; --w-border-strong:#D8D7E6; --w-nav-hover:#F2F1FC; --w-row-hover:#F4F3FD;
+  --w-green-fg:#3DA35D; --w-green-bg:#E5F4E9;
+  --w-orange-fg:#E4853B; --w-orange-bg:rgba(228,133,59,.14);
+  --w-info-fg:#49A9BE; --w-info-bg:rgba(73,169,190,.14);
+  --w-red-fg:#DC2133; --w-red-bg:rgba(220,33,51,.12);
+  --w-pink-fg:#D9446C; --w-pink-bg:rgba(217,68,108,.14);
+  --w-blue-fg:#2563EB; --w-blue-bg:rgba(37,99,235,.12);
+  --font-display:'Fredoka',system-ui,sans-serif; --font-sans:'DM Sans',system-ui,sans-serif;
+  --shadow-card:0 1px 2px rgba(20,20,50,.04),0 8px 24px -12px rgba(60,50,140,.12);
+  --shadow-pop:0 12px 32px -8px rgba(60,50,140,.22);
+  --r4:12px; --r5:20px; --r6:48px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:var(--w-bg);color:var(--w-text);font-size:14px;line-height:1.5}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--w-brand);outline-offset:2px}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:284px;flex:0 0 284px;background:var(--w-sidebar);border-right:1px solid var(--w-border);display:flex;flex-direction:column;padding:20px 16px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--w-bg);background-image:var(--w-bg-grad)}
+.topbar{height:78px;flex:0 0 78px;display:flex;align-items:center;justify-content:space-between;padding:0 36px}
+.topbar h1{font-family:var(--font-display);font-weight:600;font-size:20px}
+.content{flex:1;overflow-y:auto;padding:0 36px 40px}
+.brand{font-family:var(--font-display);font-weight:600;color:var(--w-wordmark);font-size:24px;padding:4px 8px 2px;letter-spacing:.2px}
+.brand small{font-size:12px;color:var(--w-text-3);font-family:var(--font-sans);font-weight:500;display:block;letter-spacing:.4px;text-transform:uppercase;margin-top:-2px}
+.profile{display:flex;align-items:center;gap:10px;padding:14px 8px 10px;margin-top:6px}
+.avatar{width:42px;height:42px;border-radius:50%;flex:0 0 42px;background:linear-gradient(135deg,#6E5EE6,#5B4BDB);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:600;font-size:15px}
+.profile .nm{font-family:var(--font-display);font-weight:600;font-size:15px;line-height:1.1}
+.profile .em{font-size:12px;color:var(--w-text-3)}
+.coll-pill{display:flex;align-items:center;gap:8px;width:100%;height:44px;background:var(--w-college-pill);border:none;border-radius:var(--r4);color:var(--w-brand);font-family:var(--font-display);font-weight:500;font-size:14px;padding:0 14px;margin:6px 0 14px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav-label{font-family:var(--font-display);font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--w-text-3);padding:10px 12px 6px}
+.nav-item{display:flex;align-items:center;gap:12px;height:48px;padding:0 14px;border-radius:13px;border:none;background:transparent;color:var(--w-nav-fg);font-family:var(--font-display);font-weight:500;font-size:15px;width:100%;text-align:left;transition:background .12s,color .12s}
+.nav-item svg{width:21px;height:21px;flex:0 0 21px}
+.nav-item:hover{background:var(--w-nav-hover);color:var(--w-text)}
+.nav-item.active{background:var(--w-brand-bright);color:#fff;box-shadow:0 8px 18px -6px rgba(108,92,231,.55)}
+.nav-item .ct{margin-left:auto;font-size:12px;background:var(--w-surface-muted);color:var(--w-text-2);border-radius:var(--r6);padding:1px 8px;font-family:var(--font-sans);font-weight:600}
+.nav-item.active .ct{background:rgba(255,255,255,.2);color:#fff}
+.icon-btn{width:44px;height:44px;border-radius:13px;border:1px solid var(--w-border);background:var(--w-card);display:flex;align-items:center;justify-content:center;color:var(--w-text-2)}
+.icon-btn:hover{color:var(--w-text)}
+.icon-btn svg{width:20px;height:20px}
+.btn{height:42px;border-radius:var(--r4);font-family:var(--font-display);font-weight:500;font-size:15px;padding:0 22px;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;transition:background .12s,opacity .12s;white-space:nowrap}
+.btn svg{width:18px;height:18px}
+.btn-primary{background:var(--w-brand-bright);color:#fff}
+.btn-primary:hover{background:#5f50d8}
+.btn-secondary{background:transparent;border-color:var(--w-border-strong);color:var(--w-text)}
+.btn-secondary:hover{background:var(--w-surface-muted)}
+.btn-ghost{background:transparent;color:var(--w-text-2)}
+.btn-ghost:hover{color:var(--w-text);background:var(--w-surface-muted)}
+.btn-sm{height:34px;font-size:13px;padding:0 14px;border-radius:10px}
+.btn:disabled{opacity:.4;pointer-events:none}
+.card{background:var(--w-card);border:1px solid var(--w-border);border-radius:var(--r5);padding:28px;box-shadow:var(--shadow-card)}
+.card.compact{padding:18px;border-radius:16px}
+.h1{font-family:var(--font-display);font-weight:600;font-size:28px}
+.h2{font-family:var(--font-display);font-weight:600;font-size:20px}
+.h3{font-family:var(--font-display);font-weight:600;font-size:17px}
+.section-label{font-family:var(--font-display);font-weight:600;font-size:14px;color:var(--w-text-2)}
+.lead{font-size:15px;color:var(--w-text-2)}
+.meta{font-size:12.5px;color:var(--w-text-2)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:600;font-size:13px;border-radius:var(--r6);padding:3px 11px;white-space:nowrap}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.b-green{background:var(--w-green-bg);color:var(--w-green-fg)}
+.b-orange{background:var(--w-orange-bg);color:var(--w-orange-fg)}
+.b-info{background:var(--w-info-bg);color:var(--w-info-fg)}
+.b-red{background:var(--w-red-bg);color:var(--w-red-fg)}
+.b-pink{background:var(--w-pink-bg);color:var(--w-pink-fg)}
+.b-blue{background:var(--w-blue-bg);color:var(--w-blue-fg)}
+.b-muted{background:var(--w-surface-muted);color:var(--w-text-2)}
+.bloom{display:inline-block;font-family:var(--font-sans);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:2px 7px}
+.bl-remember{background:#EEF2FF;color:#4F5BD5}.bl-understand{background:#E5F4E9;color:#3DA35D}
+.bl-apply{background:#FFF3E2;color:#E4853B}.bl-analyze{background:#E7F6F9;color:#3895AD}
+.bl-evaluate{background:#FCE8EF;color:#D9446C}.bl-create{background:#F0EBFF;color:#6C5CE7}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-family:var(--font-sans);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--w-text-3);padding:0 16px 12px;border-bottom:1px solid var(--w-border)}
+.tbl td{padding:16px;border-bottom:1px solid var(--w-border);vertical-align:middle}
+.tbl tr.row{cursor:pointer;transition:background .12s}
+.tbl tr.row:hover td{background:var(--w-row-hover)}
+.tbl tr:last-child td{border-bottom:none}
+.course-code{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--w-brand)}
+.course-name{font-family:var(--font-display);font-weight:600;font-size:15px}
+.course-sub{font-size:12.5px;color:var(--w-text-2)}
+.field{margin-bottom:18px}
+.field-label{font-family:var(--font-display);font-weight:600;font-size:13px;margin-bottom:6px;display:block}
+.field-label .opt{color:var(--w-text-3);font-weight:500}
+.input,.select,.textarea{width:100%;background:var(--w-surface-muted);border:1px solid transparent;border-radius:var(--r4);padding:11px 14px;font-family:var(--font-sans);font-size:14px;color:var(--w-text)}
+.input::placeholder,.textarea::placeholder{color:var(--w-text-3)}
+.input:focus,.select:focus,.textarea:focus{background:#fff;border-color:var(--w-brand);outline:none}
+.textarea{min-height:88px;resize:vertical;line-height:1.6}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px}
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:28px}
+.step{display:flex;align-items:center;gap:10px;color:var(--w-text-3)}
+.step .num{width:28px;height:28px;border-radius:50%;background:var(--w-surface-muted);color:var(--w-text-2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:600;font-size:13px;flex:0 0 28px}
+.step .lbl{font-family:var(--font-display);font-weight:500;font-size:14px}
+.step.active{color:var(--w-text)}.step.active .num{background:var(--w-brand-bright);color:#fff}
+.step.done .num{background:var(--w-green-bg);color:var(--w-green-fg)}.step.done{color:var(--w-text-2)}
+.step-line{flex:1;height:2px;background:var(--w-border);margin:0 14px;min-width:24px}
+.step-line.done{background:var(--w-green-fg);opacity:.4}
+.upload-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.upload-tab{height:36px;padding:0 16px;border-radius:10px;border:1px solid var(--w-border-strong);background:transparent;font-family:var(--font-display);font-weight:500;font-size:13px;color:var(--w-text-2);display:inline-flex;align-items:center;gap:7px}
+.upload-tab svg{width:16px;height:16px}
+.upload-tab.active{background:var(--w-brand-bright);border-color:var(--w-brand-bright);color:#fff}
+.dropzone{border:2px dashed var(--w-border-strong);border-radius:var(--r5);padding:40px 24px;text-align:center;background:var(--w-surface-muted);cursor:pointer;transition:border-color .12s,background .12s}
+.dropzone:hover{border-color:var(--w-brand);background:#fff}
+.dropzone svg{width:34px;height:34px;color:var(--w-brand);margin-bottom:12px}
+.dropzone .big{font-family:var(--font-display);font-weight:600;font-size:16px;margin-bottom:4px}
+.file-chip{display:inline-flex;align-items:center;gap:10px;background:var(--w-college-pill);color:var(--w-brand);border-radius:var(--r4);padding:10px 14px;font-family:var(--font-display);font-weight:500;font-size:14px;margin-top:14px}
+.file-chip svg{width:18px;height:18px}
+.aico{width:36px;height:36px;border-radius:10px;background:var(--w-college-pill);color:var(--w-brand);display:flex;align-items:center;justify-content:center;flex:0 0 36px}
+.aico svg{width:18px;height:18px}
+.co-row{display:flex;align-items:flex-start;gap:14px;padding:16px;border:1px solid var(--w-border);border-radius:16px;margin-bottom:12px;background:#fff}
+.co-row.dismissed{opacity:.5}
+.co-id{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--w-brand);flex:0 0 56px;padding-top:2px}
+.co-body{flex:1;min-width:0}
+.co-text{font-size:14px;line-height:1.55;margin-bottom:8px}
+.co-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.co-actions{display:flex;gap:6px;flex:0 0 auto;align-items:center}
+.co-icon{width:32px;height:32px;border-radius:9px;border:1px solid var(--w-border);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--w-text-2)}
+.co-icon:hover{color:var(--w-text);background:var(--w-surface-muted)}
+.co-icon svg{width:16px;height:16px}
+.co-icon.danger:hover{color:var(--w-red-fg);background:var(--w-red-bg)}
+.delta-banner{display:flex;align-items:center;gap:12px;background:var(--w-blue-bg);border-radius:var(--r4);padding:14px 16px;margin-bottom:18px}
+.delta-banner svg{width:20px;height:20px;color:var(--w-blue-fg);flex:0 0 20px}
+.delta-banner .txt{font-size:13.5px;color:var(--w-text);line-height:1.5}
+.unit{border:1px solid var(--w-border);border-radius:16px;margin-bottom:14px;overflow:hidden;background:#fff}
+.unit-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--w-surface-muted)}
+.unit-head .un{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--w-brand)}
+.unit-head .ut{font-family:var(--font-display);font-weight:600;font-size:15px}
+.unit-head .ct{margin-left:auto;font-size:12px;color:var(--w-text-2)}
+.topic-item{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--w-border);cursor:pointer;transition:background .12s}
+.topic-item:last-child{border-bottom:none}
+.topic-item:hover{background:var(--w-row-hover)}
+.topic-item .tname{font-family:var(--font-display);font-weight:600;font-size:14px}
+.topic-item .tsub{font-size:12px;color:var(--w-text-2);margin-top:2px}
+.subchip{display:inline-block;font-size:11px;color:var(--w-text-2);background:var(--w-surface-muted);border-radius:6px;padding:2px 8px;margin:2px 4px 0 0}
+.progress{height:8px;border-radius:var(--r6);background:var(--w-surface-muted);overflow:hidden}
+.progress>span{display:block;height:100%;background:var(--w-brand-bright);border-radius:var(--r6);transition:width .3s}
+.flow{display:flex;align-items:stretch;gap:0}
+.flow-stage{flex:1;min-width:0}
+.flow-conn{flex:0 0 28px;display:flex;align-items:center;justify-content:center;color:var(--w-text-3)}
+.flow-conn svg{width:18px;height:18px}
+.artifact{border:1px solid var(--w-border);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;height:100%}
+.artifact .ahead{display:flex;align-items:center;gap:10px}
+.artifact .atitle{font-family:var(--font-display);font-weight:600;font-size:14px}
+.artifact .asub{font-size:11px;color:var(--w-text-3)}
+.parallel{display:grid;grid-template-columns:1fr;gap:12px;flex:1}
+.score{background:linear-gradient(135deg,#6E5EE6,#5B4BDB);border-radius:24px;color:#fff;padding:26px 28px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.score>div:first-child{flex:1 1 280px;min-width:0}
+.score-tiles{flex:0 0 auto}
+.score .eyebrow{font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px}
+.score-tiles{display:flex;gap:12px}
+.score-tile{background:rgba(255,255,255,.12);border-radius:14px;padding:12px 16px;min-width:90px}
+.score-tile .l{font-family:var(--font-display);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:4px}
+.score-tile .v{font-family:var(--font-display);font-weight:600;font-size:22px}
+.page-actions{display:flex;align-items:center;gap:10px}
+.breadcrumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--w-text-2);margin-bottom:18px;flex-wrap:wrap}
+.breadcrumb a{color:var(--w-brand);text-decoration:none;font-weight:500;cursor:pointer}
+.breadcrumb svg{width:14px;height:14px;color:var(--w-text-3)}
+.flex{display:flex}.between{justify-content:space-between}.center{align-items:center}.gap{gap:12px}.wrap{flex-wrap:wrap}
+.mb8{margin-bottom:8px}.mb16{margin-bottom:16px}.mb24{margin-bottom:24px}.mt8{margin-top:8px}.mt16{margin-top:16px}.mt24{margin-top:24px}
+.empty{text-align:center;padding:60px 20px;color:var(--w-text-2)}
+.empty svg{width:48px;height:48px;color:var(--w-text-3);margin-bottom:16px}
+.modal-bg{position:fixed;inset:0;background:rgba(26,26,34,.4);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px}
+.modal{background:#fff;border-radius:var(--r5);padding:26px;width:100%;max-width:520px;box-shadow:var(--shadow-pop);max-height:88vh;overflow-y:auto}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--w-text);color:#fff;padding:12px 20px;border-radius:var(--r4);font-family:var(--font-display);font-weight:500;font-size:14px;z-index:60;box-shadow:var(--shadow-pop);display:flex;align-items:center;gap:10px}
+.toast svg{width:18px;height:18px;color:#7CE2A0}
+.info-card{border:1px solid var(--w-border);border-radius:16px;padding:18px;background:#fff}
+.comap{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:600;font-size:11px;color:var(--w-brand);background:var(--w-college-pill);border-radius:6px;padding:2px 8px}
+.ico18{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 18px}.ico18 svg{width:18px;height:18px}
+.lib-card{border:1px solid var(--w-border);border-radius:16px;padding:18px;background:#fff;display:flex;flex-direction:column;gap:8px}
+.lib-cat{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:2px 8px}
+.lc-ai{background:#F0EBFF;color:#6C5CE7}.lc-industry{background:var(--w-info-bg);color:var(--w-info-fg)}
+.maptbl{min-width:520px}.maptbl th,.maptbl td{padding:11px 12px}.maptbl thead th{text-align:center}.maptbl th:first-child,.maptbl td:first-child{text-align:left}
+.mapval{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;font-family:var(--font-display);font-weight:600;font-size:13px}
+.mv1{background:var(--w-info-bg);color:var(--w-info-fg)}.mv2{background:var(--w-orange-bg);color:var(--w-orange-fg)}.mv3{background:var(--w-green-bg);color:var(--w-green-fg)}
+.mapempty{color:var(--w-text-3)}
+.maplegend{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
+/* ===== Dashboard ===== */
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.dash-lead{font-size:14.5px;color:var(--w-text-2);margin:-2px 0 22px}
+.kpi{background:var(--w-card);border:1px solid var(--w-border);border-radius:var(--r5);padding:20px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:12px;text-align:left;width:100%}
+.kpi.click{cursor:pointer;transition:box-shadow .14s,transform .14s,border-color .14s}
+.kpi.click:hover{box-shadow:var(--shadow-pop);transform:translateY(-2px);border-color:var(--w-border-strong)}
+.kpi .ktop{display:flex;align-items:center;justify-content:space-between}
+.kpi .kicon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.kpi .kicon svg{width:20px;height:20px}
+.kpi .kgo{color:var(--w-text-3)}.kpi .kgo svg{width:16px;height:16px}
+.kpi .kval{font-family:var(--font-display);font-weight:600;font-size:30px;line-height:1}
+.kpi .klabel{font-family:var(--font-display);font-weight:600;font-size:13.5px;color:var(--w-text);margin-top:-4px}
+.kpi .ksub{font-size:12px;color:var(--w-text-3);margin-top:-6px}
+.dash-cols{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-bottom:16px}
+.attn-row{display:flex;align-items:center;gap:14px;padding:14px 2px}
+.attn-row+.attn-row{border-top:1px solid var(--w-border)}
+.attn-ico{width:38px;height:38px;border-radius:11px;flex:0 0 38px;display:flex;align-items:center;justify-content:center}
+.attn-ico svg{width:18px;height:18px}
+.attn-tx{min-width:0;flex:1}
+.attn-tx .at{font-family:var(--font-display);font-weight:600;font-size:14px}
+.attn-tx .ad{font-size:12.5px;color:var(--w-text-2);margin-top:1px}
+.snap-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.snap-row .sl{font-family:var(--font-display);font-weight:500;font-size:13px;flex:0 0 92px;display:flex;align-items:center;gap:7px}
+.snap-row .sl .dot{width:8px;height:8px;border-radius:50%}
+.snap-row .progress{flex:1}
+.snap-row .sv{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--w-text-2);flex:0 0 26px;text-align:right}
+.ring{--p:0;width:96px;height:96px;border-radius:50%;flex:0 0 96px;background:conic-gradient(var(--w-brand-bright) calc(var(--p)*1%),var(--w-surface-muted) 0);display:flex;align-items:center;justify-content:center}
+.ring .hole{width:72px;height:72px;border-radius:50%;background:var(--w-card);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .hole b{font-family:var(--font-display);font-weight:600;font-size:22px;line-height:1}
+.ring .hole span{font-size:10px;color:var(--w-text-3);letter-spacing:.04em;text-transform:uppercase}
+@media(max-width:880px){.sidebar{display:none}.grid-2,.grid-3,.grid-4,.dash-cols{grid-template-columns:1fr}.content{padding:0 18px 32px}.topbar{padding:0 18px}.flow{flex-direction:column;gap:12px}.flow-conn{transform:rotate(90deg);height:24px}}
+@media(max-width:1180px) and (min-width:881px){.grid-4{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">Winnify<small>WinTeach Console</small></div>
+    <div class="profile">
+      <div class="avatar">SK</div>
+      <div><div class="nm">Sameer K.</div><div class="em">content@winnify.in</div></div>
+    </div>
+    <button class="coll-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      CIET — R24 Regulations
+    </button>
+    <nav class="nav">
+      <div class="nav-label">Workspace</div>
+      <button class="nav-item" data-nav="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+      </button>
+      <button class="nav-item active" data-nav="courses">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Courses
+        <span class="ct" id="navCourseCount">3</span>
+      </button>
+      <button class="nav-item" data-nav="generation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>Content Generation
+        <span class="ct" id="navGenCount">0</span>
+      </button>
+      <button class="nav-item" data-nav="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M12 7v10M9 9l3-2 3 2"/></svg>CO Library
+      </button>
+      <button class="nav-item" data-nav="addlib">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/><path d="M5 19h14"/></svg>Additional Course Library
+        <span class="ct" id="navAddCount">0</span>
+      </button>
+      <button class="nav-item" data-nav="institutes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/><path d="M9 11h.01M15 11h.01"/></svg>Institute PO &amp; PSO
+        <span class="ct" id="navInstCount">2</span>
+      </button>
+      <div class="nav-label">Account</div>
+      <button class="nav-item" data-nav="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
+      </button>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar"><h1 id="pageTitle">Courses</h1><div class="page-actions" id="topActions"></div></header>
+    <div class="content" id="view"></div>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+const I={
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  chevron:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>',
+  image:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L9 20"/></svg>',
+  text:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6.1H3M21 12.1H3M15.1 18H3"/></svg>',
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+  notes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>',
+  assess:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  quiz:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>',
+  flash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.8L18 9l-4.4 1.2L12 15l-1.6-4.8L6 9l4.4-1.2z"/></svg>',
+  redo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7M19 12H5"/></svg>',
+  empty:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+};
+const BLOOM=['Remember','Understand','Apply','Analyze','Evaluate','Create'];
+const bloomClass=b=>'bl-'+b.toLowerCase();
+const ART_DEFS=[
+  {k:'notes',label:'Teacher Notes',sub:'Lecture notes',ico:I.notes},
+  {k:'preassess',label:'Pre-Assessment',sub:'Readiness check',ico:I.assess},
+  {k:'quiz',label:'Student Quiz',sub:'Bloom MCQs',ico:I.quiz},
+  {k:'flash',label:'Flash Cards',sub:'Spaced repetition',ico:I.flash},
+];
+const newArtifacts=()=>({notes:0,preassess:0,quiz:0,flash:0});
+
+let uid=100; const nid=()=>'t'+(++uid);
+function topic(name,subs,coText,bloom,art){return {id:nid(),name,subs,co:{text:coText,bloom},artifacts:art||newArtifacts()};}
+
+const SAMPLE={
+  code:'CSE125',name:'Python Programming',program:'B.Tech CSE',major:'CSE',institute:'Winnify',sem:3,credits:3,regulation:'CIET R24',
+  cos:[
+    {id:'CO1',text:'Understand program structure in the Python REPL shell environment.',bloom:'Understand'},
+    {id:'CO2',text:'Apply operators, control flow and functions to process data.',bloom:'Apply'},
+    {id:'CO3',text:'Implement modules, packages and data-science libraries to organize data.',bloom:'Apply'},
+    {id:'CO4',text:'Implement core data structures and object-oriented concepts.',bloom:'Apply'},
+    {id:'CO5',text:'Analyze runtime errors and implement file handling using exceptions.',bloom:'Analyze'},
+  ],
+  units:[
+    {n:'I',title:'Introduction & Operators',topics:[
+      topic('Python Basics & REPL',['History, features & applications','Python REPL (Shell)','Running scripts','Variables, keywords, assignment','Input-output & indentation'],'Understand program structure in the Python REPL shell environment.','Understand'),
+      topic('Operators & Type Conversion',['Numeric, Boolean, Sequence, String types','Operators','Type conversions','Expressions'],'Apply operators and type conversions to evaluate expressions.','Apply'),
+    ]},
+    {n:'II',title:'Control Flow & Functions',topics:[
+      topic('Control Flow',['if / if-elif-else','for & while loops','break, continue, pass'],'Apply control-flow constructs to implement program logic.','Apply'),
+      topic('Functions',['Defining & calling functions','Argument types (keyword, default, var-length)','Fruitful functions & return values','Scope: global vs local','Lambdas, map / reduce / filter'],'Implement functions for reusable data processing.','Apply'),
+    ]},
+    {n:'III',title:'Modules, Packages & DS Libraries',topics:[
+      topic('Modules & Packages',['Creating modules, import / from-import','Namespaces','Built-in modules: os, random, math, json, date, RegEx','PIP & installing packages'],'Implement modules and packages to organize code.','Apply'),
+      topic('Data Science Libraries',['NumPy basics','Pandas basics','Matplotlib basics'],'Apply NumPy, Pandas and Matplotlib to organize and visualize data.','Apply'),
+    ]},
+    {n:'IV',title:'Data Structures & OOP',topics:[
+      topic('Strings & Data Structures',['Strings & formatting','List & slicing','Tuple, Sets, Frozen sets','Dictionaries','Comprehensions & built-in methods'],'Implement core data structures and their functionalities.','Apply'),
+      topic('Object-Oriented Programming',['Classes & self-variable','Methods & constructor','Inheritance','Polymorphism','Data abstraction'],'Understand object-oriented concepts in Python.','Understand'),
+    ]},
+    {n:'V',title:'Files, Errors & Exceptions',topics:[
+      topic('Files',['Types of files; text data','File methods; binary files','Pickle module; CSV files','os & os.path modules'],'Implement file handling for reading and writing data.','Apply'),
+      topic('Errors & Exceptions',['Syntax errors & exceptions','Exception handlers','Raising & user-defined exceptions'],'Analyze runtime errors and handle them through exceptions.','Analyze'),
+    ]},
+  ],
+  libraryDelta:[
+    {text:'Create and publish reusable packages using PIP.',bloom:'Create',unit:'III'},
+    {text:'Evaluate performance trade-offs between data structures.',bloom:'Evaluate',unit:'IV'},
+  ]
+};
+const SAMPLE_TEXT=`PYTHON PROGRAMMING (L3 T0 P0 C3)
+Course Outcomes:
+- Understand program structure python REPL shell environment.
+- Implement iterators and functions for data processing.
+- Implement different modules and objects to organize data.
+- Implement different data structures and their functionalities.
+- Understand OOP concepts and handle errors through exceptions.
+UNIT I Introduction; Operators and Type Conversion ...
+UNIT II Control Flow; Functions ...
+UNIT III Modules; Packages; Data Science Libraries ...
+UNIT IV Strings & Data Structures; OOP in Python ...
+UNIT V Files; Errors and Exceptions ...`;
+
+/* ===== CO Library: reusable outcomes from equivalent courses ===== */
+const CO_LIBRARY=[
+  {text:'Create and publish reusable Python packages using PIP for distribution.',bloom:'Create'},
+  {text:'Evaluate performance trade-offs between core data structures for a given problem.',bloom:'Evaluate'},
+  {text:'Design object-oriented solutions applying inheritance and polymorphism.',bloom:'Create'},
+  {text:'Apply NumPy and Pandas to clean, manipulate and analyze datasets.',bloom:'Apply'},
+  {text:'Analyze code using debugging tools and structured exception handling.',bloom:'Analyze'},
+  {text:'Understand version control workflows for collaborative Python projects.',bloom:'Understand'},
+];
+const normCo=t=>t.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+
+/* ===== Additional Course Library: industry-relevant & AI topics ===== */
+const ADDITIONAL_LIBRARY=[
+  {cat:'AI',name:'Generative AI & LLM Foundations',subs:['What LLMs are','Tokens & embeddings','Capabilities & limits','Responsible AI'],co:'Understand the foundations and limits of generative AI and LLMs.',bloom:'Understand'},
+  {cat:'AI',name:'Prompt Engineering with Python',subs:['Prompt patterns','Few-shot prompting','Structured outputs','Calling LLM APIs'],co:'Apply prompt-engineering techniques to build LLM-powered Python apps.',bloom:'Apply'},
+  {cat:'AI',name:'Intro to ML with scikit-learn',subs:['Supervised vs unsupervised','Train/test split','Model fitting','Evaluation metrics'],co:'Apply scikit-learn to train and evaluate basic ML models.',bloom:'Apply'},
+  {cat:'Industry',name:'Version Control with Git & GitHub',subs:['Repos, commits, branches','Pull requests','Merge conflicts','CI basics'],co:'Apply Git workflows for collaborative software development.',bloom:'Apply'},
+  {cat:'Industry',name:'Building & Consuming REST APIs',subs:['HTTP methods','JSON payloads','requests library','Auth tokens'],co:'Implement Python clients that consume REST APIs.',bloom:'Apply'},
+  {cat:'Industry',name:'Cloud Deployment Essentials',subs:['Containers & Docker','Environment config','Deploying a Python app','Logging & monitoring'],co:'Understand how to deploy Python applications to the cloud.',bloom:'Understand'},
+  {cat:'Industry',name:'Testing & Code Quality',subs:['Unit testing with pytest','Fixtures & assertions','Linting & formatting','Coverage'],co:'Apply automated testing to ensure code quality.',bloom:'Apply'},
+];
+function getElectivesUnit(e){let u=e.units.find(x=>x.n==='E');if(!u){u={n:'E',title:'Industry & AI Electives',topics:[]};e.units.push(u);}return u;}
+
+/* ===== majors & institutes (PO / PSO) ===== */
+const MAJORS=['CSE','ECE','EEE','Mechanical','Civil','IT','AI & DS'];
+let iid=0;const niid=()=>'inst'+(++iid);
+function po(code,text){return{code,text};}
+function pso(code,text,scope,major){return{code,text,scope,major:major||null};} // scope: 'common' | 'major'
+
+let institutes=[
+  {id:niid(),name:'Winnify',short:'WIN',type:'EdTech Platform',location:'Bengaluru, IN',regulation:'Winnify Core',accreditation:'Internal',
+    pos:[
+      po('PO1','Apply foundational computing and engineering knowledge to solve well-defined problems.'),
+      po('PO2','Analyze problems and identify requirements using data-driven reasoning.'),
+      po('PO3','Design and build digital solutions that meet learner needs.'),
+      po('PO4','Use modern tools and platforms effectively for self-directed learning.'),
+      po('PO5','Communicate and collaborate effectively in distributed teams.'),
+    ],
+    psos:[
+      pso('PSO1','Demonstrate competency in platform-agnostic problem solving.','common'),
+      pso('PSO2','Build and ship full-stack applications using modern frameworks.','major','CSE'),
+      pso('PSO3','Design embedded and signal-processing systems for real-world use.','major','ECE'),
+    ]},
+  {id:niid(),name:'CIET',short:'CIET',type:'Engineering College',location:'Andhra Pradesh, IN',regulation:'CIET R24',accreditation:'NBA / NAAC',
+    pos:[
+      po('PO1','Engineering knowledge: apply mathematics, science and engineering fundamentals.'),
+      po('PO2','Problem analysis: identify, formulate and analyze complex engineering problems.'),
+      po('PO3','Design/development of solutions for complex engineering problems.'),
+      po('PO4','Conduct investigations of complex problems using research methods.'),
+      po('PO5','Modern tool usage: apply appropriate techniques and engineering tools.'),
+      po('PO6','The engineer and society: assess societal, health and legal issues.'),
+      po('PO7','Environment and sustainability in engineering solutions.'),
+      po('PO8','Ethics: apply ethical principles and professional responsibilities.'),
+      po('PO9','Individual and team work in multidisciplinary settings.'),
+      po('PO10','Communication: communicate effectively on complex activities.'),
+      po('PO11','Project management and finance principles.'),
+      po('PO12','Life-long learning in the context of technological change.'),
+    ],
+    psos:[
+      pso('PSO1','Apply standard practices and strategies in software project development.','common'),
+      pso('PSO2','Design and develop computer programs in networking, web and data analytics for CSE.','major','CSE'),
+      pso('PSO3','Apply VLSI and embedded design principles to ECE systems.','major','ECE'),
+      pso('PSO4','Analyze power systems and electrical machines for EEE applications.','major','EEE'),
+    ]},
+];
+const instNames=()=>institutes.map(i=>i.name);
+function instOf(c){return institutes.find(i=>i.name===(c.institute||'Winnify'))||institutes[0];}
+function applicablePsos(inst,major){return inst.psos.filter(p=>p.scope==='common'||p.major===major);}
+function mapCols(c){const inst=instOf(c);return[...inst.pos.map(p=>p.code),...applicablePsos(inst,c.major||'CSE').map(p=>p.code)];}
+function ensureMapping(c){
+  const cols=mapCols(c);const cos=c.cos||[];
+  if(!c.coMapping)c.coMapping={};
+  cos.forEach((co,ci)=>{c.coMapping[co.id]=c.coMapping[co.id]||{};
+    cols.forEach((col,xi)=>{if(c.coMapping[co.id][col]===undefined){
+      const r=(ci*3+xi*5+(col.startsWith('PSO')?2:0))%4;c.coMapping[co.id][col]=r===0?'':r; // 0 blank, else 1-3
+    }});});
+  return c.coMapping;
+}
+function coRefFor(c,unitIndex){return(c.cos&&c.cos[unitIndex])?c.cos[unitIndex].id:'CO'+(unitIndex+1);}
+
+function seedCourse(code,name,sem,credits,status,fill,institute,major){
+  const c=JSON.parse(JSON.stringify(SAMPLE));
+  c.code=code;c.name=name;c.sem=sem;c.credits=credits;c.status=status;
+  c.institute=institute||'Winnify';c.major=major||'CSE';
+  c.units.forEach(u=>u.topics.forEach(t=>{t.id=nid();
+    if(fill==='full')t.artifacts={notes:100,preassess:100,quiz:100,flash:100};
+    else if(fill==='partial')t.artifacts=Math.random()>.5?{notes:100,preassess:100,quiz:100,flash:100}:{notes:100,preassess:60,quiz:40,flash:20};
+    else t.artifacts=newArtifacts();
+  }));
+  delete c.libraryDelta;
+  return c;
+}
+let courses=[
+  seedCourse('CSE205','Data Structures',3,4,'active','full','CIET','CSE'),
+  seedCourse('CSE231','Database Management Systems',4,3,'active','partial','CIET','CSE'),
+  seedCourse('CSE118','Operating Systems',5,3,'draft','none','Winnify','CSE'),
+];
+
+let route='dashboard', draft=null, currentCourse=null, currentTopic=null, currentInst=null;
+
+const $=s=>document.querySelector(s);
+const el=h=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild;};
+const val=id=>document.getElementById(id).value.trim();
+function toast(msg){const t=el(`<div class="toast">${I.check}${msg}</div>`);$('#toastRoot').appendChild(t);setTimeout(()=>t.remove(),2600);}
+function allTopics(c){return c.units.flatMap(u=>u.topics.map(t=>({unit:u,topic:t})));}
+function topicPct(t){const a=t.artifacts;return Math.round((a.notes+a.preassess+a.quiz+a.flash)/4);}
+function topicState(t){const p=topicPct(t);if(p>=100)return'ready';if(p>0)return'generating';return'pending';}
+function coursePct(c){const ts=allTopics(c);if(!ts.length)return 0;return Math.round(ts.reduce((s,x)=>s+topicPct(x.topic),0)/ts.length);}
+function pendingJobs(){return courses.reduce((s,c)=>s+allTopics(c).filter(x=>topicState(x.topic)!=='ready').length,0);}
+function topicBadge(t){const st=topicState(t);if(st==='ready')return`<span class="badge b-green"><span class="dot"></span>Ready</span>`;if(st==='generating')return`<span class="badge b-info">Generating · ${topicPct(t)}%</span>`;return`<span class="badge b-orange">Pending</span>`;}
+function statusBadge(s){if(s==='active')return`<span class="badge b-green"><span class="dot"></span>Active</span>`;if(s==='draft')return`<span class="badge b-orange">Draft</span>`;return`<span class="badge b-muted">${s}</span>`;}
+
+function setNav(a){document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===a));}
+function go(r){route=r;render();}
+window.go=go;
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{currentInst=null;go(n.dataset.nav);}));
+function render(){
+  const v=$('#view'),t=$('#pageTitle'),a=$('#topActions');a.innerHTML='';
+  $('#navCourseCount').textContent=courses.length;
+  $('#navGenCount').textContent=pendingJobs();
+  if($('#navInstCount'))$('#navInstCount').textContent=institutes.length;
+  if($('#navAddCount'))$('#navAddCount').textContent=ADDITIONAL_LIBRARY.length;
+  if(route==='dashboard'){setNav('dashboard');t.textContent='Dashboard';renderDashboard(v,a);}
+  else if(route==='courses'){setNav('courses');t.textContent='Courses';renderCourses(v,a);}
+  else if(route==='create'||route==='editCourse'){setNav('courses');t.textContent=draft.mode==='edit'?'Edit Course':'Create New Course';renderCreate(v,a);}
+  else if(route==='coursePage'){setNav('courses');t.textContent=currentCourse.name;renderCoursePage(v,a);}
+  else if(route==='topicPage'){setNav('courses');t.textContent=currentTopic.name;renderTopicPage(v,a);}
+  else if(route==='generation'){setNav('generation');t.textContent='Content Generation';renderGeneration(v,a);}
+  else if(route==='institutes'){setNav('institutes');t.textContent='Institute PO & PSO';renderInstitutes(v,a);}
+  else if(route==='addlib'){setNav('addlib');t.textContent='Additional Course Library';renderAddLibrary(v,a);}
+  else{setNav(route);t.textContent=route[0].toUpperCase()+route.slice(1);v.innerHTML=`<div class="card"><div class="empty">${I.empty}<div class="h3 mb8">${t.textContent}</div><div class="lead">Out of scope for this prototype.</div></div></div>`;}
+}
+
+function renderAddLibrary(v,a){
+  a.innerHTML=`<button class="icon-btn">${I.bell}</button>`;
+  const cats=['AI','Industry'];
+  const section=cat=>{
+    const items=ADDITIONAL_LIBRARY.filter(x=>x.cat===cat);
+    return`<div class="flex between center mb16 mt8"><div class="section-label">${cat==='AI'?'AI & Emerging Tech':'Industry-Relevant Skills'}</div><span class="meta">${items.length} topics</span></div>
+      <div class="grid-2" style="gap:16px 16px;margin-bottom:8px">
+      ${items.map(x=>`<div class="lib-card">
+        <div class="flex between center"><span class="lib-cat lc-${x.cat.toLowerCase()}">${x.cat}</span><span class="bloom ${bloomClass(x.bloom)}">${x.bloom}</span></div>
+        <div class="atitle" style="font-family:var(--font-display);font-weight:600;font-size:15px">${x.name}</div>
+        <div class="co-meta" style="margin:0"><span class="comap">CO · ${x.bloom}</span><span class="meta" style="max-width:100%">${x.co}</span></div>
+        <div>${x.subs.map(s=>`<span class="subchip">${s}</span>`).join('')}</div>
+      </div>`).join('')}
+      </div>`;
+  };
+  v.innerHTML=`<div class="delta-banner mb24">${I.info}<div class="txt">A curated catalog of <b>industry-relevant</b> and <b>AI</b> topics institutes can add to any course. While uploading a syllabus, these appear as one-click suggestions under the detected structure.</div></div>
+    ${cats.map(section).join('')}`;
+}
+
+function renderDashboard(v,a){
+  a.innerHTML=`<button class="icon-btn">${I.bell}</button><button class="btn btn-primary" id="nc">${I.plus}Create new course</button>`;
+  a.querySelector('#nc').onclick=startCreate;
+
+  if(!courses.length){
+    v.innerHTML=`<div class="card"><div class="empty">${I.empty}<div class="h3 mb8">Welcome to WinTeach</div><div class="lead mb24">Upload a syllabus to generate your first course plan — notes, quizzes, pre-assessments and flashcards, CO-aligned.</div><button class="btn btn-primary" onclick="startCreate()">${I.plus}Create new course</button></div></div>`;
+    return;
+  }
+
+  // ---- aggregates (read-only) ----
+  const ts=courses.flatMap(allTopics);
+  const total=ts.length;
+  const ready=ts.filter(x=>topicState(x.topic)==='ready').length;
+  const generating=ts.filter(x=>topicState(x.topic)==='generating').length;
+  const pending=ts.filter(x=>topicState(x.topic)==='pending').length;
+  const activeCount=courses.filter(c=>c.status==='active').length;
+  const draftCount=courses.filter(c=>c.status==='draft').length;
+  const overall=total?Math.round(ready/total*100):0;
+  const pct=n=>total?Math.round(n/total*100):0;
+  const hour=new Date().getHours();
+  const greet=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+
+  // ---- KPI cards ----
+  const kpi=(nav,tintBg,tintFg,ico,val,label,sub)=>`
+    <button class="kpi click" data-go="${nav}">
+      <div class="ktop"><div class="kicon" style="background:${tintBg};color:${tintFg}">${ico}</div><span class="kgo">${I.arrow}</span></div>
+      <div class="kval">${val}</div><div class="klabel">${label}</div><div class="ksub">${sub}</div>
+    </button>`;
+  const kpis=`<div class="grid-4" style="margin-bottom:16px">
+    ${kpi('courses','var(--w-college-pill)','var(--w-brand)',I.notes,courses.length,'Courses',`${activeCount} active · ${draftCount} draft`)}
+    ${kpi('generation','var(--w-green-bg)','var(--w-green-fg)',I.check,`${ready}/${total}`,'Topics ready',`${overall}% generated`)}
+    ${kpi('generation','var(--w-orange-bg)','var(--w-orange-fg)',I.spark,generating+pending,'In the queue',`${generating} generating · ${pending} not started`)}
+    ${kpi('institutes','var(--w-info-bg)','var(--w-info-fg)',I.file,institutes.length,'Institutes',`PO / PSO frameworks`)}
+  </div>`;
+
+  // ---- needs attention ----
+  const items=[];
+  courses.filter(c=>c.status==='draft').forEach(c=>{
+    const left=allTopics(c).filter(x=>topicState(x.topic)!=='ready').length;
+    items.push({bg:'var(--w-orange-bg)',fg:'var(--w-orange-fg)',ico:I.spark,at:`${c.code} · ${c.name} is in draft`,ad:`${left} topic${left!==1?'s':''} still need generation before it can go active`,cta:'Open course',act:()=>{currentCourse=c;go('coursePage');}});
+  });
+  if(generating>0)items.push({bg:'var(--w-info-bg)',fg:'var(--w-info-fg)',ico:I.redo,at:`${generating} topic${generating!==1?'s':''} generating now`,ad:'Live jobs in progress across your courses',cta:'View jobs',act:()=>go('generation')});
+  if(pending>0)items.push({bg:'var(--w-college-pill)',fg:'var(--w-brand)',ico:I.arrow,at:`${pending} topic${pending!==1?'s':''} not started`,ad:'Queued sub-topics with no artifacts yet',cta:'Go to generation',act:()=>go('generation')});
+  const attnBody=items.length?items.slice(0,4).map((it,i)=>`
+    <div class="attn-row">
+      <div class="attn-ico" style="background:${it.bg};color:${it.fg}">${it.ico}</div>
+      <div class="attn-tx"><div class="at">${it.at}</div><div class="ad">${it.ad}</div></div>
+      <button class="btn btn-secondary btn-sm" data-attn="${i}">${it.cta}</button>
+    </div>`).join('')
+    :`<div class="attn-row"><div class="attn-ico" style="background:var(--w-green-bg);color:var(--w-green-fg)">${I.check}</div><div class="attn-tx"><div class="at">All caught up</div><div class="ad">Every topic across your courses is generated and ready.</div></div></div>`;
+
+  // ---- pipeline snapshot ----
+  const snapRow=(color,label,n)=>`<div class="snap-row"><span class="sl"><span class="dot" style="background:${color}"></span>${label}</span><div class="progress"><span style="width:${pct(n)}%;background:${color}"></span></div><span class="sv">${n}</span></div>`;
+  const snapshot=`<div class="card">
+    <div class="flex between center mb16"><div class="h3">Pipeline snapshot</div></div>
+    <div class="flex gap center mb24">
+      <div class="ring" style="--p:${overall}"><div class="hole"><b>${overall}%</b><span>Ready</span></div></div>
+      <div style="flex:1;min-width:0">
+        <div class="meta mb8">${ready} of ${total} sub-topics fully generated</div>
+        <div class="lead" style="font-size:13.5px">across ${courses.length} courses · ${activeCount} live for delivery</div>
+      </div>
+    </div>
+    ${snapRow('var(--w-green-fg)','Ready',ready)}
+    ${snapRow('var(--w-info-fg)','Generating',generating)}
+    ${snapRow('var(--w-orange-fg)','Not started',pending)}
+  </div>`;
+
+  // ---- recent courses ----
+  const recent=courses.slice(0,4).map((c,i)=>{const tt=allTopics(c);return`
+    <tr class="row" data-rc="${courses.indexOf(c)}">
+      <td><div class="course-code">${c.code}</div><div class="course-name">${c.name}</div><div class="course-sub">${c.institute||'Winnify'} · ${c.major||'CSE'} · Sem ${c.sem}</div></td>
+      <td style="min-width:170px"><div class="progress mb8"><span style="width:${coursePct(c)}%"></span></div><span class="meta">${tt.filter(x=>topicState(x.topic)==='ready').length}/${tt.length} topics ready</span></td>
+      <td>${statusBadge(c.status)}</td>
+    </tr>`;}).join('');
+  const recentCard=`<div class="card" style="padding:8px 12px">
+    <div class="flex between center" style="padding:14px 8px 6px"><div class="section-label">Recent courses</div><button class="btn btn-ghost btn-sm" data-go="courses">View all ${I.arrow}</button></div>
+    <table class="tbl"><thead><tr><th>Course</th><th>Generation</th><th>Status</th></tr></thead><tbody>${recent}</tbody></table>
+  </div>`;
+
+  v.innerHTML=`<div class="dash-lead">${greet}, Sameer — here's where your content pipeline stands.</div>
+    ${kpis}
+    <div class="dash-cols">
+      <div class="card"><div class="flex between center mb8"><div class="h3">Needs attention</div>${items.length?`<span class="badge b-orange">${items.length}</span>`:''}</div>${attnBody}</div>
+      ${snapshot}
+    </div>
+    ${recentCard}`;
+
+  // ---- wiring ----
+  v.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  v.querySelectorAll('[data-attn]').forEach(b=>b.onclick=()=>items[+b.dataset.attn].act());
+  v.querySelectorAll('tr[data-rc]').forEach(r=>r.onclick=()=>{currentCourse=courses[+r.dataset.rc];go('coursePage');});
+}
+
+function renderCourses(v,a){
+  a.innerHTML=`<button class="icon-btn">${I.bell}</button><button class="btn btn-primary" id="nc">${I.plus}Create new course</button>`;
+  a.querySelector('#nc').onclick=startCreate;
+  if(!courses.length){v.innerHTML=`<div class="card"><div class="empty">${I.empty}<div class="h3 mb8">No courses yet</div><div class="lead mb24">Upload a syllabus to generate your first course plan.</div><button class="btn btn-primary" onclick="startCreate()">${I.plus}Create new course</button></div></div>`;return;}
+  const rows=courses.map((c,i)=>{const ts=allTopics(c);return`
+    <tr class="row" data-i="${i}">
+      <td><div class="course-code">${c.code}</div><div class="course-name">${c.name}</div><div class="course-sub">${c.institute||'Winnify'} · ${c.major||'CSE'} · Sem ${c.sem}</div></td>
+      <td><span class="meta">${c.units.length} units · ${ts.length} topics</span></td>
+      <td style="min-width:160px"><div class="progress mb8"><span style="width:${coursePct(c)}%"></span></div><span class="meta">${ts.filter(x=>topicState(x.topic)==='ready').length}/${ts.length} topics ready</span></td>
+      <td>${statusBadge(c.status)}</td>
+      <td style="text-align:right"><button class="co-icon" data-edit="${i}" title="Edit course">${I.edit}</button></td>
+    </tr>`;}).join('');
+  v.innerHTML=`<div class="flex between center mb16"><div class="section-label">${courses.length} courses · CIET R24</div></div>
+    <div class="card" style="padding:8px 12px"><table class="tbl"><thead><tr><th>Course</th><th>Structure</th><th>Generation</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  v.querySelectorAll('tr.row').forEach(r=>r.onclick=e=>{
+    if(e.target.closest('[data-edit]')){startEdit(courses[+r.dataset.i]);return;}
+    currentCourse=courses[+r.dataset.i];go('coursePage');
+  });
+}
+
+function startCreate(){
+  draft={mode:'create',step:1,details:{code:'',name:'',program:'B.Tech CSE',sem:'',credits:'',regulation:'CIET R24'},method:'upload',fileName:'',extracted:null,delta:[]};
+  go('create');
+}
+window.startCreate=startCreate;
+function startEdit(c){
+  draft={mode:'edit',step:3,target:c,details:{code:c.code,name:c.name,institute:c.institute||'Winnify',program:c.program,major:c.major||'CSE',sem:c.sem,credits:c.credits,regulation:c.regulation||'CIET R24'},method:'upload',fileName:'(existing syllabus)',extracted:JSON.parse(JSON.stringify(c)),delta:[]};
+  go('editCourse');
+}
+function stepper(step){
+  const steps=draft.mode==='edit'?['Course details','Syllabus','Edit course plan']:['Course details','Upload & extract','Finalize COs'];
+  return`<div class="stepper">${steps.map((s,i)=>{const n=i+1;const cls=n<step?'done':n===step?'active':'';const line=i<steps.length-1?`<div class="step-line ${n<step?'done':''}"></div>`:'';return`<div class="step ${cls}"><div class="num">${n<step?I.check:n}</div><div class="lbl">${s}</div></div>${line}`;}).join('')}</div>`;
+}
+function renderCreate(v,a){
+  a.innerHTML=`<button class="btn btn-ghost" onclick="go('${draft.mode==='edit'?'coursePage':'courses'}')">Cancel</button>`;
+  if(draft.step===1)return createStep1(v);
+  if(draft.step===2)return createStep2(v);
+  if(draft.step===3)return createStep3(v);
+}
+function createStep1(v){
+  const d=draft.details;
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<span>${draft.mode==='edit'?d.code+' · Edit':'New course'}</span></div>
+    ${stepper(1)}
+    <div class="card" style="max-width:760px"><div class="h2 mb8">Course details</div>
+      <div class="lead mb24">${draft.mode==='edit'?'Update the course identity.':'Identify the course. You\u2019ll attach the syllabus next.'}</div>
+      <div class="grid-2">
+        <div class="field"><label class="field-label">Course code</label><input class="input" id="f_code" placeholder="CSE125" value="${d.code}"></div>
+        <div class="field"><label class="field-label">Course name</label><input class="input" id="f_name" placeholder="Python Programming" value="${d.name}"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="field-label">Institute</label><select class="select" id="f_inst">${instNames().map(p=>`<option ${p===(d.institute||'Winnify')?'selected':''}>${p}</option>`).join('')}</select></div>
+        <div class="field"><label class="field-label">Program</label><select class="select" id="f_prog">${['B.Tech CSE','B.Tech ECE','B.Tech Mech','B.Tech Civil','MCA','MBA'].map(p=>`<option ${p===d.program?'selected':''}>${p}</option>`).join('')}</select></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="field-label">Major <span class="opt">(drives applicable PSOs)</span></label><select class="select" id="f_major">${MAJORS.map(p=>`<option ${p===(d.major||'CSE')?'selected':''}>${p}</option>`).join('')}</select></div>
+        <div class="field"><label class="field-label">Regulation</label><input class="input" id="f_reg" value="${d.regulation}"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label class="field-label">Semester</label><input class="input" id="f_sem" type="number" placeholder="3" value="${d.sem}"></div>
+        <div class="field"><label class="field-label">Credits</label><input class="input" id="f_cr" type="number" placeholder="3" value="${d.credits}"></div>
+      </div>
+      <div class="flex between center mt16"><span class="meta">Step 1 of 3</span>
+        <button class="btn btn-primary" id="s1">${draft.mode==='edit'?'Continue to plan':'Continue to syllabus'} ${I.chevron}</button></div>
+    </div>`;
+  v.querySelector('#s1').onclick=()=>{
+    draft.details={code:val('f_code')||'CSE125',name:val('f_name')||'Python Programming',institute:val('f_inst'),program:val('f_prog'),major:val('f_major'),sem:val('f_sem')||'3',credits:val('f_cr')||'3',regulation:val('f_reg')};
+    draft.step=draft.mode==='edit'?3:2;render();
+  };
+}
+function createStep2(v){
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<span>${draft.details.code} · Syllabus</span></div>
+    ${stepper(2)}
+    <div class="card" style="max-width:760px"><div class="h2 mb8">Upload syllabus</div>
+      <div class="lead mb24">WinTeach parses the syllabus into Units → Topics → Subtopics, and maps a course outcome to each topic.</div>
+      <div class="upload-tabs" id="uT"><button class="upload-tab ${draft.method==='upload'?'active':''}" data-m="upload">${I.upload}PDF / Image</button><button class="upload-tab ${draft.method==='paste'?'active':''}" data-m="paste">${I.text}Paste text</button></div>
+      <div id="uB"></div><div id="exR"></div>
+      <div class="flex between center mt24"><button class="btn btn-ghost" onclick="draft.step=1;render()">${I.back}Back</button>
+        <button class="btn btn-primary" id="s2" disabled>Continue to finalize COs ${I.chevron}</button></div>
+    </div>`;
+  v.querySelectorAll('#uT .upload-tab').forEach(b=>b.onclick=()=>{draft.method=b.dataset.m;createStep2(v);});
+  drawUpload();if(draft.extracted)drawExtract();
+  $('#s2').disabled=!draft.extracted;
+  $('#s2').onclick=()=>{prepFinalize();draft.step=3;render();};
+}
+function drawUpload(){
+  const b=$('#uB');
+  if(draft.method==='upload'){
+    b.innerHTML=`<div class="dropzone" id="dz">${I.upload}<div class="big">Drop a PDF or image, or browse</div><div class="meta">.pdf, .png, .jpg · up to 20 MB</div>${draft.fileName?`<div class="file-chip">${I.file}${draft.fileName}</div>`:''}</div>
+      <div class="flex gap mt16 wrap"><button class="btn btn-secondary btn-sm" id="us">${I.image}Use sample (Python Programming.pdf)</button></div>`;
+    $('#dz').onclick=()=>extract('Python_Programming_R24.pdf');
+    $('#us').onclick=e=>{e.stopPropagation();extract('Python_Programming_R24.pdf');};
+  }else{
+    b.innerHTML=`<div class="field"><textarea class="textarea" id="pb" style="min-height:200px">${SAMPLE_TEXT}</textarea></div><button class="btn btn-secondary btn-sm" id="pp">${I.spark}Parse pasted text</button>`;
+    $('#pp').onclick=()=>extract('Pasted text');
+  }
+}
+function extract(name){
+  draft.fileName=name;
+  $('#exR').innerHTML=`<div class="card compact mt16" style="display:flex;align-items:center;gap:14px;border-style:dashed"><div class="aico">${I.spark}</div><div><div class="h3" style="font-size:15px">Extracting syllabus…</div><div class="meta" id="es">Reading document</div></div></div>`;
+  const stages=['Reading document','Detecting units, topics & subtopics','Mapping a CO to each topic','Tagging Bloom\u2019s levels','Done'];
+  let i=0;const iv=setInterval(()=>{if(!draft){clearInterval(iv);return;}i++;if(i<stages.length&&$('#es'))$('#es').textContent=stages[i];
+    if(i>=stages.length-1){clearInterval(iv);draft.extracted=JSON.parse(JSON.stringify(SAMPLE));if($('#exR'))drawExtract();if($('#s2'))$('#s2').disabled=false;}},500);
+}
+function drawExtract(){
+  const e=draft.extracted;e.cos=e.cos||[];
+  if(!draft.addTopics)draft.addTopics=ADDITIONAL_LIBRARY.map(s=>({...s,state:'open'}));
+  if(draft.addTopicsOpen===undefined)draft.addTopicsOpen=false;
+  const addCount=draft.addTopics.filter(s=>s.state!=='added').length;
+  const nt=e.units.reduce((s,u)=>s+u.topics.length,0);const ns=e.units.reduce((s,u)=>s+u.topics.reduce((a,t)=>a+t.subs.length,0),0);
+  const cos=e.cos;
+  $('#exR').innerHTML=`<div class="card compact mt16" style="background:var(--w-green-bg);border:none;display:flex;align-items:center;gap:12px"><span class="badge b-green"><span class="dot"></span>Extracted</span><span class="meta" style="color:var(--w-text)">${e.units.length} units · ${nt} topics · ${ns} subtopics · ${cos.length} course outcomes</span><span class="meta" style="margin-left:auto;color:var(--w-text-2)">Review &amp; edit before continuing</span></div>
+    <div class="flex between center mt24 mb16"><div class="section-label">Course Outcomes — ${cos.length} extracted</div><button class="btn btn-secondary btn-sm" id="exAddCo">${I.plus}Add CO</button></div>
+    ${cos.length?cos.map((co,i)=>`<div class="co-row" style="margin-bottom:8px"><div class="co-id">${co.id}</div><div class="co-body"><div class="co-text">${co.text}</div><div class="co-meta"><span class="bloom ${bloomClass(co.bloom)}">${co.bloom}</span></div></div><div class="co-actions"><button class="co-icon" data-exeditco="${i}" title="Edit CO">${I.edit}</button><button class="co-icon danger" data-exdelco="${i}" title="Delete CO">${I.trash}</button></div></div>`).join(''):`<div class="co-row" style="margin-bottom:8px;border-style:dashed;justify-content:center"><span class="meta">No course outcomes detected — add one.</span></div>`}
+    <div class="section-label mt24 mb16">Detected structure — ${e.name} (${e.code})</div>
+    ${e.units.map((u,ui)=>`<div class="unit"><div class="unit-head"><span class="un">Unit ${u.n}</span><span class="ut">${u.title}</span><span class="ct">${u.topics.length} topics</span><button class="co-icon" style="margin-left:10px" data-exaddtopic="${ui}" title="Add topic">${I.plus}</button></div>
+      ${u.topics.map((t,ti)=>`<div style="padding:14px 18px;border-bottom:1px solid var(--w-border)"><div class="flex between center"><div style="min-width:0"><div style="font-family:var(--font-display);font-weight:600;font-size:14px;margin-bottom:6px">${t.name}</div><div class="co-meta mb8"><span class="comap">${coRefFor(e,ui)} · ${t.co.bloom}</span></div><div>${t.subs.map(s=>`<span class="subchip">${s}</span>`).join('')}</div></div><div class="co-actions"><button class="co-icon" data-exedittopic="${ui}.${ti}" title="Edit topic">${I.edit}</button><button class="co-icon danger" data-exdeltopic="${ui}.${ti}" title="Delete topic">${I.trash}</button></div></div></div>`).join('')}</div>`).join('')}
+    <div class="section-label mt24 mb8 collapse-head" id="addTopicsHead" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none"><span class="ico18">${I.spark}</span>Add industry &amp; AI topics<span class="meta" style="font-weight:500;color:var(--w-text-3)">${addCount} suggestions</span><span class="ico18" id="addTopicsChev" style="margin-left:auto;transition:transform .15s;transform:rotate(${draft.addTopicsOpen?90:0}deg)">${I.chevron}</span></div>
+    <div id="addTopicsBody" style="${draft.addTopicsOpen?'':'display:none'}">
+      <div class="meta mb16">Suggested topics from the Additional Course Library. Add the ones relevant to this offering — they go into an <b>Industry & AI Electives</b> unit.</div>
+      <div id="exAddTopics"></div>
+    </div>`;
+  const R=$('#exR');
+  R.querySelector('#exAddCo').onclick=()=>openCoEditor(null,drawExtract);
+  R.querySelectorAll('[data-exeditco]').forEach(b=>b.onclick=()=>openCoEditor(+b.dataset.exeditco,drawExtract));
+  R.querySelectorAll('[data-exdelco]').forEach(b=>b.onclick=()=>{e.cos.splice(+b.dataset.exdelco,1);renumberCos(e);drawExtract();});
+  R.querySelectorAll('[data-exaddtopic]').forEach(b=>b.onclick=()=>openTopicEditor(+b.dataset.exaddtopic,null,drawExtract));
+  R.querySelectorAll('[data-exedittopic]').forEach(b=>b.onclick=()=>{const[ui,ti]=b.dataset.exedittopic.split('.').map(Number);openTopicEditor(ui,ti,drawExtract);});
+  R.querySelectorAll('[data-exdeltopic]').forEach(b=>b.onclick=()=>{const[ui,ti]=b.dataset.exdeltopic.split('.').map(Number);e.units[ui].topics.splice(ti,1);drawExtract();});
+  R.querySelector('#addTopicsHead').onclick=()=>{draft.addTopicsOpen=!draft.addTopicsOpen;$('#addTopicsBody').style.display=draft.addTopicsOpen?'':'none';$('#addTopicsChev').style.transform=`rotate(${draft.addTopicsOpen?90:0}deg)`;};
+  drawExtractAddTopics();
+}
+function drawExtractAddTopics(){
+  const wrap=$('#exAddTopics');if(!wrap)return;
+  const e=draft.extracted;
+  if(!draft.addTopics)draft.addTopics=ADDITIONAL_LIBRARY.map(s=>({...s,state:'open'}));
+  const visible=draft.addTopics.filter(s=>s.state!=='added');
+  if(!visible.length){wrap.innerHTML=`<div class="meta" style="padding:8px 2px">All suggested topics added.</div>`;return;}
+  wrap.innerHTML=draft.addTopics.map((s,i)=>{
+    if(s.state==='added')return'';
+    const actions=s.state==='dismissed'?`<span class="meta">Dismissed</span>`
+      :`<button class="btn btn-secondary btn-sm" data-add>${I.plus}Add topic</button><button class="co-icon" data-dis title="Dismiss">${I.x}</button>`;
+    return`<div class="co-row ${s.state==='dismissed'?'dismissed':''}" data-i="${i}" style="margin-bottom:8px">
+      <div class="co-id" style="color:var(--w-blue-fg);flex:0 0 76px"><span class="lib-cat lc-${s.cat.toLowerCase()}">${s.cat}</span></div>
+      <div class="co-body"><div style="font-family:var(--font-display);font-weight:600;font-size:14px;margin-bottom:4px">${s.name}</div><div class="co-meta mb8"><span class="bloom ${bloomClass(s.bloom)}">${s.bloom}</span></div><div>${s.subs.map(x=>`<span class="subchip">${x}</span>`).join('')}</div></div>
+      <div class="co-actions">${actions}</div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.co-row').forEach(r=>{const i=+r.dataset.i;const s=draft.addTopics[i];
+    const ab=r.querySelector('[data-add]'),db=r.querySelector('[data-dis]');
+    if(ab)ab.onclick=()=>{s.state='added';getElectivesUnit(e).topics.push(topic(s.name,s.subs,s.co,s.bloom));drawExtract();toast('Added from Additional Course Library');};
+    if(db)db.onclick=()=>{s.state='dismissed';drawExtractAddTopics();};
+  });
+}
+
+function prepFinalize(){draft.delta=(draft.extracted.libraryDelta||SAMPLE.libraryDelta).map(d=>({...d,state:'open'}));}
+function createStep3(v){
+  if(draft.mode==='edit')return editPlanStep(v);
+  return finalizeCoStep(v);
+}
+function finalizeCoStep(v){
+  const e=draft.extracted;e.cos=e.cos||[];
+  if(!draft.coSuggest)draft.coSuggest=CO_LIBRARY.map(s=>({...s,state:'open'}));
+  if(draft.coSuggestOpen===undefined)draft.coSuggestOpen=false;
+  const sugCount=draft.coSuggest.filter(s=>s.state!=='added').length;
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<span>${draft.details.code} · Finalize COs</span></div>
+    ${stepper(3)}
+    <div class="card" style="max-width:900px">
+      <div class="h2 mb8">Finalize Course Outcomes</div>
+      <div class="lead mb24">Review the outcomes extracted from the syllabus. Add, edit or delete COs, or pull from the CO Library. Topics, CO–PO/PSO mapping and Bloom tags are generated from this final set.</div>
+      <div id="coSummary" class="mb24"></div>
+      <div class="flex between center mb16"><div class="section-label">Course Outcomes</div><button class="btn btn-secondary btn-sm" id="addCo">${I.plus}Add CO</button></div>
+      <div id="coList"></div>
+      <div class="section-label mt24 mb8 collapse-head" id="coSuggestHead" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none"><span class="ico18">${I.flash}</span>CO Library suggestions<span class="meta" style="font-weight:500;color:var(--w-text-3)">${sugCount} suggestions</span><span class="ico18" id="coSuggestChev" style="margin-left:auto;transition:transform .15s;transform:rotate(${draft.coSuggestOpen?90:0}deg)">${I.chevron}</span></div>
+      <div id="coSuggestBody" style="${draft.coSuggestOpen?'':'display:none'}">
+        <div class="meta mb16">Outcomes from equivalent Python courses in the Winnify CO Library. Add the ones that fit your offering.</div>
+        <div id="coSuggest"></div>
+      </div>
+      <div class="flex between center mt24">
+        <button class="btn btn-ghost" onclick="draft.step=2;render()">${I.back}Back</button>
+        <button class="btn btn-primary" id="gen">${I.spark}Generate course plan</button>
+      </div>
+    </div>`;
+  drawCoSummary();drawCoList();drawCoSuggest();
+  v.querySelector('#coSuggestHead').onclick=()=>{draft.coSuggestOpen=!draft.coSuggestOpen;$('#coSuggestBody').style.display=draft.coSuggestOpen?'':'none';$('#coSuggestChev').style.transform=`rotate(${draft.coSuggestOpen?90:0}deg)`;};
+  v.querySelector('#addCo').onclick=()=>openCoEditor(null);
+  v.querySelector('#gen').onclick=()=>{const e2=draft.extracted;if(!e2.cos||!e2.cos.length){toast('Add at least one course outcome');return;}finalize();};
+}
+function renumberCos(e){(e.cos||[]).forEach((co,i)=>co.id='CO'+(i+1));}
+function drawCoSummary(){
+  const wrap=$('#coSummary');if(!wrap)return;
+  const cos=draft.extracted.cos||[];
+  const counts={};cos.forEach(c=>counts[c.bloom]=(counts[c.bloom]||0)+1);
+  const chips=BLOOM.filter(b=>counts[b]).map(b=>`<span class="bloom ${bloomClass(b)}">${counts[b]} ${b}</span>`).join(' ')||'<span class="meta">No outcomes yet</span>';
+  wrap.innerHTML=`<div class="info-card" style="background:var(--w-college-pill);border:none;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <div style="text-align:center"><div class="h1" style="color:var(--w-brand);font-size:30px;line-height:1">${cos.length}</div><div class="meta" style="color:var(--w-brand);font-weight:600">Outcomes</div></div>
+    <div style="width:1px;height:38px;background:var(--w-border-strong)"></div>
+    <div style="flex:1;min-width:200px"><div class="meta mb8" style="font-weight:600">Bloom coverage</div><div class="flex gap wrap" style="gap:6px">${chips}</div></div>
+  </div>`;
+}
+function coTopics(e,i){const u=e.units[i];return u?u.topics:[];}
+function drawCoList(){
+  const e=draft.extracted;
+  $('#coList').innerHTML=(e.cos&&e.cos.length)?e.cos.map((co,i)=>{
+    const tps=coTopics(e,i);
+    const tags=tps.length?`<div class="mt8" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="meta" style="font-weight:600">Maps to:</span>${tps.map(t=>`<span class="subchip" style="margin:0">${t.name}</span>`).join('')}</div>`:`<div class="mt8"><span class="meta" style="color:var(--w-text-3)">No topics mapped yet</span></div>`;
+    return`<div class="co-row" style="margin-bottom:8px">
+    <div class="co-id">${co.id}</div>
+    <div class="co-body"><div class="co-text">${co.text}</div><div class="co-meta"><span class="bloom ${bloomClass(co.bloom)}">${co.bloom}</span></div>${tags}</div>
+    <div class="co-actions"><button class="co-icon" data-editco="${i}" title="Edit CO">${I.edit}</button><button class="co-icon danger" data-delco="${i}" title="Delete CO">${I.trash}</button></div>
+  </div>`;}).join(''):`<div class="co-row" style="margin-bottom:8px;border-style:dashed;justify-content:center"><span class="meta">No course outcomes yet — add one or pull from the library below.</span></div>`;
+  $('#coList').querySelectorAll('[data-editco]').forEach(b=>b.onclick=()=>openCoEditor(+b.dataset.editco));
+  $('#coList').querySelectorAll('[data-delco]').forEach(b=>b.onclick=()=>{e.cos.splice(+b.dataset.delco,1);renumberCos(e);drawCoList();drawCoSummary();drawCoSuggest();});
+}
+function drawCoSuggest(){
+  const wrap=$('#coSuggest');if(!wrap)return;
+  const e=draft.extracted;
+  const existing=new Set((e.cos||[]).map(c=>normCo(c.text)));
+  const visible=draft.coSuggest.filter(s=>s.state!=='added');
+  if(!visible.length){wrap.innerHTML=`<div class="meta" style="padding:8px 2px">All library suggestions handled.</div>`;return;}
+  wrap.innerHTML=draft.coSuggest.map((s,i)=>{
+    if(s.state==='added')return'';
+    const dup=existing.has(normCo(s.text));
+    const actions=s.state==='dismissed'?`<span class="meta">Dismissed</span>`
+      :dup?`<span class="badge b-muted">Already added</span><button class="co-icon" data-dis title="Dismiss">${I.x}</button>`
+      :`<button class="btn btn-secondary btn-sm" data-add>${I.plus}Add CO</button><button class="co-icon" data-dis title="Dismiss">${I.x}</button>`;
+    return`<div class="co-row ${s.state==='dismissed'?'dismissed':''}" data-i="${i}" style="margin-bottom:8px">
+      <div class="co-id" style="color:var(--w-blue-fg)">LIB</div>
+      <div class="co-body"><div class="co-text">${s.text}</div><div class="co-meta"><span class="bloom ${bloomClass(s.bloom)}">${s.bloom}</span></div></div>
+      <div class="co-actions">${actions}</div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.co-row').forEach(r=>{const i=+r.dataset.i;const s=draft.coSuggest[i];
+    const ab=r.querySelector('[data-add]'),db=r.querySelector('[data-dis]');
+    if(ab)ab.onclick=()=>{s.state='added';e.cos.push({id:'CO'+(e.cos.length+1),text:s.text,bloom:s.bloom});renumberCos(e);drawCoList();drawCoSuggest();drawCoSummary();toast('Added from CO Library');};
+    if(db)db.onclick=()=>{s.state='dismissed';drawCoSuggest();};
+  });
+}
+function openCoEditor(idx,redraw){
+  const e=draft.extracted;e.cos=e.cos||[];const editing=idx!==null;
+  const co=editing?e.cos[idx]:{id:'CO'+(e.cos.length+1),text:'',bloom:'Understand'};
+  const m=el(`<div class="modal-bg"><div class="modal">
+    <div class="flex between center mb16"><div class="h3">${editing?'Edit Course Outcome':'Add Course Outcome'}</div><button class="co-icon" id="mx">${I.x}</button></div>
+    <div class="field"><label class="field-label">Outcome statement</label><textarea class="textarea" id="co_text" placeholder="Apply... / Implement... / Analyze...">${co.text}</textarea></div>
+    <div class="field"><label class="field-label">Bloom’s level</label><select class="select" id="co_bloom">${BLOOM.map(b=>`<option ${b===co.bloom?'selected':''}>${b}</option>`).join('')}</select></div>
+    <div class="flex between center mt24"><button class="btn btn-ghost" id="mc">Cancel</button><button class="btn btn-primary" id="ms">${I.check}${editing?'Save CO':'Add CO'}</button></div>
+  </div></div>`);
+  $('#modalRoot').appendChild(m);
+  const close=()=>m.remove();
+  m.querySelector('#mx').onclick=close;m.querySelector('#mc').onclick=close;m.addEventListener('click',ev=>{if(ev.target===m)close();});
+  m.querySelector('#ms').onclick=()=>{
+    const text=m.querySelector('#co_text').value.trim();if(!text){m.querySelector('#co_text').focus();return;}
+    const bloom=m.querySelector('#co_bloom').value;
+    if(editing){co.text=text;co.bloom=bloom;}else e.cos.push({id:'CO'+(e.cos.length+1),text,bloom});
+    renumberCos(e);close();
+    if(redraw)redraw();else{drawCoList();if($('#coSummary'))drawCoSummary();if($('#coSuggest'))drawCoSuggest();}
+  };
+}
+function editPlanStep(v){
+  const e=draft.extracted;const isEdit=draft.mode==='edit';
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<span>${draft.details.code} · ${isEdit?'Edit plan':'Course plan'}</span></div>
+    ${stepper(3)}
+    <div class="card" style="max-width:900px">
+      <div class="h2 mb8">${isEdit?'Edit course plan':'Finalize course plan'}</div>
+      <div class="lead mb24">Each topic carries one mapped course outcome (Bloom-tagged). Edit topics or their outcomes, add a topic, or pull suggestions from the Winnify library.</div>
+      ${!isEdit?`<div class="delta-banner">${I.info}<div class="txt"><b id="dCount">${draft.delta.filter(d=>d.state==='open').length} library suggestions</b> exist for an equivalent course but aren\u2019t in this syllabus. Add as new topics, or dismiss.</div></div>`:''}
+      <div id="planTree"></div>
+      ${!isEdit?`<div class="section-label mt24 mb16">Library delta — topics not in this syllabus</div><div id="deltaList"></div>`:''}
+      <div class="flex between center mt24">
+        <button class="btn btn-ghost" onclick="draft.step=${isEdit?1:2};render()">${I.back}Back</button>
+        <button class="btn btn-primary" id="fin">${I.check}${isEdit?'Save changes':'Finalize course plan'}</button>
+      </div>
+    </div>`;
+  drawPlanTree();if(!isEdit)drawDelta();
+  v.querySelector('#fin').onclick=isEdit?saveEdit:finalize;
+}
+function drawPlanTree(){
+  const e=draft.extracted;
+  $('#planTree').innerHTML=e.units.map((u,ui)=>`<div class="unit">
+    <div class="unit-head"><span class="un">Unit ${u.n}</span><span class="ut">${u.title}</span>
+      <span class="ct">${u.topics.length} topics</span>
+      <button class="co-icon" style="margin-left:10px" data-addtopic="${ui}" title="Add topic">${I.plus}</button></div>
+    ${u.topics.map((t,ti)=>`<div style="padding:14px 18px;border-bottom:1px solid var(--w-border)">
+      <div class="flex between center">
+        <div style="min-width:0"><div style="font-family:var(--font-display);font-weight:600;font-size:14px">${t.name}</div>
+          <div class="co-meta mt8"><span class="bloom ${bloomClass(t.co.bloom)}">${t.co.bloom}</span><span class="meta" style="max-width:520px">CO: ${t.co.text}</span></div>
+          <div class="mt8">${t.subs.map(s=>`<span class="subchip">${s}</span>`).join('')}</div></div>
+        <div class="co-actions"><button class="co-icon" data-edittopic="${ui}.${ti}" title="Edit topic & CO">${I.edit}</button><button class="co-icon danger" data-deltopic="${ui}.${ti}" title="Delete topic">${I.trash}</button></div>
+      </div></div>`).join('')}</div>`).join('');
+  $('#planTree').querySelectorAll('[data-edittopic]').forEach(b=>b.onclick=()=>{const[ui,ti]=b.dataset.edittopic.split('.').map(Number);openTopicEditor(ui,ti);});
+  $('#planTree').querySelectorAll('[data-deltopic]').forEach(b=>b.onclick=()=>{const[ui,ti]=b.dataset.deltopic.split('.').map(Number);e.units[ui].topics.splice(ti,1);drawPlanTree();});
+  $('#planTree').querySelectorAll('[data-addtopic]').forEach(b=>b.onclick=()=>openTopicEditor(+b.dataset.addtopic,null));
+}
+function drawDelta(){
+  const d=$('#deltaList');if(!d)return;
+  const open=draft.delta.filter(x=>x.state!=='added');
+  if(!open.length){d.innerHTML=`<div class="meta" style="padding:8px 2px">All suggestions handled.</div>`;return;}
+  d.innerHTML=draft.delta.map((dc,i)=>dc.state==='added'?'':`<div class="co-row ${dc.state==='dismissed'?'dismissed':''}" data-i="${i}">
+    <div class="co-id" style="color:var(--w-blue-fg)">LIB</div>
+    <div class="co-body"><div class="co-text">${dc.text}</div><div class="co-meta"><span class="bloom ${bloomClass(dc.bloom)}">${dc.bloom}</span><span class="meta">Unit ${dc.unit}</span></div></div>
+    <div class="co-actions">${dc.state==='dismissed'?`<span class="meta">Dismissed</span>`:`<button class="btn btn-secondary btn-sm" data-add>${I.plus}Add as topic</button><button class="co-icon" data-dis title="Dismiss">${I.x}</button>`}</div>
+  </div>`).join('');
+  d.querySelectorAll('.co-row').forEach(r=>{const i=+r.dataset.i;const dc=draft.delta[i];
+    const ab=r.querySelector('[data-add]'),db=r.querySelector('[data-dis]');
+    if(ab)ab.onclick=()=>{dc.state='added';const u=draft.extracted.units.find(x=>x.n===dc.unit)||draft.extracted.units[0];
+      u.topics.push(topic(dc.text.replace(/\.$/,''),['Auto-seeded from library'],dc.text,dc.bloom));drawPlanTree();drawDelta();updDelta();};
+    if(db)db.onclick=()=>{dc.state='dismissed';drawDelta();updDelta();};
+  });
+}
+function updDelta(){const n=draft.delta.filter(d=>d.state==='open').length;const b=$('#dCount');if(b)b.textContent=`${n} library suggestions`;}
+
+function openTopicEditor(ui,ti,redraw){
+  const e=draft.extracted;const editing=ti!==null;
+  const t=editing?e.units[ui].topics[ti]:{name:'',subs:[],co:{text:'',bloom:'Understand'}};
+  const m=el(`<div class="modal-bg"><div class="modal">
+    <div class="flex between center mb16"><div class="h3">${editing?'Edit topic':'Add topic'} · Unit ${e.units[ui].n}</div><button class="co-icon" id="mx">${I.x}</button></div>
+    <div class="field"><label class="field-label">Topic name</label><input class="input" id="mt_name" value="${t.name}" placeholder="e.g. Functions"></div>
+    <div class="field"><label class="field-label">Subtopics <span class="opt">(one per line)</span></label><textarea class="textarea" id="mt_subs">${t.subs.join('\n')}</textarea></div>
+    <div class="field"><label class="field-label">Mapped course outcome</label><textarea class="textarea" id="mt_co" placeholder="Implement... / Understand... / Analyze...">${t.co.text}</textarea></div>
+    <div class="field"><label class="field-label">Bloom\u2019s level</label><select class="select" id="mt_bloom">${BLOOM.map(b=>`<option ${b===t.co.bloom?'selected':''}>${b}</option>`).join('')}</select></div>
+    <div class="flex between center mt24"><button class="btn btn-ghost" id="mc">Cancel</button><button class="btn btn-primary" id="ms">${I.check}${editing?'Save topic':'Add topic'}</button></div>
+  </div></div>`);
+  $('#modalRoot').appendChild(m);
+  const close=()=>m.remove();
+  m.querySelector('#mx').onclick=close;m.querySelector('#mc').onclick=close;m.addEventListener('click',ev=>{if(ev.target===m)close();});
+  m.querySelector('#ms').onclick=()=>{
+    const name=m.querySelector('#mt_name').value.trim();if(!name){m.querySelector('#mt_name').focus();return;}
+    const subs=m.querySelector('#mt_subs').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const co={text:m.querySelector('#mt_co').value.trim()||('Understand '+name+'.'),bloom:m.querySelector('#mt_bloom').value};
+    if(editing){t.name=name;t.subs=subs;t.co=co;}
+    else{e.units[ui].topics.push(topic(name,subs,co.text,co.bloom));}
+    close();if(redraw)redraw();else drawPlanTree();
+  };
+}
+function buildCourseFromDraft(){
+  const d=draft.details;const c=JSON.parse(JSON.stringify(draft.extracted));
+  c.code=d.code;c.name=d.name;c.institute=d.institute;c.program=d.program;c.major=d.major;c.sem=d.sem;c.credits=d.credits;c.regulation=d.regulation;
+  delete c.libraryDelta;delete c.coMapping;return c;
+}
+function finalize(){
+  const c=buildCourseFromDraft();c.status='draft';
+  c.units.forEach(u=>u.topics.forEach(t=>{if(!t.artifacts)t.artifacts=newArtifacts();t.id=nid();}));
+  courses.unshift(c);currentCourse=c;
+  const nt=allTopics(c).length;draft=null;go('coursePage');
+  toast(`Course plan finalized · ${nt} topics queued for generation`);
+}
+function saveEdit(){
+  const c=draft.target;const built=buildCourseFromDraft();
+  Object.assign(c,{code:built.code,name:built.name,institute:built.institute,program:built.program,major:built.major,sem:built.sem,credits:built.credits,regulation:built.regulation,units:built.units});
+  c.units.forEach(u=>u.topics.forEach(t=>{if(!t.artifacts)t.artifacts=newArtifacts();if(!t.id)t.id=nid();}));
+  currentCourse=c;draft=null;go('coursePage');toast('Course plan updated');
+}
+
+function renderCoursePage(v,a){
+  const c=currentCourse;const ts=allTopics(c);const ready=ts.filter(x=>topicState(x.topic)==='ready').length;
+  a.innerHTML=`<button class="btn btn-ghost" onclick="go('courses')">${I.back}All courses</button>
+    <button class="btn btn-secondary" id="edit">${I.edit}Edit course</button>
+    ${ready<ts.length?`<button class="btn btn-primary" id="genAll">${I.spark}Generate pending</button>`:''}`;
+  a.querySelector('#edit').onclick=()=>startEdit(c);
+  if(a.querySelector('#genAll'))a.querySelector('#genAll').onclick=()=>{ts.forEach((x,i)=>{if(topicState(x.topic)!=='ready')setTimeout(()=>runTopicFlow(x.topic),i*180);});};
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<span>${c.code}</span></div>
+    <div class="score mb24">
+      <div><div class="eyebrow">${c.code} · ${c.institute||'Winnify'} · ${c.major||'CSE'}</div><div class="h1" style="color:#fff;font-size:30px;margin-bottom:10px">${c.name}</div>
+        <div class="flex gap center wrap"><span class="badge" style="background:rgba(255,255,255,.18);color:#fff">${c.status==='active'?'<span class="dot" style="background:#7CE2A0"></span>Active':'Draft'}</span><span class="meta" style="color:rgba(255,255,255,.85)">${c.program} · Sem ${c.sem} · ${c.credits} credits · ${c.regulation||'CIET R24'}</span></div></div>
+      <div class="score-tiles"><div class="score-tile"><div class="l">Units</div><div class="v">${c.units.length}</div></div><div class="score-tile"><div class="l">Topics</div><div class="v">${ts.length}</div></div><div class="score-tile"><div class="l">COs</div><div class="v">${(c.cos||[]).length}</div></div><div class="score-tile"><div class="l">Ready</div><div class="v">${ready}/${ts.length}</div></div></div>
+    </div>
+    <div class="flex between center mb16"><div class="section-label">Course Outcomes</div></div>
+    <div class="card mb24">${coListSummary(c)}</div>
+    <div class="flex between center mb16"><div class="section-label">CO × PO / PSO Mapping</div><span class="meta">${c.institute||'Winnify'} · ${c.major||'CSE'}</span></div>
+    <div class="card mb24" style="overflow-x:auto">${coMapTable(c)}</div>
+    <div class="flex between center mb16"><div class="section-label">Units & topics</div><span class="meta">${coursePct(c)}% generated overall</span></div>
+    <div id="unitTree"></div>`;
+  drawUnitTree(c);
+}
+function coListSummary(c){
+  const cos=c.cos||[];
+  if(!cos.length)return`<div class="meta">No course outcomes defined.</div>`;
+  return cos.map(co=>`<div class="co-row" style="margin-bottom:8px">
+    <div class="co-id">${co.id}</div>
+    <div class="co-body"><div class="co-text">${co.text}</div><div class="co-meta"><span class="bloom ${bloomClass(co.bloom)}">${co.bloom}</span></div></div>
+  </div>`).join('');
+}
+function coMapTable(c){
+  const cos=c.cos||[];if(!cos.length)return`<div class="meta">No course outcomes to map.</div>`;
+  const cols=mapCols(c);const map=ensureMapping(c);
+  return`<table class="tbl maptbl"><thead><tr><th>CO</th>${cols.map(col=>`<th>${col}</th>`).join('')}</tr></thead><tbody>
+    ${cos.map(co=>`<tr><td><span class="course-code">${co.id}</span></td>${cols.map(col=>{const val=map[co.id]?.[col];return`<td>${val?`<span class="mapval mv${val}">${val}</span>`:`<span class="mapempty">–</span>`}</td>`;}).join('')}</tr>`).join('')}
+  </tbody></table>
+  <div class="meta mt16"><span class="maplegend"><span class="mapval mv1">1</span> Low</span><span class="maplegend"><span class="mapval mv2">2</span> Medium</span><span class="maplegend"><span class="mapval mv3">3</span> High</span></div>`;
+}
+function drawUnitTree(c){
+  $('#unitTree').innerHTML=c.units.map((u,ui)=>`<div class="unit">
+    <div class="unit-head"><span class="un">Unit ${u.n}</span><span class="ut">${u.title}</span><span class="ct">${u.topics.filter(t=>topicState(t)==='ready').length}/${u.topics.length} ready</span></div>
+    ${u.topics.map(t=>`<div class="topic-item" data-tid="${t.id}">
+      <div style="flex:1;min-width:0"><div class="tname">${t.name}</div><div class="tsub">${t.subs.length} subtopics · <span class="comap">${coRefFor(c,ui)} · ${t.co.bloom}</span></div></div>
+      <div style="width:120px"><div class="progress"><span style="width:${topicPct(t)}%"></span></div></div>
+      ${topicBadge(t)}${I.chevron}
+    </div>`).join('')}</div>`).join('');
+  $('#unitTree').querySelectorAll('.topic-item').forEach(r=>r.onclick=()=>{
+    const f=allTopics(c).find(x=>x.topic.id===r.dataset.tid);currentTopic=f.topic;currentTopic._unit=f.unit;go('topicPage');
+  });
+}
+
+function renderTopicPage(v,a){
+  const t=currentTopic;const c=currentCourse;
+  a.innerHTML=`<button class="btn btn-ghost" onclick="go('coursePage')">${I.back}Back to ${c.code}</button>
+    <button class="btn btn-secondary" id="editCo">${I.edit}Edit linked outcome</button>
+    ${topicState(t)==='pending'?`<button class="btn btn-primary" id="gen">${I.spark}Generate artifacts</button>`:topicState(t)==='ready'?`<button class="btn btn-secondary" id="regen">${I.redo}Regenerate all</button>`:''}`;
+  a.querySelector('#editCo').onclick=()=>openCoInline(t);
+  if(a.querySelector('#gen'))a.querySelector('#gen').onclick=()=>runTopicFlow(t);
+  if(a.querySelector('#regen'))a.querySelector('#regen').onclick=()=>{t.artifacts=newArtifacts();render();runTopicFlow(t);};
+  v.innerHTML=`<div class="breadcrumb"><a onclick="go('courses')">Courses</a>${I.chevron}<a onclick="go('coursePage')">${c.code}</a>${I.chevron}<span>Unit ${t._unit.n}</span>${I.chevron}<span>${t.name}</span></div>
+    <div class="grid-2" style="gap:0 20px;align-items:start;grid-template-columns:1.4fr 1fr">
+      <div>
+        <div class="card mb24"><div class="flex between center mb16"><div class="h2">${t.name}</div>${topicBadge(t)}</div>
+          <div class="info-card mb16" style="background:var(--w-college-pill);border:none">
+            <div class="meta mb8" style="color:var(--w-brand);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11px">Linked course outcome</div>
+            <div style="font-size:15px;line-height:1.5;margin-bottom:8px">${t.co.text}</div>
+            <span class="bloom ${bloomClass(t.co.bloom)}">${t.co.bloom}</span>
+          </div>
+          <div class="section-label mb16">Subtopics</div>
+          <div>${t.subs.map((s,i)=>`<div class="topic-item" style="cursor:default;padding:12px 0"><span class="aico" style="width:26px;height:26px;border-radius:8px;font-family:var(--font-display);font-weight:600;font-size:12px;color:var(--w-brand)">${i+1}</span><div class="tname" style="font-weight:500">${s}</div></div>`).join('')}</div>
+        </div>
+        <div class="info-card"><div class="section-label mb16">Topic info</div>
+          <div class="grid-2"><div class="mb16"><div class="meta">Unit</div><div style="font-family:var(--font-display);font-weight:600">Unit ${t._unit.n} · ${t._unit.title}</div></div>
+          <div class="mb16"><div class="meta">Subtopics</div><div style="font-family:var(--font-display);font-weight:600">${t.subs.length}</div></div>
+          <div><div class="meta">Course</div><div style="font-family:var(--font-display);font-weight:600">${c.code}</div></div>
+          <div><div class="meta">Bloom level</div><div style="font-family:var(--font-display);font-weight:600">${t.co.bloom}</div></div></div>
+        </div>
+      </div>
+      <div><div class="card"><div class="section-label mb16">Generation flow</div>
+        <div class="meta mb16">Teacher Notes generate first; the other three run in parallel once notes are ready.</div>
+        <div id="flow"></div></div></div>
+    </div>`;
+  drawFlow(t);
+}
+function artCard(t,k){
+  const def=ART_DEFS.find(d=>d.k===k);const p=t.artifacts[k];
+  const notesReady=t.artifacts.notes>=100;
+  const locked=k!=='notes'&&!notesReady&&p===0;
+  let badge;
+  if(p>=100)badge=`<span class="badge b-green"><span class="dot"></span>Ready</span>`;
+  else if(p>0)badge=`<span class="badge b-info">${p}%</span>`;
+  else if(locked)badge=`<span class="badge b-muted">Waiting</span>`;
+  else badge=`<span class="badge b-orange">Pending</span>`;
+  return`<div class="artifact"><div class="ahead"><div class="aico">${def.ico}</div><div style="flex:1"><div class="atitle">${def.label}</div><div class="asub">${def.sub}</div></div>${badge}</div>
+    <div class="progress"><span style="width:${p}%"></span></div></div>`;
+}
+function drawFlow(t){
+  $('#flow').innerHTML=`<div class="flow">
+    <div class="flow-stage">${artCard(t,'notes')}</div>
+    <div class="flow-conn">${I.arrow}</div>
+    <div class="flow-stage"><div class="parallel">${artCard(t,'preassess')}${artCard(t,'quiz')}${artCard(t,'flash')}</div></div>
+  </div>`;
+}
+function runTopicFlow(t){
+  t.artifacts.notes=Math.max(t.artifacts.notes,5);syncTopicViews(t);
+  const n=setInterval(()=>{
+    t.artifacts.notes=Math.min(100,t.artifacts.notes+20);syncTopicViews(t);
+    if(t.artifacts.notes>=100){clearInterval(n);startParallel(t);}
+  },380);
+}
+function startParallel(t){
+  ['preassess','quiz','flash'].forEach(k=>{
+    t.artifacts[k]=Math.max(t.artifacts[k],5);
+    const iv=setInterval(()=>{
+      t.artifacts[k]=Math.min(100,Math.round(t.artifacts[k]+(14+Math.random()*10)));syncTopicViews(t);
+      if(t.artifacts[k]>=100){t.artifacts[k]=100;clearInterval(iv);
+        if(topicState(t)==='ready'){toast(`${t.name} · all artifacts ready`);maybeActivate();}}
+    },360+Math.random()*200);
+  });
+}
+function syncTopicViews(t){
+  if(route==='topicPage'&&currentTopic.id===t.id)drawFlow(t);
+  if(route==='coursePage')drawUnitTree(currentCourse);
+  if(route==='generation')renderGeneration($('#view'),$('#topActions'));
+  $('#navGenCount').textContent=pendingJobs();
+}
+function maybeActivate(){const c=currentCourse;if(!c)return;if(coursePct(c)>=100&&c.status==='draft'){c.status='active';toast(`${c.code} is now active`);}}
+function openCoInline(t){
+  const m=el(`<div class="modal-bg"><div class="modal">
+    <div class="flex between center mb16"><div class="h3">Edit linked outcome</div><button class="co-icon" id="mx">${I.x}</button></div>
+    <div class="lead mb24" style="font-size:13.5px">Editing the outcome statement or Bloom level for <b>${t.name}</b>. Saving will mark artifacts stale and offer to regenerate.</div>
+    <div class="field"><label class="field-label">Outcome statement</label><textarea class="textarea" id="co_text">${t.co.text}</textarea></div>
+    <div class="field"><label class="field-label">Bloom\u2019s level</label><select class="select" id="co_bloom">${BLOOM.map(b=>`<option ${b===t.co.bloom?'selected':''}>${b}</option>`).join('')}</select></div>
+    <div class="flex between center mt24"><button class="btn btn-ghost" id="mc">Cancel</button>
+      <div class="flex gap"><button class="btn btn-secondary" id="saveOnly">Save only</button><button class="btn btn-primary" id="saveRegen">${I.redo}Save & regenerate</button></div></div>
+  </div></div>`);
+  $('#modalRoot').appendChild(m);
+  const close=()=>m.remove();
+  m.querySelector('#mx').onclick=close;m.querySelector('#mc').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();});
+  const apply=()=>{const tx=m.querySelector('#co_text').value.trim();if(tx)t.co.text=tx;t.co.bloom=m.querySelector('#co_bloom').value;};
+  m.querySelector('#saveOnly').onclick=()=>{apply();close();render();toast('Outcome updated');};
+  m.querySelector('#saveRegen').onclick=()=>{apply();t.artifacts=newArtifacts();close();render();runTopicFlow(t);toast('Outcome updated · regenerating');};
+}
+
+/* ===== Institute PO & PSO ===== */
+function coursesForInstitute(name){return courses.filter(c=>(c.institute||'Winnify')===name);}
+function renderInstitutes(v,a){
+  if(currentInst!==null&&institutes[currentInst])return renderInstituteDetail(v,a,currentInst);
+  a.innerHTML=`<button class="icon-btn">${I.bell}</button><button class="btn btn-primary" id="ai">${I.plus}Add institute</button>`;
+  a.querySelector('#ai').onclick=()=>openInstituteEditor(null);
+  v.innerHTML=`<div class="delta-banner mb24">${I.info}<div class="txt">Program Outcomes (PO) and Program Specific Outcomes (PSO) are defined per institute. PSOs are either <b>common</b> (apply to all majors) or <b>major-specific</b>. Courses inherit the PO/PSO set of their institute &amp; major. Select an institute to view its outcomes.</div></div>
+    <div id="instList"></div>`;
+  drawInstituteTable();
+}
+function drawInstituteTable(){
+  const rows=institutes.map((inst,ii)=>{
+    const cc=coursesForInstitute(inst.name).length;
+    return`<tr class="row" data-open="${ii}">
+      <td><div class="flex center gap">
+        <div class="aico" style="width:40px;height:40px;border-radius:11px;font-family:var(--font-display);font-weight:600;font-size:14px;background:var(--w-brand-bright);color:#fff">${inst.short||inst.name.slice(0,3).toUpperCase()}</div>
+        <div><div class="course-name">${inst.name}${inst.name==='Winnify'?' <span class="badge b-blue">Default</span>':''}</div><div class="course-sub">${inst.type||'Institute'} · ${inst.location||'—'}</div></div>
+      </div></td>
+      <td><span class="meta">${inst.regulation||'—'}</span></td>
+      <td><span class="meta">${inst.pos.length} POs · ${inst.psos.length} PSOs</span></td>
+      <td><span class="meta">${cc} course${cc===1?'':'s'}</span></td>
+      <td style="text-align:right"><button class="co-icon" data-edit="${ii}" title="Edit institute">${I.edit}</button>${institutes.length>1?` <button class="co-icon danger" data-del="${ii}" title="Delete institute">${I.trash}</button>`:''}</td>
+    </tr>`;
+  }).join('');
+  $('#instList').innerHTML=`<div class="card" style="padding:8px 12px"><table class="tbl"><thead><tr><th>Institute</th><th>Regulation</th><th>Outcomes</th><th>Linked courses</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const L=$('#instList');
+  L.querySelectorAll('tr.row').forEach(r=>r.onclick=e=>{
+    if(e.target.closest('[data-edit]')){openInstituteEditor(+e.target.closest('[data-edit]').dataset.edit);return;}
+    if(e.target.closest('[data-del]')){const i=+e.target.closest('[data-del]').dataset.del;if(confirm(`Delete institute "${institutes[i].name}"?`)){institutes.splice(i,1);drawInstituteTable();if($('#navInstCount'))$('#navInstCount').textContent=institutes.length;}return;}
+    currentInst=+r.dataset.open;render();
+  });
+}
+function renderInstituteDetail(v,a,ii){
+  const inst=institutes[ii];
+  a.innerHTML=`<button class="btn btn-ghost" id="bk">${I.back}All institutes</button><button class="btn btn-secondary" id="ed">${I.edit}Edit institute</button>`;
+  a.querySelector('#bk').onclick=()=>{currentInst=null;render();};
+  a.querySelector('#ed').onclick=()=>openInstituteEditor(ii);
+  v.innerHTML=`<div class="breadcrumb"><a id="bc">Institutes</a>${I.chevron}<span>${inst.name}</span></div><div id="instList"></div>`;
+  v.querySelector('#bc').onclick=()=>{currentInst=null;render();};
+  $('#instList').innerHTML=instituteCard(inst,ii);
+  wireInstituteList();
+}
+function refreshInstitutes(){
+  if(currentInst!==null&&institutes[currentInst]){$('#instList').innerHTML=instituteCard(institutes[currentInst],currentInst);wireInstituteList();}
+  else drawInstituteTable();
+}
+function instituteCard(inst,ii){
+    const cc=coursesForInstitute(inst.name).length;
+    const common=inst.psos.filter(p=>p.scope==='common');
+    const byMajor={};inst.psos.filter(p=>p.scope==='major').forEach(p=>{(byMajor[p.major=p.major||'—']=byMajor[p.major]||[]).push(p);});
+    return`<div class="card mb24" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:16px;padding:22px 26px;background:linear-gradient(135deg,#F4F3FD,#FBFAFF);border-bottom:1px solid var(--w-border)">
+        <div class="aico" style="width:52px;height:52px;border-radius:14px;font-family:var(--font-display);font-weight:600;font-size:17px;background:var(--w-brand-bright);color:#fff">${inst.short||inst.name.slice(0,3).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div class="flex center gap wrap"><div class="h2">${inst.name}</div>${inst.name==='Winnify'?'<span class="badge b-blue">Default</span>':''}</div>
+          <div class="meta mt8">${inst.type||'Institute'} · ${inst.location||'—'} · ${inst.regulation||'—'} · ${inst.accreditation||'—'}</div>
+        </div>
+        <div class="flex gap">
+          <button class="co-icon" data-edit="${ii}" title="Edit institute">${I.edit}</button>
+          ${institutes.length>1?`<button class="co-icon danger" data-del="${ii}" title="Delete institute">${I.trash}</button>`:''}
+        </div>
+      </div>
+      <div style="padding:22px 26px">
+        <div class="flex gap wrap mb24">
+          <div class="info-card" style="flex:1;min-width:120px;text-align:center"><div class="meta">Program Outcomes</div><div class="h2" style="color:var(--w-brand)">${inst.pos.length}</div></div>
+          <div class="info-card" style="flex:1;min-width:120px;text-align:center"><div class="meta">PSOs</div><div class="h2" style="color:var(--w-brand)">${inst.psos.length}</div></div>
+          <div class="info-card" style="flex:1;min-width:120px;text-align:center"><div class="meta">Linked courses</div><div class="h2" style="color:var(--w-brand)">${cc}</div></div>
+        </div>
+
+        <div class="flex between center mb16"><div class="section-label">Program Outcomes (PO)</div><button class="btn btn-secondary btn-sm" data-addpo="${ii}">${I.plus}Add PO</button></div>
+        <div class="mb24">${inst.pos.map((p,pi)=>`<div class="co-row" style="margin-bottom:8px">
+          <div class="co-id">${p.code}</div>
+          <div class="co-body"><div class="co-text">${p.text}</div></div>
+          <div class="co-actions"><button class="co-icon" data-editpo="${ii}.${pi}" title="Edit">${I.edit}</button><button class="co-icon danger" data-delpo="${ii}.${pi}" title="Delete">${I.trash}</button></div>
+        </div>`).join('')||`<div class="meta">No POs defined.</div>`}</div>
+
+        <div class="flex between center mb16"><div class="section-label">Program Specific Outcomes (PSO)</div><button class="btn btn-secondary btn-sm" data-addpso="${ii}">${I.plus}Add PSO</button></div>
+        <div class="mb8"><span class="meta" style="font-weight:600">Common — all majors</span></div>
+        ${common.map(p=>psoRow(p,ii)).join('')||`<div class="meta mb16">No common PSOs.</div>`}
+        ${Object.keys(byMajor).sort().map(mj=>`<div class="mb8 mt16"><span class="meta" style="font-weight:600">Major-specific — ${mj}</span></div>${byMajor[mj].map(p=>psoRow(p,ii)).join('')}`).join('')}
+      </div>
+    </div>`;
+}
+function wireInstituteList(){
+  const L=$('#instList');
+  L.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openInstituteEditor(+b.dataset.edit));
+  L.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{const i=+b.dataset.del;if(confirm(`Delete institute "${institutes[i].name}"?`)){institutes.splice(i,1);currentInst=null;render();if($('#navInstCount'))$('#navInstCount').textContent=institutes.length;}});
+  L.querySelectorAll('[data-addpo]').forEach(b=>b.onclick=()=>openOutcomeEditor(+b.dataset.addpo,'po',null));
+  L.querySelectorAll('[data-editpo]').forEach(b=>b.onclick=()=>{const[ii,pi]=b.dataset.editpo.split('.').map(Number);openOutcomeEditor(ii,'po',pi);});
+  L.querySelectorAll('[data-delpo]').forEach(b=>b.onclick=()=>{const[ii,pi]=b.dataset.delpo.split('.').map(Number);institutes[ii].pos.splice(pi,1);refreshInstitutes();});
+  L.querySelectorAll('[data-addpso]').forEach(b=>b.onclick=()=>openOutcomeEditor(+b.dataset.addpso,'pso',null));
+  L.querySelectorAll('[data-editpso]').forEach(b=>b.onclick=()=>{const[ii,pi]=b.dataset.editpso.split('.').map(Number);openOutcomeEditor(ii,'pso',pi);});
+  L.querySelectorAll('[data-delpso]').forEach(b=>b.onclick=()=>{const[ii,pi]=b.dataset.delpso.split('.').map(Number);institutes[ii].psos.splice(pi,1);refreshInstitutes();});
+}
+function psoRow(p,ii){
+  const idx=institutes[ii].psos.indexOf(p);
+  return`<div class="co-row" style="margin-bottom:8px">
+    <div class="co-id">${p.code}</div>
+    <div class="co-body"><div class="co-text">${p.text}</div><div class="co-meta">${p.scope==='common'?'<span class="badge b-blue">Common</span>':`<span class="badge b-pink">${p.major||'Major'}</span>`}</div></div>
+    <div class="co-actions"><button class="co-icon" data-editpso="${ii}.${idx}" title="Edit">${I.edit}</button><button class="co-icon danger" data-delpso="${ii}.${idx}" title="Delete">${I.trash}</button></div>
+  </div>`;
+}
+function openOutcomeEditor(ii,kind,idx){
+  const inst=institutes[ii];const editing=idx!==null;const isPso=kind==='pso';
+  const arr=isPso?inst.psos:inst.pos;
+  const o=editing?arr[idx]:(isPso?{code:'PSO'+(inst.psos.length+1),text:'',scope:'common',major:null}:{code:'PO'+(inst.pos.length+1),text:''});
+  const m=el(`<div class="modal-bg"><div class="modal">
+    <div class="flex between center mb16"><div class="h3">${editing?'Edit':'Add'} ${isPso?'PSO':'PO'} · ${inst.name}</div><button class="co-icon" id="mx">${I.x}</button></div>
+    <div class="grid-2"><div class="field"><label class="field-label">Code</label><input class="input" id="o_code" value="${o.code}"></div>
+    ${isPso?`<div class="field"><label class="field-label">Scope</label><select class="select" id="o_scope"><option value="common" ${o.scope==='common'?'selected':''}>Common (all majors)</option><option value="major" ${o.scope==='major'?'selected':''}>Major-specific</option></select></div>`:'<div></div>'}</div>
+    ${isPso?`<div class="field" id="majWrap" style="${o.scope==='major'?'':'display:none'}"><label class="field-label">Major</label><select class="select" id="o_major">${MAJORS.map(mj=>`<option ${mj===o.major?'selected':''}>${mj}</option>`).join('')}</select></div>`:''}
+    <div class="field"><label class="field-label">Statement</label><textarea class="textarea" id="o_text">${o.text}</textarea></div>
+    <div class="flex between center mt24"><button class="btn btn-ghost" id="mc">Cancel</button><button class="btn btn-primary" id="ms">${I.check}${editing?'Save':'Add'}</button></div>
+  </div></div>`);
+  $('#modalRoot').appendChild(m);
+  const close=()=>m.remove();
+  m.querySelector('#mx').onclick=close;m.querySelector('#mc').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();});
+  if(isPso){const sc=m.querySelector('#o_scope');sc.onchange=()=>{m.querySelector('#majWrap').style.display=sc.value==='major'?'':'none';};}
+  m.querySelector('#ms').onclick=()=>{
+    const code=m.querySelector('#o_code').value.trim()||o.code;
+    const text=m.querySelector('#o_text').value.trim();if(!text){m.querySelector('#o_text').focus();return;}
+    if(isPso){const scope=m.querySelector('#o_scope').value;const major=scope==='major'?m.querySelector('#o_major').value:null;
+      const rec={code,text,scope,major};if(editing)arr[idx]=rec;else arr.push(rec);}
+    else{const rec={code,text};if(editing)arr[idx]=rec;else arr.push(rec);}
+    close();refreshInstitutes();
+  };
+}
+function openInstituteEditor(ii){
+  const editing=ii!==null;const inst=editing?institutes[ii]:{name:'',short:'',type:'',location:'',regulation:'',accreditation:'',pos:[],psos:[]};
+  const m=el(`<div class="modal-bg"><div class="modal">
+    <div class="flex between center mb16"><div class="h3">${editing?'Edit institute':'Add institute'}</div><button class="co-icon" id="mx">${I.x}</button></div>
+    <div class="grid-2"><div class="field"><label class="field-label">Institute name</label><input class="input" id="i_name" value="${inst.name}" placeholder="e.g. CIET"></div>
+    <div class="field"><label class="field-label">Short code</label><input class="input" id="i_short" value="${inst.short||''}" placeholder="CIET"></div></div>
+    <div class="grid-2"><div class="field"><label class="field-label">Type</label><input class="input" id="i_type" value="${inst.type||''}" placeholder="Engineering College"></div>
+    <div class="field"><label class="field-label">Location</label><input class="input" id="i_loc" value="${inst.location||''}" placeholder="Andhra Pradesh, IN"></div></div>
+    <div class="grid-2"><div class="field"><label class="field-label">Regulation</label><input class="input" id="i_reg" value="${inst.regulation||''}" placeholder="CIET R24"></div>
+    <div class="field"><label class="field-label">Accreditation</label><input class="input" id="i_acc" value="${inst.accreditation||''}" placeholder="NBA / NAAC"></div></div>
+    ${!editing?`<div class="delta-banner" style="margin-top:6px">${I.info}<div class="txt">You can add POs and PSOs after creating the institute.</div></div>`:''}
+    <div class="flex between center mt24"><button class="btn btn-ghost" id="mc">Cancel</button><button class="btn btn-primary" id="ms">${I.check}${editing?'Save institute':'Create institute'}</button></div>
+  </div></div>`);
+  $('#modalRoot').appendChild(m);
+  const close=()=>m.remove();
+  m.querySelector('#mx').onclick=close;m.querySelector('#mc').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();});
+  m.querySelector('#ms').onclick=()=>{
+    const name=m.querySelector('#i_name').value.trim();if(!name){m.querySelector('#i_name').focus();return;}
+    const data={name,short:m.querySelector('#i_short').value.trim()||name.slice(0,3).toUpperCase(),type:m.querySelector('#i_type').value.trim(),location:m.querySelector('#i_loc').value.trim(),regulation:m.querySelector('#i_reg').value.trim(),accreditation:m.querySelector('#i_acc').value.trim()};
+    if(editing)Object.assign(inst,data);
+    else institutes.push({id:niid(),...data,pos:[],psos:[]});
+    close();refreshInstitutes();if($('#navInstCount'))$('#navInstCount').textContent=institutes.length;
+    toast(editing?'Institute updated':'Institute added');
+  };
+}
+
+function renderGeneration(v,a){
+  a.innerHTML=`<button class="icon-btn">${I.bell}</button>`;
+  const rows=[];courses.forEach(c=>allTopics(c).forEach(x=>rows.push({c,u:x.unit,t:x.topic})));
+  const pend=rows.filter(r=>topicState(r.t)!=='ready').length;
+  v.innerHTML=`<div class="delta-banner mb24">${I.info}<div class="txt">Topics from finalized course plans land here. Each topic runs one flow — Teacher Notes first, then Pre-Assessment, Quiz & Flash Cards in parallel. <b>${pend} topics pending</b> across ${courses.length} courses.</div></div>
+    <div class="card" style="padding:8px 12px"><table class="tbl"><thead><tr><th>Topic</th><th>Course</th><th>Status</th><th>Progress</th><th></th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr class="row" data-i="${i}">
+      <td><div class="course-name" style="font-size:14px">${r.t.name}</div><div class="meta">Unit ${r.u.n} · ${r.t.subs.length} subtopics</div></td>
+      <td><div class="course-code">${r.c.code}</div><div class="meta">${r.c.name}</div></td>
+      <td>${topicBadge(r.t)}</td>
+      <td style="min-width:150px"><div class="progress"><span style="width:${topicPct(r.t)}%"></span></div></td>
+      <td style="text-align:right">${topicState(r.t)==='pending'?`<button class="btn btn-primary btn-sm" data-gen="${i}">${I.spark}Generate</button>`:`${I.chevron}`}</td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+  v.querySelectorAll('tr.row').forEach(r=>{const i=+r.dataset.i;const rec=rows[i];
+    r.onclick=e=>{if(e.target.closest('[data-gen]')){runTopicFlow(rec.t);return;}currentCourse=rec.c;currentTopic=rec.t;currentTopic._unit=rec.u;go('topicPage');};
+  });
+}
+
+render();
+</script>
+</body>
+</html>

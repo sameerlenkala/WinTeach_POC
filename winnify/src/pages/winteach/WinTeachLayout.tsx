@@ -1,0 +1,163 @@
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, BookOpen, Zap, Library, BookMarked,
+  Building2, Settings, LogOut, GraduationCap,
+} from 'lucide-react';
+import PageTopbar from '@/components/layout/PageTopbar';
+import { WinTeachProvider, useWinTeach } from './WinTeachContext';
+import { Toast } from './WinTeachUI';
+import { pendingJobs, ADDITIONAL_LIBRARY } from './winteachData';
+import { useAuth } from '@/contexts/AuthContext';
+
+const PAGE_TITLES_WT: Record<string, string> = {
+  '/winteach':              'Dashboard',
+  '/winteach/courses':      'Courses',
+  '/winteach/courses/new':  'Create New Course',
+  '/winteach/generation':   'Content Generation',
+  '/winteach/library':      'CO Library',
+  '/winteach/add-library':  'Additional Course Library',
+  '/winteach/institutes':   'Institute PO & PSO',
+  '/winteach/settings':     'Settings',
+};
+
+function WinTeachSidebar() {
+  const { courses, institutes } = useWinTeach();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const pending = pendingJobs(courses);
+
+  const initials = user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? 'FT';
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/signin');
+  };
+
+  const navItems = [
+    { to: '/winteach',             label: 'Dashboard',           icon: LayoutDashboard, end: true },
+    { to: '/winteach/courses',     label: 'Courses',             icon: BookOpen,   count: courses.length },
+    { to: '/winteach/generation',  label: 'Content Generation',  icon: Zap,        count: pending },
+    { to: '/winteach/library',     label: 'IO Library',          icon: Library },
+    { to: '/winteach/add-library', label: 'Add. Course Library', icon: BookMarked, count: ADDITIONAL_LIBRARY.length },
+    { to: '/winteach/institutes',  label: 'Institute PO & PSO',  icon: Building2,  count: institutes.length },
+  ];
+
+  return (
+    <aside className="ws-shell fixed top-0 left-0 bottom-0 z-40 max-md:hidden">
+
+      {/* Logo row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 16px 8px' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: '#6C5CE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <GraduationCap size={18} color="#fff" />
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: '#1A1A22' }}>Winnify</div>
+          <div style={{ fontSize: 10, color: '#6C5CE7', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Faculty</div>
+        </div>
+      </div>
+
+      {/* Profile */}
+      <div className="ws-user-section">
+        <div className="ws-avatar" style={{ background: 'linear-gradient(135deg, #6C5CE7, #4834d4)' }}>{initials}</div>
+        <div className="ws-user-info">
+          <span className="ws-user-name">{user?.name ?? '—'}</span>
+          <span className="ws-user-email">{user?.email ?? ''}</span>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="ws-nav">
+        <span className="ws-nav-group-label">Workspace</span>
+        {navItems.map(item => (
+          <NavLink key={item.to} to={item.to} end={item.end}
+            className={({ isActive }) => isActive ? 'ws-nav-item ws-nav-item--active' : 'ws-nav-item'}
+          >
+            <item.icon className="ws-nav-icon" />
+            <span className="ws-nav-label">{item.label}</span>
+            {item.count !== undefined && (
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 5px', background: 'rgba(108,92,231,0.12)', color: 'var(--brand)' }}>
+                {item.count}
+              </span>
+            )}
+          </NavLink>
+        ))}
+
+        <span className="ws-nav-group-label" style={{ marginTop: 8 }}>Account</span>
+        <NavLink to="/winteach/settings"
+          className={({ isActive }) => isActive ? 'ws-nav-item ws-nav-item--active' : 'ws-nav-item'}
+        >
+          <Settings className="ws-nav-icon" />
+          <span className="ws-nav-label">Settings</span>
+        </NavLink>
+        <button onClick={handleSignOut} className="ws-nav-item" style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left', color: 'var(--text-2)', cursor: 'pointer' }}>
+          <LogOut className="ws-nav-icon" size={20} />
+          <span className="ws-nav-label">Sign Out</span>
+        </button>
+      </nav>
+    </aside>
+  );
+}
+
+// Inject WinTeach page titles into the topbar title map at runtime
+function PageTitleInjector() {
+  const location = useLocation();
+  // Override the document title based on path
+  const path = location.pathname;
+  const title = PAGE_TITLES_WT[path] ?? (path.includes('/topic/') ? 'Topic' : path.includes('/courses/') ? 'Course Detail' : 'WinTeach');
+  document.title = `${title} · WinTeach`;
+  return null;
+}
+
+function LayoutInner() {
+  const { toastMsg } = useWinTeach();
+
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)' }}>
+      <WinTeachSidebar />
+
+      {/* Content column */}
+      <div className="flex flex-col flex-1 min-w-0 md:ml-[284px]" style={{ background: 'var(--app-bg)' }}>
+        <PageTitleInjector />
+        <PageTopbar />
+        <main className="flex-1 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
+          <Outlet />
+        </main>
+      </div>
+
+      <Toast msg={toastMsg} />
+    </div>
+  );
+}
+
+export default function WinTeachLayout() {
+  return (
+    <WinTeachProvider>
+      <LayoutInner />
+    </WinTeachProvider>
+  );
+}
+
+// Topbar + content helpers used by each WinTeach page
+// These now simply wrap children — the real topbar is PageTopbar above
+export function WinTopbar({ title: _title, actions }: { title: string; actions?: React.ReactNode }) {
+  // Actions are rendered in a floating bar below the PageTopbar
+  if (!actions) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+      gap: 10, padding: '0 36px 0', height: 48,
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--app-bg)',
+    }}>
+      {actions}
+    </div>
+  );
+}
+
+export function WinContent({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '0 36px 40px', flex: 1 }}>
+      {children}
+    </div>
+  );
+}
