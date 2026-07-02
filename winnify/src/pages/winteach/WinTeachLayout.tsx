@@ -1,3 +1,4 @@
+import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, Zap, Library, BookMarked,
@@ -47,18 +48,18 @@ function WinTeachSidebar() {
 
       {/* Logo row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 16px 8px' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: '#6C5CE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <GraduationCap size={18} color="#fff" />
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: '#efeefe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <GraduationCap size={18} color="#5b4bff" />
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: '#1A1A22' }}>Winnify</div>
-          <div style={{ fontSize: 10, color: '#6C5CE7', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Faculty</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#1c2030' }}>Winnify</div>
+          <div style={{ fontSize: 10, color: '#5b4bff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Faculty</div>
         </div>
       </div>
 
       {/* Profile */}
       <div className="ws-user-section">
-        <div className="ws-avatar" style={{ background: 'linear-gradient(135deg, #6C5CE7, #4834d4)' }}>{initials}</div>
+        <div className="ws-avatar" style={{ background: '#5b4bff' }}>{initials}</div>
         <div className="ws-user-info">
           <span className="ws-user-name">{user?.name ?? '—'}</span>
           <span className="ws-user-email">{user?.email ?? ''}</span>
@@ -75,7 +76,7 @@ function WinTeachSidebar() {
             <item.icon className="ws-nav-icon" />
             <span className="ws-nav-label">{item.label}</span>
             {item.count !== undefined && (
-              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 5px', background: 'rgba(108,92,231,0.12)', color: 'var(--brand)' }}>
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 5px', background: 'rgba(91,75,255,0.10)', color: 'var(--brand)' }}>
                 {item.count}
               </span>
             )}
@@ -112,7 +113,7 @@ function LayoutInner() {
   const { toastMsg } = useWinTeach();
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", '--font-display': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" } as React.CSSProperties}>
       <WinTeachSidebar />
 
       {/* Content column */}

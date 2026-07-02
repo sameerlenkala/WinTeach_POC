@@ -27,7 +27,7 @@ function CellDropdown({ value, onChange, onClose }: { value: number; onChange: (
   return (
     <div ref={ref} style={{ position: 'absolute', zIndex: 100, top: '100%', left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: '0 4px 16px rgba(60,50,140,.14)', padding: 6, minWidth: 130, marginTop: 4 }}>
       {opts.map(o => (
-        <div key={o.v} onClick={() => { onChange(o.v); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: value === o.v ? W.collegePill : 'transparent', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: o.fg !== W.text3 ? o.fg : W.text }}>
+        <div key={o.v} onClick={() => { onChange(o.v); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: value === o.v ? '#efeefe' : 'transparent', fontWeight: 600, fontSize: 13, color: o.fg !== W.text3 ? o.fg : W.text }}>
           {o.v > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, background: o.bg, color: o.fg, fontSize: 12 }}>{o.v}</span>}
           {o.label}
         </div>
@@ -67,7 +67,7 @@ function BloomDropdown({ current, onSelect, onClose }: { current: string; onSele
         const active = b === current;
         return (
           <div key={b} onClick={() => { onSelect(b); onClose(); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: active ? bg : 'transparent', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: active ? fg : W.text }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: active ? bg : 'transparent', fontWeight: 600, fontSize: 13, color: active ? fg : W.text }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: fg, display: 'inline-block', flexShrink: 0 }} />
             {b}
             {active && <span style={{ marginLeft: 'auto', fontSize: 11 }}>✓</span>}
@@ -80,7 +80,7 @@ function BloomDropdown({ current, onSelect, onClose }: { current: string; onSele
 
 function Spinner() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: W.text3, fontFamily: W.fontDisplay, fontSize: 15 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: W.text3, fontSize: 15 }}>
       Loading…
     </div>
   );
@@ -203,10 +203,11 @@ export default function WinTeachCoursePage() {
 
   const [editingMap, setEditingMap] = useState(false);
 
+  // CE section tag palette for CO attainment levels
   const mvStyle = (v: number): React.CSSProperties => {
-    if (v === 1) return { background: '#F0EFF9', color: '#7B6FBB' };
-    if (v === 2) return { background: '#E5E2FB', color: '#5B4BDB' };
-    if (v === 3) return { background: '#6C5CE7', color: '#fff' };
+    if (v === 1) return { background: '#eef3ff', color: '#2b54c9' };   // read tag
+    if (v === 2) return { background: '#efeaff', color: '#5b4bff' };   // speak tag
+    if (v === 3) return { background: '#5b4bff', color: '#fff' };      // brand solid
     return {};
   };
 
@@ -233,70 +234,66 @@ export default function WinTeachCoursePage() {
           { label: courseCode },
         ]} />
 
-        {/* Hero header */}
-        <div style={{
-          background: 'linear-gradient(135deg,#6E5EE6,#5B4BDB)', borderRadius: 24,
-          color: '#fff', padding: '26px 28px', display: 'flex',
-          justifyContent: 'space-between', alignItems: 'flex-end',
-          gap: 24, flexWrap: 'wrap', marginBottom: 24,
-        }}>
-          <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.72)', marginBottom: 8 }}>
-              {courseCode} · {c?.institute || apiCourse?.code || 'Winnify'}
-            </div>
-            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 30, color: '#fff', marginBottom: 10 }}>{courseName}</div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={toggleStatus} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13,
-                borderRadius: W.r6, padding: '3px 11px',
-                background: 'rgba(255,255,255,.18)', color: '#fff',
-                border: 'none', cursor: 'pointer',
-              }}>
-                {courseStatus === 'active'
-                  ? <><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#7CE2A0', display: 'inline-block' }} />Active</>
-                  : 'Draft'}
-              </button>
-              <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,.85)' }}>
-                {c?.program && `${c.program} · `}
-                {(apiCourse?.semester ?? c?.sem) && `Sem ${apiCourse?.semester ?? c?.sem} · `}
-                {(apiCourse?.credits ?? c?.credits) && `${apiCourse?.credits ?? c?.credits} credits · `}
-                {apiCourse?.regulation ?? c?.regulation ?? ''}
-              </span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 12, flex: '0 0 auto' }}>
-            {([
-              ['Units', units.length],
-              ['Topics', totalTopics || ts.length],
-              ['COs', cos.length],
-              ['Ready', `${ready}/${ts.length}`],
-            ] as [string, string | number][]).map(([l, v]) => (
-              <div key={l} style={{ background: 'rgba(255,255,255,.12)', borderRadius: 14, padding: '12px 16px', minWidth: 90 }}>
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,.7)', marginBottom: 4 }}>{l}</div>
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 22 }}>{v}</div>
+        {/* Hero header — ce-card exact, flat #f6f7fb header band */}
+        <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', marginBottom: 24, overflow: 'hidden' }}>
+          <div style={{ background: '#f6f7fb', borderBottom: '1px solid #e9eaf2', padding: '22px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+                {/* ce-page__kicker */}
+                <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 4 }}>
+                  {courseCode} · {c?.institute || apiCourse?.code || 'Winnify'}
+                </div>
+                {/* ce-section-h2 */}
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 800, fontSize: '1.3rem', color: '#1c2030', marginBottom: 10 }}>{courseName}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={toggleStatus} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12,
+                    borderRadius: 999, padding: '3px 11px',
+                    background: courseStatus === 'active' ? '#e7fbf5' : '#fff1e6',
+                    color: courseStatus === 'active' ? '#15a06a' : '#c9622b',
+                    border: 'none', cursor: 'pointer',
+                  }}>
+                    {courseStatus === 'active'
+                      ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15a06a', display: 'inline-block' }} />Active</>
+                      : 'Draft'}
+                  </button>
+                  <span style={{ fontSize: '.8rem', color: '#6b7080' }}>
+                    {c?.program && `${c.program} · `}
+                    {(apiCourse?.semester ?? c?.sem) && `Sem ${apiCourse?.semester ?? c?.sem} · `}
+                    {(apiCourse?.credits ?? c?.credits) && `${apiCourse?.credits ?? c?.credits} credits · `}
+                    {apiCourse?.regulation ?? c?.regulation ?? ''}
+                  </span>
+                </div>
               </div>
-            ))}
+              {/* Stat chips — ce-card mini, flat */}
+              <div style={{ display: 'flex', gap: 10, flex: '0 0 auto', flexWrap: 'wrap' }}>
+                {([
+                  ['Units', units.length],
+                  ['Topics', totalTopics || ts.length],
+                  ['COs', cos.length],
+                  ['Ready', `${ready}/${ts.length}`],
+                ] as [string, string | number][]).map(([l, v]) => (
+                  <div key={l} style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 14, padding: '10px 16px', minWidth: 80, textAlign: 'center' }}>
+                    <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'rgba(28,32,48,.45)', marginBottom: 3 }}>{l}</div>
+                    <div style={{ fontFamily: W.fontDisplay, fontWeight: 800, fontSize: '1.12rem', color: '#1c2030' }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Course Outcomes */}
-        <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2, marginBottom: 12 }}>Course Outcomes</div>
+        {/* Course Outcomes — ce-page__kicker */}
+        <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 6 }}>Course Outcomes</div>
         <Card style={{ marginBottom: 24 }}>
           {cosLoading ? <Spinner /> : cos.length ? (() => {
-            // Count occurrences per bloom level
-            const bloomCount: Record<string, number> = {};
-            cos.forEach(co => { if (co.bloom_level) bloomCount[co.bloom_level] = (bloomCount[co.bloom_level] ?? 0) + 1; });
-            // Track running index per bloom level
-            const bloomIdx: Record<string, number> = {};
+            const bloomNameMap: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
+            const normBloom = (v?: string) => v ? (bloomNameMap[v] ?? v) : '';
             return cos.map((co, i) => {
-              let bloomLabel = co.bloom_level ?? '';
-              if (co.bloom_level && bloomCount[co.bloom_level] > 1) {
-                bloomIdx[co.bloom_level] = (bloomIdx[co.bloom_level] ?? 0) + 1;
-                bloomLabel = `${co.bloom_level} ${bloomIdx[co.bloom_level]}`;
-              }
+              const bloomLabel = normBloom(co.bloom_level);
               return (
-            <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: i < cos.length - 1 ? 8 : 0, background: '#fff' }}>
+            <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid #e9eaf2', borderRadius: 14, marginBottom: i < cos.length - 1 ? 8 : 0, background: '#fff' }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>CO{co.co_number || co.number || i + 1}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.description ?? (co as any).text}</div>
@@ -304,7 +301,7 @@ export default function WinTeachCoursePage() {
                   <button
                     onClick={() => setOpenBloom(openBloom === co.id ? null : co.id)}
                     style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {co.bloom_level
+                    {bloomLabel
                       ? <BloomBadge bloom={bloomLabel} />
                       : <span style={{ fontSize: 11, color: W.brand, fontStyle: 'italic', textDecoration: 'underline dotted' }}>Set bloom level</span>}
                     <span style={{ fontSize: 10, color: W.text3 }}>▾</span>
@@ -337,7 +334,7 @@ export default function WinTeachCoursePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 12.5, color: W.text2 }}>{c?.institute || ''} {c?.major ? `· ${c.major}` : ''}</span>
             <button onClick={() => { setEditingMap(e => !e); setOpenCell(null); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${editingMap ? W.brand : W.border}`, background: editingMap ? W.collegePill : '#fff', color: editingMap ? W.brand : W.text2, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${editingMap ? '#5b4bff' : '#e9eaf2'}`, background: editingMap ? '#efeefe' : '#fff', color: editingMap ? '#5b4bff' : W.text2, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>
               <IEdit />
               {editingMap ? 'Done' : 'Edit levels'}
             </button>

@@ -149,7 +149,7 @@ export default function WinTeachCreateCourse() {
                     <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: '0 4px 16px rgba(60,50,140,.12)', padding: 8, maxHeight: 220, overflowY: 'auto' }}>
                       {MAJORS.map(m => (
                         <div key={m} onClick={() => toggleMajor(m)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: majors.includes(m) ? W.collegePill : 'transparent' }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: majors.includes(m) ? '#efeefe' : 'transparent' }}>
                           <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${majors.includes(m) ? W.brand : W.border}`, background: majors.includes(m) ? W.brand : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {majors.includes(m) && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
                           </div>
@@ -186,7 +186,7 @@ export default function WinTeachCreateCourse() {
     const [pasteText, setPasteText] = useState('');
     // phase: idle → ready(file picked, not yet uploaded) → uploading → extracting → done | error
     const [phase, setPhase] = useState<'idle' | 'ready' | 'uploading' | 'extracting' | 'done' | 'error'>(
-      draft!.extracted ? 'done' : 'idle'
+      draft!.extracted ? 'done' : (draft!.uploadId || draft!.fileName) ? 'ready' : 'idle'
     );
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const [stage, setStage] = useState('');
@@ -248,6 +248,8 @@ export default function WinTeachCreateCourse() {
 
         if (ai && (ai.units?.length || ai.course_outcomes?.length)) {
           setStage('Building course structure…');
+          const bloomNameMap: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
+          const normBloom = (v: string | undefined) => { if (!v) return 'Understand'; return bloomNameMap[v] ?? v; };
           const units: Unit[] = (ai.units ?? []).map((u: any, ui: number) => ({
             n: String(u.unit_number ?? ui + 1),
             title: u.title ?? `Unit ${ui + 1}`,
@@ -256,7 +258,7 @@ export default function WinTeachCreateCourse() {
               id: nid(),
               name: t.title,
               subs: (t.subtopics ?? []).map((s: any) => s.title ?? s),
-              co: { text: '', bloom: t.bloom_level ?? 'Understand' },
+              co: { text: '', bloom: normBloom(t.bloom_level) },
               coNumber: t.co_number ?? null,
               artifacts: newArtifacts(),
             })),
@@ -264,7 +266,7 @@ export default function WinTeachCreateCourse() {
           const cos: CO[] = (ai.course_outcomes ?? []).map((c: any, i: number) => ({
             id: `CO${i + 1}`,
             text: c.text,
-            bloom: c.bloom_level ?? 'Understand',
+            bloom: normBloom(c.bloom_level),
           }));
           extracted = {
             id: '', code: ai.course_code || draft!.details.code,
@@ -344,11 +346,11 @@ export default function WinTeachCreateCourse() {
               {(['upload', 'paste'] as const).map(m => (
                 <button key={m} onClick={() => { if (!busy) setMethod(m); }} style={{
                   height: 36, padding: '0 16px', borderRadius: 10,
-                  border: `1px solid ${method === m ? W.brandBright : W.borderStrong}`,
-                  background: method === m ? W.brandBright : 'transparent',
-                  fontFamily: W.fontDisplay, fontWeight: 500, fontSize: 13,
-                  color: method === m ? '#fff' : W.text2,
-                  display: 'inline-flex', alignItems: 'center', gap: 7, cursor: busy ? 'not-allowed' : 'pointer',
+                  border: `1px solid ${method === m ? '#5b4bff' : '#e9eaf2'}`,
+                  background: method === m ? '#fff' : 'transparent',
+                  fontFamily: W.fontSans, fontWeight: 600, fontSize: '.84rem',
+                  color: method === m ? '#5b4bff' : '#6b7080',
+                  display: 'inline-flex', alignItems: 'center', gap: 8, cursor: busy ? 'not-allowed' : 'pointer', transition: '.15s',
                 }}>
                   <span style={{ width: 16, height: 16, display: 'inline-flex' }}>{m === 'upload' ? <IUpload /> : <IText />}</span>
                   {m === 'upload' ? 'PDF / Image' : 'Paste text'}
@@ -390,7 +392,7 @@ export default function WinTeachCreateCourse() {
                   </>
                 )}
                 {(pendingFile?.name || draft!.fileName) && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: W.collegePill, color: W.brand, borderRadius: W.r4, padding: '10px 14px', fontFamily: W.fontDisplay, fontWeight: 500, fontSize: 14, marginTop: 14 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#efeefe', color: '#5b4bff', borderRadius: 12, padding: '10px 14px', fontWeight: 500, fontSize: 14, marginTop: 14 }}>
                     <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IFile /></span>
                     {(pendingFile?.name || draft!.fileName)}
                     {(phase === 'ready' || phase === 'done') && (
@@ -496,17 +498,21 @@ export default function WinTeachCreateCourse() {
     const [, forceUpdate] = useState(0);
 
     useEffect(() => {
+      if (!e) return;
       // Auto-inject pipeline suggested COs as Winnify Industry Outcomes if not already added
       const pipelineSugs: any[] = (e as any)._pipelineSuggested ?? [];
       if (pipelineSugs.length > 0 && !e.cos.some(c => (c as any).isIndustry)) {
         const existing = new Set(e.cos.map(c => normCo(c.text)));
+        const bloomMap: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
         pipelineSugs.forEach((s: any) => {
           const text = s.text ?? '';
           if (text && !existing.has(normCo(text))) {
+            const rawBloom = s.bloom_name ?? s.bloom_level ?? 'Apply';
+            const bloom = bloomMap[rawBloom] ?? rawBloom;
             e.cos.push({
               id: 'CO' + (e.cos.length + 1),
               text,
-              bloom: s.bloom_name ?? s.bloom_level ?? 'Apply',
+              bloom,
               isIndustry: true,
             } as any);
             existing.add(normCo(text));
@@ -515,7 +521,7 @@ export default function WinTeachCreateCourse() {
         renumberCos(e.cos);
         forceUpdate(n => n + 1);
       }
-    }, [(e as any)._pipelineSuggested?.length]);
+    }, [(e as any)?._pipelineSuggested?.length]);
     const [coModal, setCoModal] = useState<{ idx: number | null } | null>(null);
     const [saving, setSaving] = useState(false);
     const [bloomDropIdx, setBloomDropIdx] = useState<number | null>(null);
@@ -592,7 +598,7 @@ export default function WinTeachCreateCourse() {
         {/* Full-screen saving overlay */}
         {saving && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(255,255,255,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <div style={{ width: 64, height: 64, borderRadius: 20, background: W.collegePill, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: 18, background: '#efeefe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ width: 28, height: 28, display: 'inline-flex', color: W.brand, animation: 'spin 1s linear infinite' }}><ISpark /></span>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -617,7 +623,7 @@ export default function WinTeachCreateCourse() {
             </div>
 
             {/* CO summary */}
-            <div style={{ background: W.collegePill, borderRadius: 16, padding: 18, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ background: '#f6f7fb', borderRadius: 14, padding: 18, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 24 }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 30, color: W.brand, lineHeight: 1 }}>{cos.length}</div>
                 <div style={{ fontSize: 12.5, color: W.brand, fontWeight: 600 }}>Outcomes</div>
@@ -651,6 +657,12 @@ export default function WinTeachCreateCourse() {
                   {isIndustry && <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 9, letterSpacing: '.06em', textTransform: 'uppercase', color: W.blueFg, marginTop: 2 }}>Industry</div>}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
+                  {isIndustry && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, color: W.blueFg, background: 'rgba(37,99,235,.08)', borderRadius: 6, padding: '2px 8px', marginBottom: 6 }}>
+                      <span style={{ width: 12, height: 12, display: 'inline-flex' }}><ISpark /></span>
+                      Suggested by Winnify AI
+                    </div>
+                  )}
                   <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.text}</div>
                   {/* Inline bloom editor */}
                   <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -677,7 +689,7 @@ export default function WinTeachCreateCourse() {
                             >
                               <BloomBadge bloom={b} />
                               {isNextLevel && (
-                                <span style={{ fontSize: 10, fontWeight: 600, color: W.brand, background: W.collegePill, borderRadius: 6, padding: '1px 6px', marginLeft: 6 }}>↑ Upgrade</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '1px 6px', marginLeft: 6 }}>↑ Upgrade</span>
                               )}
                             </div>
                           );
@@ -685,12 +697,18 @@ export default function WinTeachCreateCourse() {
                       </div>
                     )}
                   </div>
-                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: W.text2 }}>Maps to:</span>
-                    {(e.units[i]?.topics || []).map(t => (
-                      <span key={t.name} style={{ display: 'inline-block', fontSize: 11, color: W.text2, background: W.surfaceMuted, borderRadius: 6, padding: '2px 8px' }}>{t.name}</span>
-                    ))}
-                  </div>
+                  {(() => {
+                    const coNum = i + 1;
+                    const mappedTopics = e.units.flatMap(u => u.topics.filter((t: any) => t.coNumber === coNum));
+                    return mappedTopics.length > 0 ? (
+                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: W.text2 }}>Maps to:</span>
+                        {mappedTopics.map((t: any) => (
+                          <span key={t.name} style={{ display: 'inline-block', fontSize: 11, color: W.text2, background: W.surfaceMuted, borderRadius: 6, padding: '2px 8px' }}>{t.name}</span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <CoIcon onClick={() => setCoModal({ idx: i })} title="Edit CO"><IEdit /></CoIcon>
@@ -839,6 +857,9 @@ function ExtractedView({ extracted, onChange }: {
   const e = extracted;
   const [coModal, setCoModal] = useState<{ idx: number | null } | null>(null);
   const [topicModal, setTopicModal] = useState<{ ui: number; ti: number | null } | null>(null);
+  const [cosOpen, setCosOpen] = useState(true);
+  const [structOpen, setStructOpen] = useState(true);
+  const [bloomDropIdx, setBloomDropIdx] = useState<number | null>(null);
   const [, forceUpdate] = useState(0);
   const nt = e.units.reduce((s, u) => s + u.topics.length, 0);
   const ns = e.units.reduce((s, u) => s + u.topics.reduce((a, t) => a + t.subs.length, 0), 0);
@@ -849,18 +870,46 @@ function ExtractedView({ extracted, onChange }: {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, borderRadius: W.r6, padding: '3px 11px', background: W.greenBg, color: W.greenFg }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />Extracted
         </span>
-        <span style={{ fontSize: 12.5, color: W.text }}>{e.units.length} units · {nt} topics · {ns} subtopics · {(e.cos || []).length} course outcomes</span>
+        <span style={{ fontSize: 12.5, color: W.text }}>{e.units.filter((u: any) => u.n !== 'E').length} units · {nt} topics · {ns} subtopics · {(e.cos || []).filter((c: any) => !c.isIndustry).length} course outcomes</span>
         <span style={{ marginLeft: 'auto', fontSize: 12.5, color: W.text2 }}>Review & edit before continuing</span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 16 }}>
-        <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Course Outcomes — {(e.cos || []).length} extracted</div>
-        <Btn sm onClick={() => setCoModal({ idx: null })}><span style={{ width: 14, height: 14, display: 'inline-flex' }}><IPlus /></span>Add CO</Btn>
+      <div
+        onClick={() => setCosOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: cosOpen ? 16 : 8, cursor: 'pointer', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 18, height: 18, display: 'inline-flex', transition: 'transform .15s', transform: cosOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}><IChevron /></span>
+          <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Course Outcomes — {(e.cos || []).filter((c: any) => !c.isIndustry).length} extracted</div>
+        </div>
+        <div onClick={e2 => e2.stopPropagation()}>
+          <Btn sm onClick={() => setCoModal({ idx: null })}>
+            <span style={{ width: 14, height: 14, display: 'inline-flex' }}><IPlus /></span>Add CO
+          </Btn>
+        </div>
       </div>
-      {(e.cos || []).map((co, i) => (
+      {cosOpen && (e.cos || []).filter((co: any) => !co.isIndustry).map((co, i) => (
         <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 8, background: '#fff' }}>
           <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px' }}>{co.id}</div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.text}</div><BloomBadge bloom={co.bloom} /></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.text}</div>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button onClick={() => setBloomDropIdx(bloomDropIdx === i ? null : i)} style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <BloomBadge bloom={co.bloom || 'Set level'} />
+                <span style={{ fontSize: 10, color: W.text3 }}>▾</span>
+              </button>
+              {bloomDropIdx === i && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: W.shadowCard, zIndex: 50, minWidth: 160, padding: 6 }}>
+                  {BLOOM.map(b => (
+                    <div key={b} onClick={() => { co.bloom = b; setBloomDropIdx(null); onChange(); forceUpdate(n => n + 1); }}
+                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: co.bloom === b ? '#5b4bff' : W.text, background: co.bloom === b ? '#efeefe' : 'transparent' }}>
+                      {b}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <CoIcon onClick={() => setCoModal({ idx: i })}><IEdit /></CoIcon>
             <CoIcon danger onClick={() => { e.cos!.splice(i, 1); renumberCos(e.cos!); onChange(); forceUpdate(n => n + 1); }}><ITrash /></CoIcon>
@@ -868,10 +917,17 @@ function ExtractedView({ extracted, onChange }: {
         </div>
       ))}
 
-      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2, marginTop: 24, marginBottom: 16 }}>
-        Detected structure — {e.name} ({e.code})
+
+      <div
+        onClick={() => setStructOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: structOpen ? 16 : 8, cursor: 'pointer', userSelect: 'none' }}
+      >
+        <span style={{ width: 18, height: 18, display: 'inline-flex', transition: 'transform .15s', transform: structOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}><IChevron /></span>
+        <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>
+          Detected structure — {e.name} ({e.code})
+        </div>
       </div>
-      {e.units.map((u, ui) => (
+      {structOpen && e.units.map((u, ui) => (
         <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 14, overflow: 'hidden', background: '#fff' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: W.surfaceMuted }}>
             <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>Unit {u.n}</span>

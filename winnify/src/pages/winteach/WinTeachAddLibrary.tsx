@@ -4,7 +4,7 @@ import { CheckCircle2, Plus, X } from 'lucide-react';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Card, Btn, BloomBadge, SubChip, Field, Select, CoIcon } from './WinTeachUI';
-import { IUpload, ISpark, IFile, IBack, ICheck, IEdit, ITrash } from './WinTeachIcons';
+import { ISpark, IFile, IBack, ICheck, IEdit, ITrash } from './WinTeachIcons';
 import { useCourses } from '@/api/hooks';
 import { uploadsApi } from '@/api/uploads';
 import { renumberCos, BLOOM } from './winteachData';
@@ -156,7 +156,7 @@ function CatalogView() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 8 }}>
             {section.topics.map(t => (
-              <div key={t.title} style={{ border: `1px solid ${W.border}`, borderRadius: 16, padding: 18, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div key={t.title} style={{ border: '1.5px solid #e9eaf2', borderRadius: 14, padding: '14px 16px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, transition: '.15s', cursor: 'default' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase', borderRadius: 6, padding: '2px 8px', background: section.tagBg, color: section.tagColor }}>
                     {section.tag}
@@ -165,7 +165,7 @@ function CatalogView() {
                 </div>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{t.title}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, color: '#5B4BDB', background: '#E5E2FB', borderRadius: 6, padding: '2px 8px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '2px 8px' }}>
                     CO · {t.bloom}
                   </span>
                   <span style={{ fontSize: 12.5, color: W.text2 }}>{t.co}</span>
@@ -304,7 +304,6 @@ export default function WinTeachAddLibrary() {
   };
 
   const handleFile = (file: File) => doExtract(file);
-  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); };
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f); };
 
   const commit = async () => {
@@ -345,23 +344,7 @@ export default function WinTeachAddLibrary() {
         {/* ── IDLE: Upload zone + Catalog ── */}
         {stage === 'idle' && (
           <>
-            <Card style={{ maxWidth: 700, marginBottom: 32 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 20, marginBottom: 8 }}>Upload a syllabus</div>
-              <div style={{ fontSize: 15, color: W.text2, marginBottom: 24 }}>
-                Drop a PDF or DOCX — WinTeach extracts COs, units, and topics for you to review before applying to a course.
-              </div>
-              <input ref={fileInputRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={handleInput} />
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={e => e.preventDefault()}
-                style={{ border: `2px dashed ${W.borderStrong}`, borderRadius: W.r5, padding: '52px 24px', textAlign: 'center', background: W.surfaceMuted, cursor: 'pointer' }}
-              >
-                <div style={{ width: 40, height: 40, color: W.brand, margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}><IUpload /></div>
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Drop a PDF or DOCX, or browse</div>
-                <div style={{ fontSize: 13, color: W.text2 }}>.pdf · .docx · up to 20 MB</div>
-              </div>
-            </Card>
+            <input ref={fileInputRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={handleInput} />
 
             {/* ── Curated Catalog ── */}
             <CatalogView />
@@ -372,7 +355,7 @@ export default function WinTeachAddLibrary() {
         {stage === 'loading' && (
           <Card style={{ maxWidth: 700 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: W.collegePill, color: W.brand, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ width: 22, height: 22, display: 'inline-flex' }}><ISpark /></span>
               </div>
               <div>
@@ -478,7 +461,7 @@ export default function WinTeachAddLibrary() {
             </Card>
 
             {/* Commit panel */}
-            <Card style={{ borderColor: W.brandBright }}>
+            <Card style={{ borderColor: '#e9eaf2' }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Apply to a course</div>
               <div style={{ fontSize: 13.5, color: W.text2, marginBottom: 16 }}>
                 Select an existing course to commit the extracted COs and topics into. Existing COs and topics are preserved.

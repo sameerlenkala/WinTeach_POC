@@ -3,7 +3,7 @@ import { useWinTeach } from './WinTeachContext';
 import { allTopics, topicState, coursePct } from './winteachData';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Badge, StatusBadge, ProgressBar, Card, Btn, IconBtn } from './WinTeachUI';
+import { Badge, StatusBadge, XpBar, Card, Btn, IconBtn } from './WinTeachUI';
 import { IBell, IPlus, IArrow, ISpark, ICheck, INotes, IFile } from './WinTeachIcons';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -87,37 +87,49 @@ export default function WinTeachDashboard() {
     act: () => navigate('/winteach/generation'),
   });
   if (pending > 0) items.push({
-    bg: W.collegePill, fg: W.brand,
+    bg: '#efeefe', fg: '#5b4bff',
     at: `${pending} topic${pending !== 1 ? 's' : ''} not started`,
     ad: 'Queued sub-topics with no artifacts yet', cta: 'Go to generation',
     act: () => navigate('/winteach/generation'),
   });
 
-  const kpi = (path: string, bg: string, fg: string, icon: React.ReactNode, val: React.ReactNode, label: string, sub: string) => (
-    <button key={path + label} className="wt-kpi" onClick={() => navigate(path)} style={{
-      background: W.card, border: `1px solid ${W.border}`, borderRadius: W.r5,
-      padding: 20, boxShadow: W.shadowCard, display: 'flex', flexDirection: 'column',
-      gap: 12, textAlign: 'left', width: '100%', cursor: 'pointer',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: fg }}>
-          <span style={{ width: 20, height: 20, display: 'flex' }}>{icon}</span>
-        </div>
-        <span style={{ color: W.text3, width: 16, height: 16, display: 'flex' }}><IArrow /></span>
+  // CE hcard exact: border 1px #e9eaf2, radius 14px, padding 15px 16px
+  // hover: brand border, 0 6px 18px rgba(30,30,60,.07), translateY(-1px)
+  const kpi = (path: string, icoBg: string, icoFg: string, icon: React.ReactNode, val: React.ReactNode, label: string, sub: string, barPct?: number) => (
+    <button key={path + label} onClick={() => navigate(path)} style={{
+      display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
+      background: '#fff', border: '1px solid #e9eaf2', borderRadius: 14,
+      padding: '15px 16px', cursor: 'pointer', transition: '.15s',
+      font: 'inherit', color: 'inherit', width: '100%',
+    }}
+      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#5b4bff'; el.style.boxShadow = '0 6px 18px rgba(30,30,60,.07)'; el.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e9eaf2'; el.style.boxShadow = ''; el.style.transform = ''; }}
+    >
+      {/* ce-hcard__ico exact */}
+      <div style={{ flex: 'none', width: 40, height: 40, borderRadius: 11, background: icoBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: icoFg, fontSize: '1.4rem' }}>
+        <span style={{ width: 22, height: 22, display: 'flex' }}>{icon}</span>
       </div>
-      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 30, lineHeight: 1 }}>{val}</div>
-      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13.5, color: W.text, marginTop: -4 }}>{label}</div>
-      <div style={{ fontSize: 12, color: W.text3, marginTop: -6 }}>{sub}</div>
+      {/* ce-hcard__body */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: '.94rem', color: '#1c2030' }}>{label}</div>
+        <span style={{ display: 'block', fontSize: '.8rem', color: '#6b7080', margin: '3px 0 9px', lineHeight: 1.4 }}>
+          <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#1c2030', marginRight: 6 }}>{val}</span>
+          {sub}
+        </span>
+        {/* ce-hcard__bar */}
+        <XpBar value={barPct ?? 0} />
+      </div>
+      <span style={{ flex: 'none', color: '#6b7080', fontSize: '1.1rem', alignSelf: 'center', width: 16, height: 16, display: 'flex' }}><IArrow /></span>
     </button>
   );
 
   const snapColor = (color: string, label: string, n: number) => (
-    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-      <span style={{ fontFamily: W.fontDisplay, fontWeight: 500, fontSize: 13, flex: '0 0 92px', display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      <span style={{ fontFamily: W.fontDisplay, fontWeight: 500, fontSize: 13, flex: '0 0 96px', display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
         {label}
       </span>
-      <div style={{ flex: 1 }}><ProgressBar value={pct(n)} color={color} /></div>
+      <div style={{ flex: 1 }}><XpBar value={pct(n)} color={color} /></div>
       <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text2, flex: '0 0 26px', textAlign: 'right' }}>{n}</span>
     </div>
   );
@@ -127,6 +139,7 @@ export default function WinTeachDashboard() {
       <WinTopbar title="Dashboard" actions={
         <>
           <IconBtn><IBell /></IconBtn>
+          {/* ce-btn--big exact */}
           <Btn variant="primary" onClick={() => navigate('/winteach/courses/new')}>
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IPlus /></span>
             Create new course
@@ -134,109 +147,150 @@ export default function WinTeachDashboard() {
         </>
       } />
       <WinContent>
-        <div style={{ fontSize: 14.5, color: W.text2, margin: '-2px 0 22px' }}>
-          {greet}, {user?.name?.split(' ')[0] ?? 'there'} — here's where your content pipeline stands.
+
+        {/* ── Hero greeting (ce-card exact) ── */}
+        <div style={{
+          background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18,
+          boxShadow: '0 2px 10px rgba(28,32,48,.04)',
+          marginBottom: 20, padding: '28px 32px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 4 }}>
+                WORKSPACE
+              </div>
+              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '1.32rem', color: '#1c2030', lineHeight: 1.2 }}>
+                {greet}, {user?.name?.split(' ')[0] ?? 'there'} 👋
+              </div>
+              <div style={{ fontSize: '.95rem', color: '#6b7080', marginTop: 4 }}>
+                Here's where your content pipeline stands today.
+              </div>
+            </div>
+            <span style={{ fontSize: 12, color: 'rgba(28,32,48,.45)', fontFamily: W.fontDisplay }}>
+              {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+          </div>
         </div>
 
-        {/* KPI grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16 }}>
-          {kpi('/winteach/courses', W.collegePill, W.brand, <INotes />, courses.length, 'Courses', `${activeCount} active · ${draftCount} draft`)}
-          {kpi('/winteach/generation', W.greenBg, W.greenFg, <ICheck />, `${ready}/${total}`, 'Topics ready', `${overall}% generated`)}
-          {kpi('/winteach/generation', W.orangeBg, W.orangeFg, <ISpark />, generating + pending, 'In the queue', `${generating} generating · ${pending} not started`)}
-          {kpi('/winteach/institutes', W.infoBg, W.infoFg, <IFile />, institutes.length, 'Institutes', 'PO / PSO frameworks')}
+        {/* ── KPI hcards (ce-hcard exact) ── */}
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 10 }}>Overview</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+            {/* ce-hcard__ico: bg #efeefe, color #5b4bff — default; done: bg #e7f7ef, color #15a06a */}
+            {kpi('/winteach/courses',    '#efeefe', '#5b4bff', <INotes />, courses.length,      'Courses',      `${activeCount} active · ${draftCount} draft`,          Math.min(activeCount / Math.max(courses.length, 1) * 100, 100))}
+            {kpi('/winteach/generation', '#e7f7ef', '#15a06a', <ICheck />, `${ready}/${total}`, 'Topics ready', `${overall}% generated`,                              overall)}
+            {kpi('/winteach/generation', '#fff1e6', '#c9622b', <ISpark />, generating + pending, 'In the queue', `${generating} generating · ${pending} not started`, pct(generating))}
+            {kpi('/winteach/institutes', '#eef3ff', '#2b54c9', <IFile />,  institutes.length,   'Institutes',   'PO / PSO frameworks',                               Math.min(institutes.length * 25, 100))}
+          </div>
         </div>
 
-        {/* Two-col: attention + snapshot */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 16, marginBottom: 16 }}>
-          {/* Needs attention */}
-          <Card>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 17 }}>Needs attention</div>
+        {/* ── Two-col: attention + snapshot ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 16, margin: '16px 0' }}>
+
+          {/* Needs attention — ce-card + ce-topic rows */}
+          <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, padding: '28px 32px', boxShadow: '0 2px 10px rgba(28,32,48,.04)' }}>
+            <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 4 }}>Action required</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #e9eaf2' }}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>Needs attention</div>
               {items.length > 0 && <Badge variant="orange">{items.length}</Badge>}
             </div>
-            {items.length ? items.slice(0, 4).map((it, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 2px', borderTop: i > 0 ? `1px solid ${W.border}` : 'none' }}>
-                <div style={{ width: 38, height: 38, borderRadius: 11, flex: '0 0 38px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: it.bg, color: it.fg }}>
-                  <span style={{ width: 18, height: 18, display: 'flex' }}><ISpark /></span>
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>{it.at}</div>
-                  <div style={{ fontSize: 12.5, color: W.text2, marginTop: 1 }}>{it.ad}</div>
-                </div>
-                <Btn sm onClick={it.act}>{it.cta}</Btn>
-              </div>
-            )) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 2px' }}>
-                <div style={{ width: 38, height: 38, borderRadius: 11, flex: '0 0 38px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: W.greenBg, color: W.greenFg }}>
-                  <span style={{ width: 18, height: 18, display: 'flex' }}><ICheck /></span>
-                </div>
-                <div>
-                  <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>All caught up</div>
-                  <div style={{ fontSize: 12.5, color: W.text2 }}>Every topic across your courses is generated and ready.</div>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          {/* Pipeline snapshot */}
-          <Card>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 17 }}>Pipeline snapshot</div>
+            <div style={{ display: 'grid', gap: 11 }}>
+              {items.length ? items.slice(0, 4).map((it, i) => (
+                /* ce-topic exact: 1.5px border, 14px radius, hover brand border + rgba(91,75,255,.12) shadow */
+                <button key={i} onClick={it.act} style={{
+                  display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', width: '100%',
+                  background: '#fff', border: '1.5px solid #e9eaf2', borderRadius: 14, padding: '14px 16px',
+                  cursor: 'pointer', transition: '.15s', font: 'inherit', color: 'inherit',
+                }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#5b4bff'; el.style.boxShadow = '0 6px 18px rgba(91,75,255,.12)'; el.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e9eaf2'; el.style.boxShadow = ''; el.style.transform = ''; }}
+                >
+                  {/* ce-topic__num circle (brand2 teal) */}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: '50%', background: '#00b39a', color: '#fff', fontWeight: 700, flexShrink: 0, fontSize: 14 }}>
+                    {i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: '.98rem', fontFamily: W.fontDisplay }}>{it.at}</b>
+                    <small style={{ display: 'block', color: '#6b7080', fontSize: '.8rem', marginTop: 2 }}>{it.ad}</small>
+                  </div>
+                  <span style={{ color: '#5b4bff', fontWeight: 700, flexShrink: 0, fontSize: 13 }}>{it.cta} →</span>
+                </button>
+              )) : (
+                <button style={{ display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', width: '100%', background: '#f4fcf8', border: '1.5px solid #bfe9d6', borderRadius: 14, padding: '14px 16px', cursor: 'default', font: 'inherit', color: 'inherit' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: '50%', background: '#15a06a', color: '#fff', fontWeight: 700, flexShrink: 0 }}>✓</div>
+                  <div>
+                    <b style={{ fontSize: '.98rem', fontFamily: W.fontDisplay }}>All caught up</b>
+                    <small style={{ display: 'block', color: '#6b7080', fontSize: '.8rem', marginTop: 2 }}>Every topic across your courses is generated and ready.</small>
+                  </div>
+                </button>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-              {/* Ring */}
+          </div>
+
+          {/* Pipeline snapshot — ce-card */}
+          <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, padding: '28px 32px', boxShadow: '0 2px 10px rgba(28,32,48,.04)' }}>
+            <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 4 }}>Progress</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #e9eaf2' }}>Pipeline snapshot</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
               <div style={{
-                width: 96, height: 96, borderRadius: '50%', flex: '0 0 96px',
-                background: `conic-gradient(${W.brandBright} ${overall}%, ${W.surfaceMuted} 0)`,
+                width: 88, height: 88, borderRadius: '50%', flexShrink: 0,
+                background: `conic-gradient(#5b4bff ${overall}%, #eceef6 0)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <div style={{ width: 72, height: 72, borderRadius: '50%', background: W.card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <b style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 22, lineHeight: 1 }}>{overall}%</b>
-                  <span style={{ fontSize: 10, color: W.text3, letterSpacing: '.04em', textTransform: 'uppercase' }}>Ready</span>
+                <div style={{ width: 66, height: 66, borderRadius: '50%', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <b style={{ fontFamily: W.fontDisplay, fontWeight: 800, fontSize: 20, lineHeight: 1, color: '#5b4bff' }}>{overall}%</b>
+                  <span style={{ fontSize: 9, color: 'rgba(28,32,48,.45)', letterSpacing: '.04em', textTransform: 'uppercase' }}>Ready</span>
                 </div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, color: W.text2, marginBottom: 8 }}>{ready} of {total} sub-topics fully generated</div>
-                <div style={{ fontSize: 13.5, color: W.text2 }}>across {courses.length} courses · {activeCount} live for delivery</div>
+                <div style={{ fontSize: '.8rem', color: '#6b7080', marginBottom: 4 }}>{ready} of {total} topics ready</div>
+                <div style={{ fontSize: '.8rem', color: '#6b7080' }}>{courses.length} courses · {activeCount} live</div>
               </div>
             </div>
-            {snapColor(W.greenFg, 'Ready', ready)}
-            {snapColor(W.infoFg, 'Generating', generating)}
-            {snapColor(W.orangeFg, 'Not started', pending)}
-          </Card>
+            {snapColor('#00b39a', 'Ready', ready)}
+            {snapColor('#5b4bff', 'Generating', generating)}
+            {snapColor('#E4853B', 'Not started', pending)}
+          </div>
         </div>
 
-        {/* Recent courses */}
-        <Card style={{ padding: '8px 12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 8px 6px' }}>
-            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Recent courses</div>
+        {/* ── Recent courses (ce-card + table) ── */}
+        <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 28px 0' }}>
+            <div>
+              <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>Content</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>Recent courses</div>
+            </div>
             <Btn variant="ghost" sm onClick={() => navigate('/winteach/courses')}>
               View all <span style={{ width: 16, height: 16, display: 'inline-flex' }}><IArrow /></span>
             </Btn>
           </div>
-          <table className="wt-tbl" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className="wt-tbl" style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
             <thead>
               <tr>
                 {['Course', 'Generation', 'Status'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 600, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: W.text3, padding: '0 16px 12px', borderBottom: `1px solid ${W.border}` }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {courses.slice(0, 4).map(c => {
                 const tt = allTopics(c);
+                const cpct = coursePct(c);
                 return (
-                  <tr key={c.id} className="wt-row" onClick={() => navigate(`/winteach/courses/${c.id}`)} style={{ cursor: 'pointer' }}>
-                    <td style={{ padding: 16, borderBottom: `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>{c.code}</div>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{c.name}</div>
-                      <div style={{ fontSize: 12.5, color: W.text2 }}>{c.institute || 'Winnify'} · {c.major || 'CSE'} · Sem {c.sem}</div>
+                  <tr key={c.id} onClick={() => navigate(`/winteach/courses/${c.id}`)} style={{ cursor: 'pointer', transition: 'background .12s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
+                  >
+                    <td style={{ padding: '14px 24px', borderBottom: '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                      <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 2 }}>{c.code}</div>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{c.name}</div>
+                      <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 1 }}>{c.institute || 'Winnify'} · Sem {c.sem}</div>
                     </td>
-                    <td style={{ padding: 16, borderBottom: `1px solid ${W.border}`, verticalAlign: 'middle', minWidth: 170 }}>
-                      <div style={{ marginBottom: 8 }}><ProgressBar value={coursePct(c)} /></div>
-                      <span style={{ fontSize: 12.5, color: W.text2 }}>{tt.filter(x => topicState(x.topic) === 'ready').length}/{tt.length} topics ready</span>
+                    <td style={{ padding: '14px 24px', borderBottom: '1px solid #e9eaf2', verticalAlign: 'middle', minWidth: 170 }}>
+                      <div style={{ marginBottom: 6 }}><XpBar value={cpct} /></div>
+                      <span style={{ fontSize: '.8rem', color: '#6b7080' }}>{tt.filter(x => topicState(x.topic) === 'ready').length}/{tt.length} topics · {cpct}%</span>
                     </td>
-                    <td style={{ padding: 16, borderBottom: `1px solid ${W.border}`, verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 24px', borderBottom: '1px solid #e9eaf2', verticalAlign: 'middle' }}>
                       <StatusBadge status={c.status} />
                     </td>
                   </tr>
@@ -244,7 +298,7 @@ export default function WinTeachDashboard() {
               })}
             </tbody>
           </table>
-        </Card>
+        </div>
       </WinContent>
     </>
   );

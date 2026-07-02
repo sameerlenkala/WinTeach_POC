@@ -10,29 +10,31 @@ const ROLES: { id: Role; label: string; sub: string; initials: string; email: st
   { id: 'faculty',  label: 'Faculty',             sub: 'Courses · Lectures · Attendance', initials: 'FC', email: 'faculty@vjit.ac.in',  dest: '/academic/faculty' },
 ];
 
-/* ── token shortcuts matching winteach_3.html :root ── */
+/* ── token shortcuts — CE lesson template palette ── */
 const T = {
-  brand:      '#5B4BDB',
-  brandBright:'#6C5CE7',
+  brand:      '#5b4bff',
+  brandBright:'#7b3bff',
+  brand2:     '#00b39a',
   wordmark:   '#F6A623',
-  bg:         '#EFEEFC',
-  card:       '#FFFFFF',
-  surface:    '#F1F2F7',
-  border:     '#E6E5F0',
-  borderStr:  '#D8D7E6',
-  text:       '#1A1A22',
-  text2:      'rgba(26,26,34,.66)',
-  text3:      'rgba(26,26,34,.45)',
-  pillBg:     '#E5E2FB',
-  green:      '#3DA35D',
-  greenBg:    '#E5F4E9',
+  bg:         '#f6f7fb',
+  card:       '#ffffff',
+  surface:    '#f6f7fb',
+  border:     '#e9eaf2',
+  borderStr:  '#d8d9e8',
+  text:       '#1c2030',
+  text2:      '#6b7080',
+  text3:      'rgba(28,32,48,.45)',
+  pillBg:     '#eef3ff',
+  green:      '#15a06a',
+  greenBg:    '#e7fbf5',
   shadow:     '0 1px 2px rgba(20,20,50,.04),0 8px 24px -12px rgba(60,50,140,.12)',
-  shadowPop:  '0 12px 32px -8px rgba(60,50,140,.22)',
+  shadowPop:  '0 12px 32px -8px rgba(91,75,255,.20)',
   fontD:      "'Fredoka',system-ui,sans-serif",
-  fontS:      "'DM Sans',system-ui,sans-serif",
+  fontS:      "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
   r4:         '12px',
   r5:         '20px',
   r6:         '48px',
+  gradient:   'linear-gradient(135deg,#5b4bff,#7b3bff 58%,#00b39a)',
 };
 
 export default function AcademicLogin() {
@@ -81,7 +83,7 @@ export default function AcademicLogin() {
 
         {/* ── Left brand panel ── */}
         <div style={{
-          flex: '0 0 300px', background: `linear-gradient(160deg,#6E5EE6 0%,${T.brand} 100%)`,
+          flex: '0 0 300px', background: T.gradient,
           padding: '36px 28px', display: 'flex', flexDirection: 'column', color: '#fff',
         }}>
           {/* Wordmark */}
@@ -141,7 +143,7 @@ export default function AcademicLogin() {
               background: T.pillBg, borderRadius: T.r6, padding: '4px 14px',
               fontFamily: T.fontD, fontWeight: 500, fontSize: 13, color: T.brand, marginBottom: 14,
             }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.brandBright }} />
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.brand2 }} />
               {active.label}
             </div>
             <h1 style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 26, color: T.text, lineHeight: 1.15, marginBottom: 6 }}>
@@ -175,7 +177,7 @@ export default function AcademicLogin() {
                   borderRadius: T.r4, fontFamily: T.fontS, fontSize: 14,
                   color: T.text, outline: 'none', transition: 'border .12s, background .12s',
                 }}
-                onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brandBright; }}
+                onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brand; }}
                 onBlur={e => { e.target.style.background = T.surface; e.target.style.borderColor = 'transparent'; }}
               />
             </div>
@@ -184,7 +186,7 @@ export default function AcademicLogin() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 13, color: T.text }}>Password</label>
-                <button type="button" style={{ fontSize: 12.5, color: T.brandBright, background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.fontS }}>
+                <button type="button" style={{ fontSize: 12.5, color: T.brand, background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.fontS }}>
                   Forgot password?
                 </button>
               </div>
@@ -199,7 +201,7 @@ export default function AcademicLogin() {
                     borderRadius: T.r4, fontFamily: T.fontS, fontSize: 14,
                     color: T.text, outline: 'none', transition: 'border .12s, background .12s',
                   }}
-                  onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brandBright; }}
+                  onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brand; }}
                   onBlur={e => { e.target.style.background = T.surface; e.target.style.borderColor = 'transparent'; }}
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} style={{
@@ -214,14 +216,14 @@ export default function AcademicLogin() {
 
             {/* Submit */}
             <button type="submit" disabled={isLoading} style={{
-              height: 46, borderRadius: T.r4, background: T.brandBright, color: '#fff',
+              height: 46, borderRadius: T.r4, background: T.brand, color: '#fff',
               border: 'none', fontFamily: T.fontD, fontWeight: 500, fontSize: 15,
               cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.75 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               transition: 'background .12s', marginTop: 4,
             }}
-              onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = '#5f50d8'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.brandBright; }}
+              onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = '#4a3aee'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.brand; }}
             >
               {isLoading ? <><Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> Signing in…</> : 'Sign in'}
             </button>
@@ -242,7 +244,7 @@ export default function AcademicLogin() {
           {/* Back link */}
           <div style={{ marginTop: 28, fontSize: 13, color: T.text3 }}>
             Student?{' '}
-            <a href="/signin" style={{ color: T.brandBright, textDecoration: 'none', fontWeight: 500 }}>
+            <a href="/signin" style={{ color: T.brand, textDecoration: 'none', fontWeight: 500 }}>
               Go to student login →
             </a>
           </div>

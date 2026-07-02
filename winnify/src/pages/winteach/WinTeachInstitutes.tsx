@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useWinTeach } from './WinTeachContext';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Badge, Card, Btn, IconBtn, CoIcon, DeltaBanner, Modal, Field, Input, Select, Textarea } from './WinTeachUI';
+import { Badge, Btn, IconBtn, CoIcon, DeltaBanner, Modal, Field, Input, Select, Textarea } from './WinTeachUI';
 import { IBell, IPlus, IEdit, ITrash, ICheck, IInfo } from './WinTeachIcons';
 import { MAJORS } from './winteachData';
 import {
@@ -57,12 +57,16 @@ export default function WinTeachInstitutes() {
         </DeltaBanner>
 
         {institutesLoading ? <Spinner /> : (
-          <Card style={{ padding: '8px 12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
+            <div style={{ padding: '22px 28px 0' }}>
+              <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>Frameworks</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>Institutes</div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
               <thead>
                 <tr>
                   {['Institute', 'Regulation', 'Linked courses', ''].map(h => (
-                    <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 600, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: W.text3, padding: '0 16px 12px', borderBottom: `1px solid ${W.border}` }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -76,26 +80,29 @@ export default function WinTeachInstitutes() {
                         if ((e.target as HTMLElement).closest('[data-edit]') || (e.target as HTMLElement).closest('[data-del]')) return;
                         setCurrentInst(inst.id);
                       }}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', transition: 'background .12s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
-                      <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
+                      <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 11, background: W.brandBright, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>
-                            {inst.short?.slice(0, 3) || inst.name.slice(0, 3).toUpperCase()}
+                          {/* ce-hcard__ico exact: 40px, 11px radius, #efeefe bg, #5b4bff color */}
+                          <div style={{ width: 40, height: 40, borderRadius: 11, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                            {inst.short?.slice(0, 2) || inst.name.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{inst.name}</div>
-                            <div style={{ fontSize: 12.5, color: W.text2 }}>{inst.type || 'Institute'} · {inst.location || '—'}</div>
+                            <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{inst.name}</div>
+                            <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 1 }}>{inst.type || 'Institute'} · {inst.location || '—'}</div>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                        <span style={{ fontSize: 12.5, color: W.text2 }}>{inst.regulation || '—'}</span>
+                      <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                        <span style={{ fontSize: '.8rem', color: '#6b7080' }}>{inst.regulation || '—'}</span>
                       </td>
-                      <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                        <span style={{ fontSize: 12.5, color: W.text2 }}>{cc} course{cc !== 1 ? 's' : ''}</span>
+                      <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                        <span style={{ fontSize: '.8rem', color: '#6b7080' }}>{cc} course{cc !== 1 ? 's' : ''}</span>
                       </td>
-                      <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle', textAlign: 'right' }}>
+                      <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
                           <CoIcon data-edit onClick={() => setInstModal({ id: inst.id })} title="Edit"><IEdit /></CoIcon>
                         </div>
@@ -105,14 +112,14 @@ export default function WinTeachInstitutes() {
                 })}
                 {!institutes.length && (
                   <tr>
-                    <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: W.text2, fontSize: 14 }}>
+                    <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#6b7080', fontSize: 14 }}>
                       No institutes yet. Add one to get started.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </Card>
+          </div>
         )}
       </WinContent>
 
@@ -172,7 +179,7 @@ function InstituteDetail({
   });
 
   const poRow = (p: PO) => (
-    <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 8, background: '#fff' }}>
+    <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid #e9eaf2', borderRadius: 14, marginBottom: 8, background: '#fff' }}>
       <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>{p.code}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, lineHeight: 1.55 }}>{p.text}</div>
@@ -185,7 +192,7 @@ function InstituteDetail({
   );
 
   const psoRow = (p: PSO) => (
-    <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 8, background: '#fff' }}>
+    <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid #e9eaf2', borderRadius: 14, marginBottom: 8, background: '#fff' }}>
       <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>{p.code}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{p.text}</div>
@@ -217,11 +224,12 @@ function InstituteDetail({
           <span>{inst.name}</span>
         </div>
 
-        {/* Institute card */}
-        <div style={{ border: `1px solid ${W.border}`, borderRadius: W.r5, background: W.card, marginBottom: 24, overflow: 'hidden', boxShadow: W.shadowCard }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '22px 26px', background: 'linear-gradient(135deg,#F4F3FD,#FBFAFF)', borderBottom: `1px solid ${W.border}` }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, background: W.brandBright, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 17 }}>
-              {inst.short_name?.slice(0, 3) || inst.name.slice(0, 3).toUpperCase()}
+        {/* Institute card — ce-card exact, flat bg */}
+        <div style={{ border: '1px solid #e9eaf2', borderRadius: 18, background: '#fff', marginBottom: 24, overflow: 'hidden', boxShadow: '0 2px 10px rgba(28,32,48,.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '22px 28px', background: '#f6f7fb', borderBottom: '1px solid #e9eaf2' }}>
+            {/* ce-hcard__ico: 40px, 11px, #efeefe, #5b4bff */}
+            <div style={{ width: 48, height: 48, borderRadius: 11, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
+              {inst.short_name?.slice(0, 2) || inst.name.slice(0, 2).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 20 }}>{inst.name}</div>
@@ -244,7 +252,7 @@ function InstituteDetail({
           <div style={{ padding: '22px 26px' }}>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
               {[['Program Outcomes', pos.length], ['PSOs', psos.length]].map(([label, val]) => (
-                <div key={label} style={{ flex: '1 1 120px', minWidth: 120, border: `1px solid ${W.border}`, borderRadius: 16, padding: 18, textAlign: 'center', background: '#fff' }}>
+                <div key={label} style={{ flex: '1 1 120px', minWidth: 120, border: '1px solid #e9eaf2', borderRadius: 18, padding: 18, textAlign: 'center', background: '#fff' }}>
                   <div style={{ fontSize: 12.5, color: W.text2 }}>{label}</div>
                   <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 20, color: W.brand }}>{val}</div>
                 </div>
@@ -253,7 +261,7 @@ function InstituteDetail({
 
             {/* POs */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Program Outcomes (PO)</div>
+              <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff' }}>Program Outcomes (PO)</div>
               <Btn sm onClick={() => setPoModal({ id: null })}>
                 <span style={{ width: 14, height: 14, display: 'inline-flex' }}><IPlus /></span>Add PO
               </Btn>
@@ -266,7 +274,7 @@ function InstituteDetail({
 
             {/* PSOs */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Program Specific Outcomes (PSO)</div>
+              <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff' }}>Program Specific Outcomes (PSO)</div>
               <Btn sm onClick={() => setPsoModal({ id: null })}>
                 <span style={{ width: 14, height: 14, display: 'inline-flex' }}><IPlus /></span>Add PSO
               </Btn>

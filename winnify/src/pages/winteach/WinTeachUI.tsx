@@ -47,28 +47,42 @@ export function BloomBadge({ bloom }: { bloom: string }) {
   return <span style={bloomStyle(bloom)}>{bloom}</span>;
 }
 
-// ---- Progress bar ----
+// ---- Progress bar (ce-xp exact) ----
 export function ProgressBar({ value, color }: { value: number; color?: string }) {
   return (
-    <div style={{ height: 8, borderRadius: W.r6, background: W.surfaceMuted, overflow: 'hidden' }}>
-      <span style={{ display: 'block', height: '100%', width: `${value}%`, background: color || W.brandBright, borderRadius: W.r6, transition: 'width .3s' }} />
+    <div style={{ height: 9, borderRadius: 999, background: '#eceef6', overflow: 'hidden' }}>
+      <span style={{ display: 'block', height: '100%', width: `${value}%`, background: color || 'linear-gradient(90deg,#5b4bff,#00b39a)', borderRadius: 999, transition: 'width .4s ease' }} />
     </div>
   );
 }
 
-// ---- Card ----
+// ---- XpBar (ce-hcard__bar exact: 5px, #eceef6 track, #5b4bff fill) ----
+export function XpBar({ value, color }: { value: number; color?: string }) {
+  return (
+    <div style={{ display: 'block', height: 5, background: '#eceef6', borderRadius: 99, overflow: 'hidden' }}>
+      <i style={{ display: 'block', height: '100%', width: `${value}%`, background: color ?? '#5b4bff', borderRadius: 99 }} />
+    </div>
+  );
+}
+
+// ---- Card (ce-card exact) ----
 export function Card({ children, style, compact }: { children: React.ReactNode; style?: React.CSSProperties; compact?: boolean }) {
   return (
     <div style={{
-      background: W.card, border: `1px solid ${W.border}`, borderRadius: compact ? 16 : W.r5,
-      padding: compact ? 18 : 28, boxShadow: W.shadowCard, ...style,
+      background: '#fff', border: '1px solid #e9eaf2', borderRadius: compact ? 14 : 18,
+      padding: compact ? '18px 20px' : '28px 32px', boxShadow: '0 2px 10px rgba(28,32,48,.04)', ...style,
     }}>
       {children}
     </div>
   );
 }
 
-// ---- Button ----
+// ---- CE Kicker ----
+export function Kicker({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 3 }}>{children}</div>;
+}
+
+// ---- Button (ce-btn exact) ----
 type BtnVariant = 'primary' | 'secondary' | 'ghost';
 export function Btn({
   variant = 'secondary', sm, disabled, onClick, children, style,
@@ -76,25 +90,27 @@ export function Btn({
   variant?: BtnVariant; sm?: boolean; disabled?: boolean;
   onClick?: () => void; children: React.ReactNode; style?: React.CSSProperties;
 }) {
-  const base: React.CSSProperties = {
-    height: sm ? 34 : 42, borderRadius: sm ? 10 : W.r4,
-    fontFamily: W.fontDisplay, fontWeight: 500, fontSize: sm ? 13 : 15,
-    padding: sm ? '0 14px' : '0 22px',
-    border: '1px solid transparent',
-    display: 'inline-flex', alignItems: 'center', gap: 8,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.4 : 1,
-    transition: 'background .12s, opacity .12s',
-    whiteSpace: 'nowrap',
-    ...style,
-  };
   const variants: Record<BtnVariant, React.CSSProperties> = {
-    primary: { background: W.brandBright, color: '#fff', borderColor: 'transparent' },
-    secondary: { background: 'transparent', borderColor: W.borderStrong, color: W.text },
-    ghost: { background: 'transparent', color: W.text2, borderColor: 'transparent' },
+    // ce-btn--big: linear-gradient(135deg, #5b4bff, #00b39a)
+    primary:   { border: 'none', borderRadius: 11, padding: sm ? '7px 14px' : '13px 22px', fontSize: sm ? '.82rem' : '1rem',    fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#5b4bff,#00b39a)' },
+    // ce-btn default
+    secondary: { border: `1px solid ${W.borderStrong}`, borderRadius: 11, padding: sm ? '6px 14px' : '11px 18px', fontSize: sm ? '.82rem' : '.92rem', fontWeight: 600, color: W.text, background: 'transparent' },
+    ghost:     { border: 'none', borderRadius: 11, padding: sm ? '6px 12px' : '11px 16px', fontSize: sm ? '.82rem' : '.92rem',  fontWeight: 500, color: W.text2, background: 'transparent' },
   };
   return (
-    <button style={{ ...base, ...variants[variant] }} disabled={disabled} onClick={onClick}>
+    <button style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      fontFamily: W.fontDisplay,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.4 : 1,
+      transition: 'filter .12s',
+      whiteSpace: 'nowrap',
+      ...variants[variant],
+      ...style,
+    }} disabled={disabled} onClick={onClick}
+      onMouseEnter={e => { if (!disabled && variant === 'primary') (e.currentTarget as HTMLElement).style.filter = 'brightness(1.07)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = ''; }}
+    >
       {children}
     </button>
   );
@@ -184,7 +200,7 @@ export function DeltaBanner({ children }: { children: React.ReactNode }) {
 export function Aico({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      width: 36, height: 36, borderRadius: 10, background: W.collegePill, color: W.brand,
+      width: 40, height: 40, borderRadius: 11, background: '#efeefe', color: '#5b4bff',
       display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 36px',
     }}>
       <span style={{ width: 18, height: 18, display: 'flex' }}>{children}</span>
@@ -200,8 +216,8 @@ export function CoRow({ id, text, bloom, actions, style }: {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16,
-      border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 12,
-      background: '#fff', ...style,
+      border: `1.5px solid ${W.border}`, borderRadius: 14, marginBottom: 12,
+      background: '#fff', transition: 'border-color .15s, box-shadow .15s', ...style,
     }}>
       <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>{id}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -220,8 +236,8 @@ export function CoMapTag({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11,
-      color: W.brand, background: W.collegePill, borderRadius: 6, padding: '2px 8px',
+      fontWeight: 700, fontSize: '.68rem', textTransform: 'uppercase' as const, letterSpacing: '.08em',
+      color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '2px 8px',
     }}>
       {children}
     </span>
@@ -329,7 +345,7 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, flex: '0 0 28px',
-                background: active ? W.brandBright : done ? W.greenBg : W.surfaceMuted,
+                background: active ? W.brand : done ? W.greenBg : W.surfaceMuted,
                 color: active ? '#fff' : done ? W.greenFg : W.text2,
               }}>
                 {done ? '✓' : n}

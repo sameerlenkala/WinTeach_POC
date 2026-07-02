@@ -4,7 +4,7 @@ import { useWinTeach } from './WinTeachContext';
 import { useCourses, useUnits } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { TopicBadge, ProgressBar, Card, Btn, IconBtn, DeltaBanner } from './WinTeachUI';
+import { TopicBadge, XpBar, Card, Btn, IconBtn, DeltaBanner } from './WinTeachUI';
 import { IBell, ISpark } from './WinTeachIcons';
 import { allTopics, topicState, topicPct, newArtifacts } from './winteachData';
 import { generationApi } from '@/api/generation';
@@ -160,12 +160,19 @@ export default function WinTeachGeneration() {
           <b>{pend} topic{pend !== 1 ? 's' : ''} pending</b> across {courses.length} course{courses.length !== 1 ? 's' : ''}.
         </DeltaBanner>
 
-        <Card style={{ padding: '8px 12px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        {/* ce-card full-bleed table */}
+        <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
+          <div style={{ padding: '22px 28px 0' }}>
+            <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>Generation</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>
+              All topics <span style={{ fontSize: '.92rem', fontWeight: 500, color: '#6b7080', marginLeft: 6 }}>{pend} pending</span>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
             <thead>
               <tr>
                 {['Topic', 'Course', 'Status', 'Progress', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 600, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: W.text3, padding: '0 16px 12px', borderBottom: `1px solid ${W.border}` }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -182,31 +189,33 @@ export default function WinTeachGeneration() {
                       if (r.c.units) { setCurrentCourse(r.c); setCurrentTopic(r.t); }
                       navigate(`/winteach/courses/${r.c.id || r.c.code}/topic/${r.t.id}`);
                     }}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', transition: 'background .12s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                   >
-                    <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>{(r.t as any).name ?? (r.t as any).title}</div>
-                      <div style={{ fontSize: 12.5, color: W.text2 }}>Unit {r.u.n ?? r.u.unit_number} · {(r.t.subs ?? []).length} subtopics</div>
+                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{(r.t as any).name ?? (r.t as any).title}</div>
+                      <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 2 }}>Unit {r.u.n ?? r.u.unit_number} · {(r.t.subs ?? []).length} subtopics</div>
                     </td>
-                    <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>{r.c.code}</div>
-                      <div style={{ fontSize: 12.5, color: W.text2 }}>{r.c.name}</div>
+                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                      <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 2 }}>{r.c.code}</div>
+                      <div style={{ fontSize: '.8rem', color: '#6b7080' }}>{r.c.name}</div>
                     </td>
-                    <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
                       <TopicBadge topic={r.t} />
                     </td>
-                    <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle', minWidth: 150 }}>
-                      <ProgressBar value={topicPct(r.t)} />
+                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', minWidth: 150 }}>
+                      <XpBar value={topicPct(r.t)} />
                     </td>
-                    <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle', textAlign: 'right' }}>
+                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', textAlign: 'right' }}>
                       {topicState(r.t) === 'pending' && !activeJobs[r.t.id] ? (
                         <Btn sm variant="primary" onClick={() => generateTopic(r.c.id, r.t)}>
                           <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>Generate
                         </Btn>
                       ) : isGenerating ? (
-                        <span style={{ fontSize: 12, color: W.brand, fontFamily: W.fontDisplay, fontWeight: 600 }}>Running…</span>
+                        <span style={{ fontSize: 12, color: '#5b4bff', fontFamily: W.fontDisplay, fontWeight: 600 }}>Running…</span>
                       ) : (
-                        <span style={{ width: 18, height: 18, display: 'inline-flex', color: W.text3 }}><IChevronSvg /></span>
+                        <span style={{ width: 18, height: 18, display: 'inline-flex', color: 'rgba(28,32,48,.45)' }}><IChevronSvg /></span>
                       )}
                     </td>
                   </tr>
@@ -214,7 +223,7 @@ export default function WinTeachGeneration() {
               })}
             </tbody>
           </table>
-        </Card>
+        </div>
       </WinContent>
     </>
   );

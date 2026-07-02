@@ -4,7 +4,7 @@ import { useWinTeach } from './WinTeachContext';
 import { allTopics, topicState, coursePct } from './winteachData';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { StatusBadge, ProgressBar, Card, Btn, IconBtn, CoIcon, Modal } from './WinTeachUI';
+import { StatusBadge, XpBar, Card, Btn, IconBtn, CoIcon, Modal } from './WinTeachUI';
 import { IBell, IPlus, IEdit, IEmpty, ITrash } from './WinTeachIcons';
 import { coursesApi } from '@/api/courses';
 
@@ -71,17 +71,21 @@ export default function WinTeachCourses() {
           </Card>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>
-                {courses.length} course{courses.length !== 1 ? 's' : ''}
+            {/* ce-card with 0 padding for full-bleed table */}
+            <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 28px 0' }}>
+                <div>
+                  <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>My workspace</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>
+                    Courses <span style={{ fontSize: '.92rem', fontWeight: 500, color: '#6b7080', marginLeft: 6 }}>{courses.length} total</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <Card style={{ padding: '8px 12px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
                 <thead>
                   <tr>
                     {['Course', 'Structure', 'Generation', 'Status', ''].map((h, i) => (
-                      <th key={i} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 600, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: W.text3, padding: '0 16px 12px', borderBottom: `1px solid ${W.border}` }}>{h}</th>
+                      <th key={i} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -96,28 +100,30 @@ export default function WinTeachCourses() {
                           if ((e.target as HTMLElement).closest('[data-edit]')) return;
                           navigate(`/winteach/courses/${c.id}`);
                         }}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', transition: 'background .12s' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                       >
-                        <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                          <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>{c.code}</div>
-                          <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{c.name}</div>
-                          <div style={{ fontSize: 12.5, color: W.text2 }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 2 }}>{c.code}</div>
+                          <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{c.name}</div>
+                          <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 1 }}>
                             {(c as any).semester ? `Sem ${(c as any).semester}` : '—'} · {c.credits ?? '—'} credits · {c.regulation || '—'}
                           </div>
                         </td>
-                        <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: 12.5, color: W.text2 }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '.8rem', color: '#6b7080' }}>
                             {c.units?.length ?? 0} units · {ts.length} topics
                           </span>
                         </td>
-                        <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle', minWidth: 160 }}>
-                          <div style={{ marginBottom: 8 }}><ProgressBar value={coursePct(c)} /></div>
-                          <span style={{ fontSize: 12.5, color: W.text2 }}>{readyCount}/{ts.length} topics ready</span>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', minWidth: 160 }}>
+                          <div style={{ marginBottom: 6 }}><XpBar value={coursePct(c)} /></div>
+                          <span style={{ fontSize: '.8rem', color: '#6b7080' }}>{readyCount}/{ts.length} topics · {coursePct(c)}%</span>
                         </td>
-                        <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle' }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
                           <StatusBadge status={c.status} />
                         </td>
-                        <td style={{ padding: 16, borderBottom: isLast ? 'none' : `1px solid ${W.border}`, verticalAlign: 'middle', textAlign: 'right' }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                             <CoIcon data-edit onClick={() => navigate(`/winteach/courses/${c.id}`)} title="Open course">
                               <IEdit />
@@ -132,7 +138,7 @@ export default function WinTeachCourses() {
                   })}
                 </tbody>
               </table>
-            </Card>
+            </div>
           </>
         )}
       </WinContent>

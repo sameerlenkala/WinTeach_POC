@@ -46,15 +46,15 @@ export default function WinTeachLibrary() {
     <>
       <WinTopbar title="Library" actions={<IconBtn><IBell /></IconBtn>} />
       <WinContent>
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, background: W.surfaceMuted, borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
+        {/* Tabs — ce-top__btn style */}
+        <div style={{ display: 'flex', gap: 4, background: '#f6f7fb', borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
           {([['sources', 'Source catalog'], ['co', 'CO Library']] as [Tab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
               height: 34, padding: '0 18px', borderRadius: 9, border: 'none',
               background: tab === key ? '#fff' : 'transparent',
-              boxShadow: tab === key ? '0 1px 4px rgba(60,50,140,0.10)' : 'none',
+              boxShadow: tab === key ? '0 1px 4px rgba(28,32,48,.08)' : 'none',
               fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13,
-              color: tab === key ? W.brandBright : W.text2, cursor: 'pointer',
+              color: tab === key ? '#5b4bff' : '#6b7080', cursor: 'pointer',
             }}>{label}</button>
           ))}
         </div>
@@ -72,7 +72,7 @@ export default function WinTeachLibrary() {
             </div>
 
             {addOpen && (
-              <Card compact style={{ marginBottom: 16, border: `1.5px solid ${W.brandBright}` }}>
+              <Card compact style={{ marginBottom: 16, border: '1.5px solid #e9eaf2' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Add reference book / source</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   {[
@@ -110,9 +110,9 @@ export default function WinTeachLibrary() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 {(sources as any[]).map((src) => (
-                  <div key={src.id} style={{ border: `1px solid ${W.border}`, borderRadius: 16, padding: 18, background: '#fff', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div key={src.id} style={{ border: '1px solid #e9eaf2', borderRadius: 14, padding: '15px 16px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 10, background: W.collegePill, color: W.brand, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 38px' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 11, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 40px' }}>
                         <BookOpen size={18} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -153,9 +153,9 @@ export default function WinTeachLibrary() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 {(coEntries as any[]).map((item, i) => (
-                  <div key={item.id ?? i} style={{ border: `1px solid ${W.border}`, borderRadius: 16, padding: 18, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div key={item.id ?? i} style={{ border: '1px solid #e9eaf2', borderRadius: 14, padding: '15px 16px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12, color: W.brand, background: W.collegePill, borderRadius: 6, padding: '2px 8px' }}>CO Library</span>
+                      <span style={{ fontWeight: 700, fontSize: '.68rem', textTransform: 'uppercase' as const, letterSpacing: '.08em', color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '2px 8px' }}>CO Library</span>
                       <BloomBadge bloom={item.bloom_level ?? item.bloom ?? 'Apply'} />
                     </div>
                     <div style={{ fontSize: 14, lineHeight: 1.55, color: W.text }}>{item.text ?? item.description}</div>
