@@ -499,16 +499,54 @@ def gen_topic_plan(client: Any, ctx: dict) -> dict:
     return _chat_json(client, *build_topic_plan_prompt(ctx), temperature=0.2)
 
 
+def _normalize_plan_keys(plan: dict) -> dict:
+    """Defensive key normalization — map common model aliases onto the canonical
+    field names the validators expect, and coerce scope fields to arrays. The
+    prompt demands the exact keys; this is a belt-and-braces guard against drift."""
+    def as_list(v):
+        if v is None:
+            return []
+        return v if isinstance(v, list) else [v]
+
+    for c in plan.get("concept_inventory", []) or []:
+        if not c.get("concept_name"):
+            c["concept_name"] = c.get("text") or c.get("name") or ""
+        if not c.get("flags"):
+            c["flags"] = c.get("derived_flags") or {}
+        c["serves_tlos"] = as_list(c.get("serves_tlos"))
+        c["scope_in"] = as_list(c.get("scope_in"))
+        c["scope_out"] = as_list(c.get("scope_out"))
+        c["flag_overrides"] = as_list(c.get("flag_overrides"))
+    for t in plan.get("tlo_set", []) or []:
+        if not t.get("statement"):
+            t["statement"] = t.get("text") or t.get("tlo_statement") or ""
+        t["served_by_concepts"] = as_list(t.get("served_by_concepts"))
+    for m in plan.get("co_mapping", []) or []:
+        if not m.get("co_statement"):
+            m["co_statement"] = m.get("text") or m.get("statement") or ""
+    return plan
+
+
 def ingest_topic_plan(plan: dict) -> dict:
-    """Strip model-emitted stamps/gate, backfill lookup budgets, and re-derive
-    flags from the canonical table so the stored plan is authoritative."""
+    """Strip model-emitted stamps/gate, normalize keys, backfill lookup budgets,
+    and re-derive flags from the canonical table so the stored plan is authoritative."""
     plan.pop("gate", None)
+    _normalize_plan_keys(plan)
     fm = plan.setdefault("front_matter", {})
     for f in ("topic_plan_version", "validated_at", "scope_hash"):
         fm[f] = None
     for c in plan.get("concept_inventory", []) or []:
         cty = c.get("primary_content_type")
         if cty in {e.value for e in ct.ContentType}:
+            # Flags are DERIVED from the Content Type (§4 "one classification, two
+            # projections"), not trusted from the model. Only flags the model
+            # explicitly records in flag_overrides may deviate from the canonical
+            # derivation — so conformance holds by construction.
+            model_flags = c.get("flags", {}) or {}
+            overrides = {name: model_flags.get(name) for name in (c.get("flag_overrides") or [])
+                         if name in ct.FLAG_NAMES and model_flags.get(name) is not None}
+            c["flags"] = ct.derive_flags(cty, overrides=overrides,
+                                         comparison_target=model_flags.get("comparison_target"))
             # Budgets are always resolved from the lookup, never trusted from the model.
             c["budgets"] = ct.resolve_budgets(int(c.get("time_minutes", 0) or 0),
                                               c.get("complexity_tier", "moderate"))
@@ -1072,17 +1110,81 @@ def _upsert_artifact(db, job_id: str, topic_id: str, artifact_type: str, content
     return new_id
 
 
+_BLOOM_INT_TO_LABEL = {1: "Remember", 2: "Understand", 3: "Apply",
+                       4: "Analyze", 5: "Evaluate", 6: "Create"}
+
+
+def _co_context(co_row: dict) -> dict:
+    """Shape a course_outcomes row into the operative_co block the prompts expect.
+    bloom_level may be an int (1–6) or a text label depending on the write path."""
+    bloom = co_row.get("bloom_label")
+    raw = co_row.get("bloom_level")
+    if not bloom:
+        if isinstance(raw, int) or (isinstance(raw, str) and raw.isdigit()):
+            bloom = _BLOOM_INT_TO_LABEL.get(int(raw), "Understand")
+        else:
+            bloom = raw or "Understand"
+    return {"co_id": f"CO{co_row.get('co_number')}",
+            "text": co_row.get("text") or co_row.get("description", ""),
+            "bloom_level": bloom}
+
+
 def _load_topic_context(db, course_id: str, topic_id: str) -> dict:
-    """Best-effort TopicContext assembly from the finalized course tables
-    (§3.6 → §5.1). Missing joins degrade gracefully to empty defaults."""
+    """Assemble the TopicContext (§5.1) from the finalized course tables
+    (§3.6). Reads both column vocabularies: the 01-schema names
+    (contact_hours/sem/co_id) and the app-compat names (hours/semester)."""
     course = _row(db, "courses", course_id)
     topic = _row(db, "topics", topic_id)
     unit = _row(db, "units", topic.get("unit_id")) if topic.get("unit_id") else {}
     subtopics = db.table("subtopics").select("title").eq("topic_id", topic_id).execute()
-    topic = dict(topic)
-    topic["subtopics"] = [s.get("title") for s in (subtopics.data or [])]
-    topic.setdefault("reference_books", [])
-    return build_topic_context(course, unit, topic)
+
+    operative_co = None
+    if topic.get("co_id"):
+        operative_co = _co_context(_row(db, "course_outcomes", topic["co_id"]))
+    else:
+        # App-created topics carry no co_id — fall back to the co_number ==
+        # unit_number heuristic the courses API uses, else the first CO.
+        cos = db.table("course_outcomes").select("*").eq("course_id", course_id) \
+            .order("co_number").execute().data or []
+        if cos:
+            unit_no = unit.get("unit_number")
+            unit_no = int(unit_no) if str(unit_no).isdigit() else None
+            match = next((c for c in cos if c.get("co_number") == unit_no), cos[0])
+            operative_co = _co_context(match)
+
+    sem = course.get("sem")
+    if not sem:
+        digits = "".join(ch for ch in str(course.get("semester") or "") if ch.isdigit())
+        sem = int(digits) if digits else None
+    academic_year = math.ceil(int(sem) / 2) if sem else 2
+    unit_hours = unit.get("contact_hours") or unit.get("hours") or 0
+    topic_hours = float(topic.get("contact_hours") or 0) or max(round(unit_hours / 3, 1), 2)
+
+    return {
+        "course_code": course.get("code", ""),
+        "course_name": course.get("name", ""),
+        "regulation": course.get("regulation", ""),
+        "academic_year": academic_year,
+        "credits": course.get("credits", 3),
+        "lab_flag": course.get("lab_flag", False),
+        # No dedicated subject-type config in the POC schema — derive from `major`.
+        "subject_domain": course.get("major") or course.get("program") or "",
+        "subject_type_key": course.get("major", ""),
+        "subject_type_label": course.get("major", ""),
+        "audience_level": "UG",
+        "unit_number": unit.get("unit_number", ""),
+        "unit_title": unit.get("title", ""),
+        "unit_total_hours": unit_hours,
+        "topic_id": topic_id,
+        "topic_number": str(topic.get("sort_order", "")),
+        "topic_title": topic.get("title", ""),
+        "topic_hours_allocated": topic_hours,
+        "subtopics": [s.get("title") for s in (subtopics.data or [])],
+        "operative_co": operative_co,
+        "supporting_cos": [],
+        "prerequisites": [],
+        "reference_books": [],
+    }
 
 
 def _row(db, table: str, row_id: str) -> dict:

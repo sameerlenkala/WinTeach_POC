@@ -86,9 +86,41 @@ Produce, in this order:
 - prerequisite_boundary: 2–6 prerequisites, each pointing to the earlier topic that taught it;
   prereq_gap:true where none exists.
 
-Concept IDs and TLO IDs are assigned by the orchestrator after validation — output them as
-null; do not number them yourself. Budgets are resolved by the orchestrator from a lookup —
-you may omit them."""
+Use WORKING IDs so the cross-references validate: give each TLO a tlo_id "T1","T2",… in
+order and each concept a concept_id "C1","C2",… in order. Reference those exact ids in every
+concept's serves_tlos, in each TLO's served_by_concepts, and in the session_plan
+(concepts_covered / tlos_advanced). The orchestrator canonicalizes these ids after validation.
+Budgets are resolved by the orchestrator from a lookup — you may omit them."""
+
+# Exact output keys the code validators + strict schema expect (§7.5). Node A must
+# emit these verbatim — do not rename fields (this is what a prior model got wrong).
+_TOPIC_PLAN_OUTPUT = """
+Output ONLY this JSON — no explanation, no markdown. Use these EXACT field names:
+{{
+  "front_matter": {{"topic": "{topic_title}", "course": "{code} {name}", "subject_domain": "{domain}",
+    "audience_level": "{level}", "topic_duration_hours": {topic_hours}}},
+  "co_mapping": [{{"co_id": "CO1", "co_statement": "verbatim CO text", "bloom_level": "L2..L6",
+    "source": "Faculty-finalized", "topic_weight_pct": 100}}],
+  "tlo_set": [{{"tlo_id": "T1", "statement": "<approved verb-first, measurable>", "parent_co": "CO1",
+    "bloom_level": "L2..L6", "served_by_concepts": ["C1"]}}],
+  "concept_inventory": [{{"concept_id": "C1", "concept_name": "short concept name",
+    "serves_tlos": ["T1"], "primary_content_type": "P1|P2|P3|P4|P5", "secondary_blocks": [],
+    "flags": {{"requires_code": false, "needs_execution_trace": false, "needs_worked_example": true,
+      "needs_analysis": false, "needs_comparison": false, "comparison_target": null}},
+    "flag_overrides": [], "complexity_tier": "simple|moderate|complex",
+    "proficiency_target": "text", "scope_in": ["item", "item"], "scope_out": ["item"],
+    "bloom_ceiling": "L2..L6", "time_minutes": 30, "relative_weight_pct": 25, "ct_low_confidence": false}}],
+  "session_plan": [{{"session_no": 1, "minutes": 60, "concepts_covered": ["C1"], "tlos_advanced": ["T1"]}}],
+  "assessment_blueprint": {{"bloom_co_matrix": [], "quiz_bloom_range": "L2-L3", "assignment_skew": "text",
+    "co_weighting": [], "must_assess_concepts": ["C1"]}},
+  "prerequisite_boundary": [{{"knowledge": "text", "taught_in_topic": null, "prereq_gap": false}}]
+}}
+Rules: scope_in and scope_out are ARRAYS of strings. tlo_set statements lead with an approved
+verb-bank verb at the declared level (never understand/know/learn/appreciate/be aware of).
+co_mapping topic_weight_pct sums to 100; concept relative_weight_pct sums to 100. This topic is
+{topic_total_minutes} minutes long: your session_plan minutes MUST sum to {topic_total_minutes}
+(±5) and your concept time_minutes MUST also sum to {topic_total_minutes}. Every concept serves
+≥1 TLO; every TLO is served by ≥1 concept; every concept appears in ≥1 session."""
 
 
 def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
@@ -107,8 +139,8 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         "finalized_COs (AUTHORITATIVE — select a subset, never edit): operative {op_co}, "
         "supporting {sup_cos}\n"
         "prerequisites: {prereqs}\n"
-        "reference_books: {refs}\n\n"
-        "Return ONLY the TopicPlan JSON. Weights reconcile to 100%; session minutes to the duration."
+        "reference_books: {refs}\n"
+        + _TOPIC_PLAN_OUTPUT
     ).format(
         code=ctx.get("course_code", ""), name=ctx.get("course_name", ""),
         reg=ctx.get("regulation", ""), domain=ctx.get("subject_domain", ""),
@@ -121,6 +153,7 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         subtopics=_j(ctx.get("subtopics", [])),
         op_co=_j(ctx.get("operative_co")), sup_cos=_j(ctx.get("supporting_cos", [])),
         prereqs=_j(ctx.get("prerequisites", [])), refs=_j(ctx.get("reference_books", [])),
+        topic_total_minutes=int(round(float(ctx.get("topic_hours_allocated", 0) or 0) * 60)),
     )
     return system, user
 
