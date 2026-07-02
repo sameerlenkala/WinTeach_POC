@@ -15,6 +15,11 @@ interface ComplexityRequest {
   hours?: number;
 }
 
+// TODO(§8.1): migrate this union — and the artifact card model across
+// WinTeachGeneration/WinTeachTopicPage/WinTeachContext + types.ts — to the eight
+// backend artifact_type names (topic_plan, student_notes, slides, summary, quiz,
+// assignment, faculty_diagnostic, flashcards). Deferred to the G2/G3 review-surface
+// stories so the current POC UI keeps compiling.
 interface JobCreatePayload {
   course_id: string;
   topic_id: string;
