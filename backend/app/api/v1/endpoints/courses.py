@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends
 from supabase import Client
 from app.core.dependencies import get_db, get_current_user, require_role
 from app.schemas.course import CourseCreate, CourseUpdate, CourseStatusPatch, COCreate, COUpdate, COMappingUpdate
+from app.schemas.generation import ScopePatchRequest
 from app.services import course_service
+from app.services import generation_service
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -59,6 +61,14 @@ def update_co(course_id: str, co_id: str, payload: COUpdate, user: dict = Depend
 @router.delete("/{course_id}/cos/{co_id}", status_code=204)
 def delete_co(course_id: str, co_id: str, user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
     course_service.delete_co(db, user, course_id, co_id)
+
+
+# ── Trigger write-back (§3.7) ────────────────────────────────────────────────
+
+@router.post("/{course_id}/scope-patches", status_code=201)
+def scope_patches(course_id: str, payload: ScopePatchRequest,
+                  user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    return generation_service.apply_scope_patch(db, user, course_id, payload)
 
 
 # ── Units & Topics ───────────────────────────────────────────────────────────
