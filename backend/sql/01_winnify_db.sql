@@ -36,14 +36,14 @@ create table profiles (
 
 -- Auto-create profile on Supabase signup
 create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into profiles (id, full_name, email, role)
+  insert into public.profiles (id, full_name, email, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.email,
-    coalesce((new.raw_user_meta_data->>'role')::user_role, 'student')
+    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'student')
   );
   return new;
 end;
@@ -230,7 +230,8 @@ create table uploads (
   file_url          text not null,   -- Supabase Storage path
   file_type         text,            -- "pdf" | "docx"
   file_size         int,
-  status            upload_status default 'uploading',
+  status            text default 'uploading',   -- free text: uploading|processing|done|committed|failed
+
   extraction_result jsonb,           -- full structured result with confidence
   committed_at      timestamptz,
   created_at        timestamptz default now()
@@ -323,13 +324,17 @@ create table settings (
 -- ============================================================
 
 -- Helper: get role of current user
-create or replace function auth_role() returns user_role language sql stable as $$
-  select role from profiles where id = auth.uid();
+-- security definer + pinned search_path so the internal read of `profiles`
+-- bypasses RLS — otherwise the profiles policies (which call auth_role) recurse.
+create or replace function auth_role() returns user_role
+  language sql stable security definer set search_path = public as $$
+  select role from public.profiles where id = auth.uid();
 $$;
 
 -- Helper: get institute_id of current user
-create or replace function auth_institute() returns uuid language sql stable as $$
-  select institute_id from profiles where id = auth.uid();
+create or replace function auth_institute() returns uuid
+  language sql stable security definer set search_path = public as $$
+  select institute_id from public.profiles where id = auth.uid();
 $$;
 
 -- profiles

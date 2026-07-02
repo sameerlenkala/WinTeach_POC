@@ -53,14 +53,14 @@ def get_summary(db: Client, user: dict) -> dict:
         generating = (
             db.table("generation_jobs")
             .select("id", count="exact")
-            .eq("created_by", user["id"])
+            .eq("triggered_by", user["id"])
             .eq("status", "running")
             .execute()
         )
         recent = (
             db.table("uploads")
             .select("id, filename, created_at, status")
-            .eq("faculty_id", user["id"])
+            .eq("uploaded_by", user["id"])
             .order("created_at", desc=True)
             .limit(5)
             .execute()

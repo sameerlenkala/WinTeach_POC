@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
@@ -5,6 +6,8 @@ from supabase import Client
 from app.core.config import settings
 from app.schemas.common import ROLE_REDIRECT
 from app.schemas.auth import LoginResponse, MeResponse, InviteResponse
+
+logger = logging.getLogger(__name__)
 
 
 # Superadmin is intentionally excluded — must exist in real Supabase auth (no auto-seed).
@@ -60,10 +63,15 @@ def _ensure_demo_user(db: Client, email: str, name: str, role: str) -> None:
 
 
 def login(db: Client, email: str, password: str) -> LoginResponse:
-    # For known demo accounts (non-superadmin), seed the user in Supabase on first login
+    # For known demo accounts (non-superadmin), seed the user in Supabase on first
+    # login. Seeding is best-effort: if the admin API is throttled/unavailable and
+    # the user already exists, we still let them sign in below.
     demo = _DEMO_ACCOUNTS.get(email.lower().strip())
     if demo and password == demo.get("password", _DEMO_PASSWORD):
-        _ensure_demo_user(db, email, demo["name"], demo["role"])
+        try:
+            _ensure_demo_user(db, email, demo["name"], demo["role"])
+        except Exception as e:
+            logger.warning("demo user seeding failed for %s (continuing to sign-in): %s", email, e)
 
     try:
         auth_resp = db.auth.sign_in_with_password({"email": email, "password": password})
@@ -75,7 +83,11 @@ def login(db: Client, email: str, password: str) -> LoginResponse:
     user = auth_resp.user
     session = auth_resp.session
 
-    profile = db.table("profiles").select("*, institutes(name)").eq("id", user.id).single().execute()
+    # Disambiguate the embed: profiles↔institutes has two FKs (institute_id and
+    # institutes.created_by), so PostgREST needs the explicit relationship name.
+    profile = db.table("profiles").select(
+        "*, institutes!profiles_institute_id_fkey(name)"
+    ).eq("id", user.id).single().execute()
     if not profile.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 

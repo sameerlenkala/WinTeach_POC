@@ -44,13 +44,15 @@ async def upload_syllabus(
     except Exception:
         pass  # Storage optional in local dev
 
-    # Insert upload row as processing
+    # Insert upload row as processing (columns match the uploads schema §01 + §03)
     db.table("uploads").insert({
         "id": upload_id,
-        "faculty_id": user["id"],
+        "uploaded_by": user["id"],
         "institute_id": user.get("institute_id"),
         "filename": file.filename,
-        "storage_path": storage_path,
+        "file_url": storage_path,
+        "file_type": "pdf" if file.content_type == "application/pdf" else "docx",
+        "file_size": len(content),
         "status": "processing",
     }).execute()
 

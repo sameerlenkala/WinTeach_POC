@@ -18,7 +18,10 @@ def create_source(db: Client, user: dict, payload: LibrarySourceCreate) -> dict:
 def list_sources(db: Client, user: dict) -> list[dict]:
     query = db.table("library_sources").select("*")
     if user["role"] in ("faculty", "admin"):
-        query = query.eq("institute_id", user.get("institute_id"))
+        inst = user.get("institute_id")
+        # A null institute_id must filter for NULL, not the literal string "None"
+        # (which Postgres rejects as an invalid uuid).
+        query = query.eq("institute_id", inst) if inst else query.is_("institute_id", "null")
     return query.order("title").execute().data or []
 
 
