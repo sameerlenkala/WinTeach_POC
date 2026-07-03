@@ -109,72 +109,6 @@ function Field({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function NotesBody({ content }: { content: any }) {
-  const core = content?.core ?? {};
-  const closing = content?.closing ?? {};
-  const def = core?.core_concept?.formal_definition;
-  const mech = core?.deep_dive?.architecture_and_mechanism?.explanation;
-  const code = core?.deep_dive?.code_or_formalization;
-  const worked = core?.practical_understanding?.worked_example;
-  const mistakes = closing?.sections?.common_mistakes ?? [];
-  return (
-    <>
-      {def && <Field title="Definition">{def}</Field>}
-      {mech && <Field title="Mechanism">{mech}</Field>}
-      {code?.applicable && code?.content && (
-        <Field title={`Code (${code.language_or_system ?? code.type ?? ''})`}>
-          <pre style={{ background: 'var(--text)', color: '#e7e9f5', borderRadius: 8, padding: 14, overflow: 'auto', fontSize: 12, lineHeight: 1.5, margin: '4px 0' }}>{code.content}</pre>
-        </Field>
-      )}
-      {worked && <Field title="Worked example">{worked}</Field>}
-      {mistakes.length > 0 && (
-        <Field title="Common mistakes">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {mistakes.slice(0, 3).map((m: any, i: number) => <li key={i} style={{ marginBottom: 4 }}><b>{m.wrong_way ?? m.mistake}</b> — {m.why_it_fails ?? m.correct_approach}</li>)}
-          </ul>
-        </Field>
-      )}
-    </>
-  );
-}
-
-function SlidesBody({ content }: { content: any }) {
-  const slides = content?.slides ?? [];
-  return (
-    <Field title={`${slides.length} slides`}>
-      <ol style={{ margin: 0, paddingLeft: 18 }}>
-        {slides.map((s: any, i: number) => (
-          <li key={i} style={{ marginBottom: 8 }}>
-            <b>{s.title}</b>
-            {(s.body_blocks ?? []).length > 0 && <div style={{ color: W.text2, fontSize: 12.5, marginTop: 2 }}>{(s.body_blocks).join(' · ')}</div>}
-          </li>
-        ))}
-      </ol>
-    </Field>
-  );
-}
-
-function QuizBody({ content }: { content: any }) {
-  const mcq = content?.mcq ?? [];
-  const sa = content?.short_answer ?? [];
-  return (
-    <>
-      {mcq.map((q: any, i: number) => (
-        <div key={i} style={{ marginBottom: 14, padding: '12px 14px', background: W.surfaceMuted, borderRadius: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: W.text, marginBottom: 4 }}>{i + 1}. {q.question}</div>
-          <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
-            {(q.options ?? []).map((o: string, oi: number) => (
-              <li key={oi} style={{ color: oi === q.answer_index ? W.greenFg : W.text2, fontWeight: oi === q.answer_index ? 700 : 400, fontSize: 12.5, marginBottom: 2 }}>{o}</li>
-            ))}
-          </ul>
-          {q.explanation && <div style={{ fontSize: 12, color: W.text3 }}>{q.explanation}</div>}
-        </div>
-      ))}
-      {sa.length > 0 && <Field title="Short answer">{sa.map((q: any, i: number) => <div key={i} style={{ marginBottom: 4 }}>• {q.question}</div>)}</Field>}
-    </>
-  );
-}
-
 function TopicArtifactBody({ type, content }: { type: TopicArtType; content: any }) {
   if (!content) return null;
   if (type === 'flashcards') return (
@@ -248,24 +182,14 @@ function ViewerModal({ title, subtitle, loading, error, onRetry, children, onClo
 
 /* ── concept artifact tile ───────────────────────────────────────────────── */
 
-function ConceptTile({ jobId, conceptId, conceptName, type, state, locked, onChanged, onView }: {
-  jobId: string; conceptId: string; conceptName: string; type: ConceptArtType;
-  state?: ConceptArtifactState; locked: boolean; onChanged: () => void; onView?: () => void;
+function ConceptTile({ jobId, conceptId, type, state, locked, onChanged, onView }: {
+  jobId: string; conceptId: string; type: ConceptArtType;
+  state?: ConceptArtifactState; locked: boolean; onChanged: () => void; onView: () => void;
 }) {
-  const [content, setContent] = useState<any>(null);
-  const [open, setOpen] = useState(false);
-  const [loadErr, setLoadErr] = useState(false);
   const status = state?.status ?? 'not_generated';
   const approved = state?.approval_status === 'approved';
 
-  const loadContent = useCallback(async () => {
-    setLoadErr(false);
-    try { setContent((await generationApi.getConcept(jobId, conceptId, type)).content); } catch { setLoadErr(true); }
-  }, [jobId, conceptId, type]);
-
-  useEffect(() => { if (open && !content && status === 'ready') loadContent(); }, [open, status, content, loadContent]);
-
-  const gen = async () => { await generationApi.genConcept(jobId, conceptId, type); setContent(null); onChanged(); };
+  const gen = async () => { await generationApi.genConcept(jobId, conceptId, type); onChanged(); };
 
   return (
     <div style={{
@@ -291,7 +215,7 @@ function ConceptTile({ jobId, conceptId, conceptName, type, state, locked, onCha
       <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         {status === 'not_generated' && <Btn sm variant="primary" onClick={gen}>Generate</Btn>}
         {status === 'ready' && <>
-          <Btn sm onClick={onView ?? (() => setOpen(true))}>View</Btn>
+          <Btn sm onClick={onView}>View</Btn>
           {!approved && <Btn sm variant="primary" onClick={async () => { await generationApi.approveConcept(jobId, conceptId, type); onChanged(); }}>Approve</Btn>}
           <Btn sm variant="ghost" onClick={gen}>Regenerate</Btn>
         </>}
@@ -299,21 +223,16 @@ function ConceptTile({ jobId, conceptId, conceptName, type, state, locked, onCha
         {status === 'generating' && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: W.text2 }}><Spin /> ~30–90s</span>}
         {(state?.cost_usd ?? 0) > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{usd(state?.cost_usd)}</span>}
       </div>
-      {open && (
-        <ViewerModal title={`${CONCEPT_LABEL[type]} — ${conceptName}`} subtitle={conceptId} loading={!content} error={loadErr} onRetry={loadContent} onClose={() => setOpen(false)}>
-          {type === 'student_notes' ? <NotesBody content={content} /> : type === 'slides' ? <SlidesBody content={content} /> : <QuizBody content={content} />}
-        </ViewerModal>
-      )}
     </div>
   );
 }
 
 /* ── concept card (editable plan + notes/slides/quiz tiles) ──────────────── */
 
-function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, onViewNotes }: {
+function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, onViewArtifact }: {
   index: number; job: GenJob; concept: any; edit: any; onEdit: (patch: any) => void;
   stateFor: (cid: string, t: ConceptArtType) => ConceptArtifactState | undefined; onChanged: () => void;
-  onViewNotes: (cid: string) => void;
+  onViewArtifact: (cid: string, t: ConceptArtType) => void;
 }) {
   const [showEdit, setShowEdit] = useState(false);
   const merged = { ...concept, ...edit };
@@ -371,9 +290,9 @@ function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, o
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 12 }}>
         {CONCEPT_TYPES.map(t => (
-          <ConceptTile key={t} jobId={job.id} conceptId={concept.concept_id} conceptName={concept.concept_name}
+          <ConceptTile key={t} jobId={job.id} conceptId={concept.concept_id}
             type={t} state={stateFor(concept.concept_id, t)} locked={t !== 'student_notes' && !notesReady} onChanged={onChanged}
-            onView={t === 'student_notes' ? () => onViewNotes(concept.concept_id) : undefined} />
+            onView={() => onViewArtifact(concept.concept_id, t)} />
         ))}
       </div>
       {!notesReady && <div style={{ fontSize: 11.5, color: W.text3, marginTop: 8 }}>Generate Notes first — Slides & Quiz derive from them.</div>}
@@ -901,7 +820,7 @@ export default function WinTeachGenerate() {
               {concepts.map((c: any, i: number) => (
                 <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
                   onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
-                  onViewNotes={(cid) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/notes/${cid}`)} />
+                  onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
               ))}
 
               {/* topic-level artifacts */}

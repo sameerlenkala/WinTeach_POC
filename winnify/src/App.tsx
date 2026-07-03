@@ -69,7 +69,7 @@ import WinTeachCourses from './pages/winteach/WinTeachCourses';
 import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
 import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
 import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
-import WinTeachNotesReader from './pages/winteach/WinTeachNotesReader';
+import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
 import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
 import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
@@ -166,7 +166,9 @@ export default function App() {
             {/* Topic → the generation studio directly (no redundant topic page) */}
             <Route path="courses/:id/topic/:topicId" element={<WinTeachGenerate />} />
             <Route path="courses/:id/topic/:topicId/generate" element={<WinTeachGenerate />} />
-            <Route path="courses/:id/topic/:topicId/notes/:conceptId" element={<WinTeachNotesReader />} />
+            <Route path="courses/:id/topic/:topicId/notes/:conceptId" element={<WinTeachConceptReader type="student_notes" />} />
+            <Route path="courses/:id/topic/:topicId/slides/:conceptId" element={<WinTeachConceptReader type="slides" />} />
+            <Route path="courses/:id/topic/:topicId/quiz/:conceptId" element={<WinTeachConceptReader type="quiz" />} />
             <Route path="generation" element={<WinTeachGeneration />} />
             <Route path="library" element={<WinTeachLibrary />} />
             <Route path="add-library" element={<WinTeachAddLibrary />} />

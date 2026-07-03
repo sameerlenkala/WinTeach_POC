@@ -1,5 +1,5 @@
-// LMS-style reader for generated Student Notes.
-// Route: /winteach/courses/:id/topic/:topicId/notes/:conceptId
+// LMS-style reader for per-concept generations (Student Notes, Slides, Quiz).
+// Routes: /winteach/courses/:id/topic/:topicId/{notes|slides|quiz}/:conceptId
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
@@ -7,12 +7,20 @@ import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Btn, Badge } from './WinTeachUI';
 import { IBack, ICheck, INotes } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
-import { generationApi, type GenJob, type ConceptArtifactState } from '@/api/generation';
+import { generationApi, CONCEPT_TYPES, type GenJob, type ConceptArtifactState, type ConceptArtType } from '@/api/generation';
+
+/* ── per-type metadata ───────────────────────────────────────────────────── */
+
+const READER_META: Record<ConceptArtType, { label: string; tab: string; segment: string; emptyHint: string }> = {
+  student_notes: { label: 'Student notes', tab: 'Notes', segment: 'notes', emptyHint: 'Generate this lesson from the studio.' },
+  slides: { label: 'Slides', tab: 'Slides', segment: 'slides', emptyHint: 'Slides derive from approved notes — generate them from the studio.' },
+  quiz: { label: 'Quiz', tab: 'Quiz', segment: 'quiz', emptyHint: 'The quiz derives from approved notes — generate it from the studio.' },
+};
 
 /* ── status helpers ──────────────────────────────────────────────────────── */
 
-function notesState(job: GenJob | null, cid: string): ConceptArtifactState | undefined {
-  return (job?.concept_artifacts ?? []).find(c => c.concept_id === cid && c.artifact_type === 'student_notes');
+function artState(job: GenJob | null, cid: string, type: ConceptArtType): ConceptArtifactState | undefined {
+  return (job?.concept_artifacts ?? []).find(c => c.concept_id === cid && c.artifact_type === type);
 }
 
 function StateIcon({ s }: { s?: ConceptArtifactState }) {
@@ -140,15 +148,108 @@ function NotesArticle({ content }: { content: any }) {
   );
 }
 
+function SlidesArticle({ content }: { content: any }) {
+  const slides: any[] = content?.slides ?? [];
+  if (!slides.length) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+      {slides.map((s: any, i: number) => (
+        <section key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, overflow: 'hidden' }}>
+          <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: `1px solid ${W.border}`, background: W.surfaceMuted }}>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{String(s.slide_no ?? i + 1).padStart(2, '0')}</span>
+            <b style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text, flex: 1, minWidth: 0 }}>{s.title}</b>
+            {s.role && <Badge variant="muted">{s.role}</Badge>}
+          </header>
+          <div style={{ padding: '14px 18px' }}>
+            {(s.body_blocks ?? []).length > 0 && (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7, color: W.text }}>
+                {s.body_blocks.map((b: string, bi: number) => <li key={bi} style={{ marginBottom: 4 }}>{b}</li>)}
+              </ul>
+            )}
+            {s.speaker_notes && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${W.border}`, fontSize: 12.5, lineHeight: 1.65, color: W.text2 }}>
+                <span style={{ fontWeight: 600, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', color: W.text3, display: 'block', marginBottom: 4 }}>Speaker notes</span>
+                {s.speaker_notes}
+              </div>
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function QuizArticle({ content }: { content: any }) {
+  const mcq: any[] = content?.mcq ?? [];
+  const sa: any[] = content?.short_answer ?? [];
+  if (!mcq.length && !sa.length) return null;
+  const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+  let n = 0;
+  return (
+    <>
+      {mcq.length > 0 && (
+        <Section n={++n} title="Multiple choice">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {mcq.map((q: any, i: number) => (
+              <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>Q{i + 1}</span>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, flex: 1 }}>{q.question}</div>
+                  {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 28 }}>
+                  {(q.options ?? []).map((o: string, oi: number) => {
+                    const correct = oi === q.answer_index;
+                    return (
+                      <div key={oi} style={{
+                        display: 'flex', gap: 8, alignItems: 'baseline', padding: '5px 10px', borderRadius: 7, fontSize: 13.5, lineHeight: 1.5,
+                        background: correct ? 'color-mix(in oklab, var(--status-green) 8%, transparent)' : 'transparent',
+                        color: correct ? W.greenFg : W.text2, fontWeight: correct ? 600 : 400,
+                      }}>
+                        <span style={{ fontWeight: 600, flexShrink: 0 }}>{LETTERS[oi] ?? oi + 1}.</span>
+                        <span>{o}</span>
+                        {correct && <span style={{ fontSize: 11, marginLeft: 'auto', flexShrink: 0 }}>✓ correct</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {q.explanation && <div style={{ marginLeft: 28, marginTop: 8, fontSize: 12.5, lineHeight: 1.6, color: W.text3 }}>{q.explanation}</div>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+      {sa.length > 0 && (
+        <Section n={++n} title="Short answer">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {sa.map((q: any, i: number) => (
+              <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, marginBottom: 6 }}>{q.question}</div>
+                {q.model_answer && (
+                  <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text2 }}>
+                    <span style={{ fontWeight: 600, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', color: W.text3, display: 'block', marginBottom: 4 }}>Model answer</span>
+                    {q.model_answer}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+    </>
+  );
+}
+
 /* ── page ────────────────────────────────────────────────────────────────── */
 
 const CT_LABEL: Record<string, string> = { P1: 'Conceptual', P2: 'Code', P3: 'Proof', P4: 'Systems', P5: 'Lab' };
 
-export default function WinTeachNotesReader() {
+export default function WinTeachConceptReader({ type }: { type: ConceptArtType }) {
   const navigate = useNavigate();
   const { id: courseId, topicId, conceptId } = useParams();
   const { data: course } = useCourse(courseId ?? '');
   const { data: topic } = useTopic(courseId ?? '', topicId ?? '');
+  const meta = READER_META[type];
 
   const [job, setJob] = useState<GenJob | null>(null);
   const [plan, setPlan] = useState<any>(null);
@@ -161,9 +262,11 @@ export default function WinTeachNotesReader() {
   const concepts: any[] = plan?.concept_inventory ?? [];
   const idx = concepts.findIndex(c => c.concept_id === conceptId);
   const concept = idx >= 0 ? concepts[idx] : null;
-  const nState = job && conceptId ? notesState(job, conceptId) : undefined;
+  const nState = job && conceptId ? artState(job, conceptId, type) : undefined;
   const approved = nState?.approval_status === 'approved';
   const studioPath = `/winteach/courses/${courseId}/topic/${topicId}`;
+  const readerPath = (t: ConceptArtType, cid: string) =>
+    `/winteach/courses/${courseId}/topic/${topicId}/${READER_META[t].segment}/${cid}`;
 
   // job + plan
   useEffect(() => {
@@ -174,37 +277,38 @@ export default function WinTeachNotesReader() {
     }).catch(() => setLoading(false));
   }, [topicId]);
 
-  // Poll while any notes are generating so status icons, progress, and the
-  // Approve button unfreeze once the backend finishes.
-  const generatingAny = (job?.concept_artifacts ?? []).some(a => a.artifact_type === 'student_notes' && a.status === 'generating');
+  // Poll while any artifact of this type is generating so status icons,
+  // progress, and the Approve button unfreeze once the backend finishes.
+  const generatingAny = (job?.concept_artifacts ?? []).some(a => a.artifact_type === type && a.status === 'generating');
   useEffect(() => {
     if (!topicId || !generatingAny) return;
     const t = setInterval(() => generationApi.getTopicJob(topicId).then(setJob).catch(() => {}), 2600);
     return () => clearInterval(t);
   }, [topicId, generatingAny]);
 
-  // Active concept content. Keyed on job.id + notes status (not the job object)
-  // so poll/approve refreshes don't clear the article, while a generating→ready
-  // flip fetches the finished notes.
+  // Active concept content. Keyed on job.id + artifact status (not the job
+  // object) so poll/approve refreshes don't clear the article, while a
+  // generating→ready flip fetches the finished content.
   const jobId = job?.id;
   const nStatus = nState?.status;
   useEffect(() => {
     if (!jobId || !conceptId) return;
     setLoading(true); setContent(null);
-    generationApi.getConcept(jobId, conceptId, 'student_notes')
+    generationApi.getConcept(jobId, conceptId, type)
       .then(r => setContent(r.content))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [jobId, conceptId, nStatus]);
+  }, [jobId, conceptId, type, nStatus]);
 
-  const goto = useCallback((cid: string) =>
-    navigate(`/winteach/courses/${courseId}/topic/${topicId}/notes/${cid}`), [navigate, courseId, topicId]);
+  const goto = useCallback((cid: string) => navigate(readerPath(type, cid)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, courseId, topicId, type]);
 
   const approve = async () => {
     if (!job || !conceptId) return;
     setApproving(true);
     try {
-      await generationApi.approveConcept(job.id, conceptId, 'student_notes');
+      await generationApi.approveConcept(job.id, conceptId, type);
       setJob(await generationApi.getTopicJob(topicId!));
     } catch { /* */ }
     finally { setApproving(false); }
@@ -213,13 +317,13 @@ export default function WinTeachNotesReader() {
   const prev = idx > 0 ? concepts[idx - 1] : null;
   const next = idx >= 0 && idx < concepts.length - 1 ? concepts[idx + 1] : null;
   const readyCount = concepts.filter(c => {
-    const s = notesState(job, c.concept_id);
+    const s = artState(job, c.concept_id, type);
     return s?.status === 'ready' || s?.approval_status === 'approved';
   }).length;
 
   return (
     <>
-      <WinTopbar title="Notes" actions={
+      <WinTopbar title={meta.tab} actions={
         <Btn variant="ghost" onClick={() => navigate(studioPath)}>
           <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>Back to studio
         </Btn>
@@ -234,7 +338,7 @@ export default function WinTeachNotesReader() {
             boxShadow: W.shadowCard, overflow: 'hidden',
           }}>
             <div style={{ padding: '16px 18px 14px', borderBottom: `1px solid ${W.border}` }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: W.text3, marginBottom: 5 }}>{courseCode} · Student notes</div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: W.text3, marginBottom: 5 }}>{courseCode} · {meta.label}</div>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14.5, color: W.text, lineHeight: 1.35 }}>{topicTitle}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <div style={{ flex: 1, height: 4, borderRadius: 99, background: 'var(--score-track)', overflow: 'hidden' }}>
@@ -246,7 +350,7 @@ export default function WinTeachNotesReader() {
             <nav style={{ padding: 8 }}>
               {concepts.map((c, i) => {
                 const active = c.concept_id === conceptId;
-                const s = notesState(job, c.concept_id);
+                const s = artState(job, c.concept_id, type);
                 return (
                   <button key={c.concept_id} onClick={() => goto(c.concept_id)} style={{
                     display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
@@ -274,16 +378,16 @@ export default function WinTeachNotesReader() {
             borderRadius: 12, boxShadow: W.shadowCard,
           }}>
             {/* article header */}
-            <header style={{ padding: '26px 40px 22px', borderBottom: `1px solid ${W.border}` }}>
+            <header style={{ padding: '26px 40px 18px', borderBottom: `1px solid ${W.border}` }}>
               <div style={{ fontSize: 11.5, color: W.text3, marginBottom: 8 }}>
                 <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(`/winteach/courses/${courseId}`)}>{courseCode}</span>
                 {' / '}
                 <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(studioPath)}>{topicTitle}</span>
-                {' / '}Student notes
+                {' / '}{meta.label}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                 <h1 style={{ flex: '1 1 300px', minWidth: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', color: W.text, margin: 0, lineHeight: 1.25 }}>
-                  {concept?.concept_name ?? 'Notes'}
+                  {concept?.concept_name ?? meta.tab}
                 </h1>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                   {nState?.status === 'ready' && !approved && (
@@ -300,6 +404,29 @@ export default function WinTeachNotesReader() {
                 {concept?.complexity_tier && <Badge variant="muted">{concept.complexity_tier}</Badge>}
                 {idx >= 0 && <Badge variant="muted">Lesson {idx + 1} of {concepts.length}</Badge>}
               </div>
+              {/* artifact tabs: same concept, other generations */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+                {CONCEPT_TYPES.map(t => {
+                  const active = t === type;
+                  const s = job && conceptId ? artState(job, conceptId, t) : undefined;
+                  const done = s?.status === 'ready' || s?.approval_status === 'approved';
+                  return (
+                    <button key={t} disabled={active}
+                      onClick={() => conceptId && navigate(readerPath(t, conceptId))}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7,
+                        border: `1px solid ${active ? 'transparent' : W.border}`,
+                        background: active ? 'var(--tint-brand-bg)' : 'transparent',
+                        color: active ? 'var(--tint-brand-fg)' : W.text2,
+                        fontFamily: W.fontDisplay, fontSize: 12.5, fontWeight: 600,
+                        cursor: active ? 'default' : 'pointer',
+                      }}>
+                      {READER_META[t].tab}
+                      {done && <span style={{ fontSize: 10 }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </header>
 
             {/* article body */}
@@ -307,18 +434,20 @@ export default function WinTeachNotesReader() {
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '30px 0 60px' }}>
                   <span className="wt-spin" style={{ width: 14, height: 14, border: `2px solid ${W.border}`, borderTopColor: W.brand, borderRadius: '50%', display: 'inline-block' }} />
-                  Loading notes…
+                  Loading {meta.tab.toLowerCase()}…
                 </div>
               ) : content ? (
-                <NotesArticle content={content} />
+                type === 'student_notes' ? <NotesArticle content={content} />
+                  : type === 'slides' ? <SlidesArticle content={content} />
+                    : <QuizArticle content={content} />
               ) : (
                 <div style={{ textAlign: 'center', padding: '48px 0 72px', color: W.text2 }}>
                   <div style={{ width: 40, height: 40, color: W.text3, margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}><INotes /></div>
                   <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, color: W.text, marginBottom: 6 }}>
-                    {nState?.status === 'generating' ? 'Notes are generating…' : 'No notes yet'}
+                    {nState?.status === 'generating' ? `${meta.tab} are generating…` : `No ${meta.tab.toLowerCase()} yet`}
                   </div>
                   <div style={{ fontSize: 13, marginBottom: 18 }}>
-                    {nState?.status === 'generating' ? 'This usually takes 30–90 seconds. Check back shortly.' : 'Generate this lesson from the studio.'}
+                    {nState?.status === 'generating' ? 'This usually takes 30–90 seconds. Check back shortly.' : meta.emptyHint}
                   </div>
                   <Btn onClick={() => navigate(studioPath)}>Open Generation Studio</Btn>
                 </div>
