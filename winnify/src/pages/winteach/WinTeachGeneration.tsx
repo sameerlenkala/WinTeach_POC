@@ -4,8 +4,8 @@ import { useWinTeach } from './WinTeachContext';
 import { useCourses, useUnits } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { TopicBadge, XpBar, Card, Btn, IconBtn, DeltaBanner } from './WinTeachUI';
-import { IBell, ISpark } from './WinTeachIcons';
+import { TopicBadge, XpBar, Card, Btn, IconBtn } from './WinTeachUI';
+import { IBell, ISpark, ICheck, INotes } from './WinTeachIcons';
 import { allTopics, topicState, topicPct, newArtifacts } from './winteachData';
 import type { Topic } from './winteachData';
 
@@ -42,8 +42,6 @@ function IChevronSvg() {
 // Tracks active jobs: topicId → jobId
 const activeJobs: Record<string, string> = {};
 
-
-
 export default function WinTeachGeneration() {
   const navigate = useNavigate();
   const { courses, setCurrentCourse, setCurrentTopic, runTopicFlow } = useWinTeach();
@@ -59,7 +57,11 @@ export default function WinTeachGeneration() {
   const dbCourseIds = new Set(dbRows.map((r: any) => r.c.id));
   const localRows = courses.flatMap(c => allTopics(c).map(x => ({ c, u: x.unit, t: x.topic })));
   const rows = [...dbRows, ...localRows.filter(r => !dbCourseIds.has((r.c as any).id))];
-  const pend = rows.filter(r => topicState(r.t) !== 'ready').length;
+
+  const ready = rows.filter(r => topicState(r.t) === 'ready').length;
+  const generating = rows.filter(r => topicState(r.t) === 'generating').length;
+  const pend = rows.length - ready;
+  const notStarted = pend - generating;
 
   // This board is a lightweight overview + preview animation. Real generation
   // (per-unit review, approvals, fan-out) runs in the topic's Generation Studio.
@@ -76,13 +78,14 @@ export default function WinTeachGeneration() {
     });
   };
 
-  // Group by course for better UX when many courses exist
-  const byCourse: Record<string, typeof rows> = {};
+  // Group by course
+  const byCourse: Record<string, { c: any; rows: typeof rows }> = {};
   rows.forEach(r => {
     const key = r.c.id || r.c.code;
-    if (!byCourse[key]) byCourse[key] = [];
-    byCourse[key].push(r);
+    if (!byCourse[key]) byCourse[key] = { c: r.c, rows: [] };
+    byCourse[key].rows.push(r);
   });
+  const groups = Object.values(byCourse);
 
   // Always render the loader so hooks fire regardless of rows.length
   const loader = <AllCoursesLoader onRows={handleRows} />;
@@ -107,6 +110,22 @@ export default function WinTeachGeneration() {
     );
   }
 
+  const stat = (icoBg: string, icoFg: string, icon: React.ReactNode, val: number | string, label: string, delay: number) => (
+    <div key={label} className="ds-rise" style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 10,
+      padding: '14px 16px', animationDelay: `${delay}ms`,
+    }}>
+      <div style={{ width: 38, height: 38, borderRadius: 8, background: icoBg, color: icoFg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ width: 19, height: 19, display: 'flex' }}>{icon}</span>
+      </div>
+      <div>
+        <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 18, color: W.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+        <div style={{ fontSize: 12, color: W.text2 }}>{label}</div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <WinTopbar title="Content Generation" actions={
@@ -122,75 +141,84 @@ export default function WinTeachGeneration() {
       } />
       {loader}
       <WinContent>
-        <DeltaBanner>
-          Topics from finalized course plans land here. Each topic runs one flow — Teacher Notes first, then Pre-Assessment, Quiz &amp; Flash Cards in parallel.{' '}
-          <b>{pend} topic{pend !== 1 ? 's' : ''} pending</b> across {courses.length} course{courses.length !== 1 ? 's' : ''}.
-        </DeltaBanner>
 
-        {/* ce-card full-bleed table */}
-        <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
-          <div style={{ padding: '22px 28px 0' }}>
-            <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>Generation</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>
-              All topics <span style={{ fontSize: '.92rem', fontWeight: 500, color: '#6b7080', marginLeft: 6 }}>{pend} pending</span>
-            </div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
-            <thead>
-              <tr>
-                {['Topic', 'Course', 'Status', 'Progress', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const isLast = i === rows.length - 1;
+        {/* ── Summary strip ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 18 }}>
+          {stat('var(--tint-brand-bg)', 'var(--tint-brand-fg)', <INotes />, rows.length, `Topics across ${groups.length} course${groups.length !== 1 ? 's' : ''}`, 0)}
+          {stat('var(--status-green-bg)', 'var(--status-green)', <ICheck />, ready, 'Ready', 60)}
+          {stat('var(--status-info-bg)', 'var(--status-info)', <ISpark />, generating, 'Generating now', 120)}
+          {stat('var(--tint-orange-bg)', 'var(--tint-orange-fg)', <IChevronSvg />, notStarted, 'Not started', 180)}
+        </div>
+
+        {/* ── Per-course boards ── */}
+        {groups.map((g, gi) => {
+          const gReady = g.rows.filter(r => topicState(r.t) === 'ready').length;
+          const gPct = g.rows.length ? Math.round(gReady / g.rows.length * 100) : 0;
+          return (
+            <div key={g.c.id || g.c.code} className="ds-rise" style={{
+              background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 12,
+              boxShadow: W.shadowCard, overflow: 'hidden', marginBottom: 16,
+              animationDelay: `${240 + gi * 60}ms`,
+            }}>
+              {/* course header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 24px', background: W.surfaceMuted, borderBottom: `1px solid ${W.border}`, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                  <div style={{ fontFamily: W.fontDisplay, fontSize: '.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: W.brandTintFg, marginBottom: 2 }}>{g.c.code}</div>
+                  <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>{g.c.name}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+                  <div style={{ width: 130 }}><XpBar value={gPct} /></div>
+                  <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.text2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {gReady}/{g.rows.length} ready
+                  </span>
+                </div>
+              </div>
+
+              {/* topic rows */}
+              {g.rows.map((r, i) => {
+                const isLast = i === g.rows.length - 1;
                 const isGenerating = topicState(r.t) === 'generating' || !!activeJobs[r.t.id];
                 return (
-                  <tr
+                  <div
                     key={r.t.id}
-                    className="wt-row"
                     onClick={() => {
                       r.t._unit = r.u;
                       if (r.c.units) { setCurrentCourse(r.c); setCurrentTopic(r.t); }
                       navigate(`/winteach/courses/${r.c.id || r.c.code}/topic/${r.t.id}`);
                     }}
-                    style={{ cursor: 'pointer', transition: 'background .12s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14, padding: '13px 24px',
+                      borderBottom: isLast ? 'none' : `1px solid ${W.border}`,
+                      cursor: 'pointer', transition: 'background .12s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--row-hover)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                   >
-                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{(r.t as any).name ?? (r.t as any).title}</div>
-                      <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 2 }}>Unit {r.u.n ?? r.u.unit_number} · {(r.t.subs ?? []).length} subtopics</div>
-                    </td>
-                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
-                      <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 2 }}>{r.c.code}</div>
-                      <div style={{ fontSize: '.8rem', color: '#6b7080' }}>{r.c.name}</div>
-                    </td>
-                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
-                      <TopicBadge topic={r.t} />
-                    </td>
-                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', minWidth: 150 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text }}>{(r.t as any).name ?? (r.t as any).title}</div>
+                      <div style={{ fontSize: 12, color: W.text2, marginTop: 2 }}>Unit {r.u.n ?? r.u.unit_number} · {(r.t.subs ?? []).length} subtopics</div>
+                    </div>
+                    <div style={{ width: 120, flex: '0 0 auto' }} className="max-md:hidden">
                       <XpBar value={topicPct(r.t)} />
-                    </td>
-                    <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', textAlign: 'right' }}>
+                    </div>
+                    <TopicBadge topic={r.t} />
+                    <div style={{ flex: '0 0 auto', minWidth: 96, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
                       {topicState(r.t) === 'pending' && !activeJobs[r.t.id] ? (
                         <Btn sm variant="primary" onClick={() => generateTopic(r.c.id, r.t)}>
                           <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>Generate
                         </Btn>
                       ) : isGenerating ? (
-                        <span style={{ fontSize: 12, color: '#5b4bff', fontFamily: W.fontDisplay, fontWeight: 600 }}>Running…</span>
+                        <span style={{ fontSize: 12, color: W.brandTintFg, fontFamily: W.fontDisplay, fontWeight: 600 }}>Running…</span>
                       ) : (
-                        <span style={{ width: 18, height: 18, display: 'inline-flex', color: 'rgba(28,32,48,.45)' }}><IChevronSvg /></span>
+                        <span style={{ width: 18, height: 18, display: 'inline-flex', color: W.text3 }}><IChevronSvg /></span>
                       )}
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          );
+        })}
       </WinContent>
     </>
   );

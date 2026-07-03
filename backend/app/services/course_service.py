@@ -90,13 +90,18 @@ def delete_course(db: Client, user: dict, course_id: str) -> None:
     if not row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     _check_access(user, row.data)
-    # Delete child rows first to avoid FK constraint violations
+    # Delete child rows first to avoid FK constraint violations.
+    # Topics before course_outcomes (topics.co_id -> course_outcomes has no cascade).
     unit_rows = db.table("units").select("id").eq("course_id", course_id).execute().data or []
     for u in unit_rows:
         db.table("topics").delete().eq("unit_id", u["id"]).execute()
     db.table("units").delete().eq("course_id", course_id).execute()
     db.table("course_outcomes").delete().eq("course_id", course_id).execute()
     db.table("co_mappings").delete().eq("course_id", course_id).execute()
+    # uploads.course_id / uploads.committed_to_course reference courses(id) WITHOUT
+    # on-delete-cascade, so they must be cleared or the course delete raises a 500.
+    db.table("uploads").delete().eq("course_id", course_id).execute()
+    db.table("uploads").delete().eq("committed_to_course", course_id).execute()
     db.table("courses").delete().eq("id", course_id).execute()
 
 

@@ -72,12 +72,12 @@ export default function WinTeachCourses() {
         ) : (
           <>
             {/* ce-card with 0 padding for full-bleed table */}
-            <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 28px 0' }}>
                 <div>
-                  <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>My workspace</div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030' }}>
-                    Courses <span style={{ fontSize: '.92rem', fontWeight: 500, color: '#6b7080', marginLeft: 6 }}>{courses.length} total</span>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--brand)', marginBottom: 3 }}>My workspace</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text)' }}>
+                    Courses <span style={{ fontSize: '.92rem', fontWeight: 500, color: 'var(--text-2)', marginLeft: 6 }}>{courses.length} total</span>
                   </div>
                 </div>
               </div>
@@ -85,7 +85,7 @@ export default function WinTeachCourses() {
                 <thead>
                   <tr>
                     {['Course', 'Structure', 'Generation', 'Status', ''].map((h, i) => (
-                      <th key={i} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(28,32,48,.45)', padding: '0 24px 12px', borderBottom: '1px solid #e9eaf2' }}>{h}</th>
+                      <th key={i} style={{ textAlign: 'left', fontFamily: W.fontSans, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '0 24px 12px', borderBottom: '1px solid var(--border)' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -101,29 +101,29 @@ export default function WinTeachCourses() {
                           navigate(`/winteach/courses/${c.id}`);
                         }}
                         style={{ cursor: 'pointer', transition: 'background .12s' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f5f4ff'; }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--row-hover)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                       >
-                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
-                          <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 2 }}>{c.code}</div>
-                          <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: '#1c2030' }}>{c.name}</div>
-                          <div style={{ fontSize: '.8rem', color: '#6b7080', marginTop: 1 }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--brand)', marginBottom: 2 }}>{c.code}</div>
+                          <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '.98rem', color: 'var(--text)' }}>{c.name}</div>
+                          <div style={{ fontSize: '.8rem', color: 'var(--text-2)', marginTop: 1 }}>
                             {(c as any).semester ? `Sem ${(c as any).semester}` : '—'} · {c.credits ?? '—'} credits · {c.regulation || '—'}
                           </div>
                         </td>
-                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
-                          <span style={{ fontSize: '.8rem', color: '#6b7080' }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '.8rem', color: 'var(--text-2)' }}>
                             {c.units?.length ?? 0} units · {ts.length} topics
                           </span>
                         </td>
-                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', minWidth: 160 }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle', minWidth: 160 }}>
                           <div style={{ marginBottom: 6 }}><XpBar value={coursePct(c)} /></div>
-                          <span style={{ fontSize: '.8rem', color: '#6b7080' }}>{readyCount}/{ts.length} topics · {coursePct(c)}%</span>
+                          <span style={{ fontSize: '.8rem', color: 'var(--text-2)' }}>{readyCount}/{ts.length} topics · {coursePct(c)}%</span>
                         </td>
-                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle' }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle' }}>
                           <StatusBadge status={c.status} />
                         </td>
-                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid #e9eaf2', verticalAlign: 'middle', textAlign: 'right' }}>
+                        <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle', textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                             <CoIcon data-edit onClick={() => navigate(`/winteach/courses/${c.id}`)} title="Open course">
                               <IEdit />
@@ -150,14 +150,14 @@ export default function WinTeachCourses() {
             <br />This will permanently remove the course and all its topics, COs, and generated content.
           </div>
           {deleteError && (
-            <div style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>
+            <div style={{ background: 'rgba(220,38,38,0.08)', color: 'var(--status-red)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>
               {deleteError}
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Btn variant="ghost" onClick={() => { setConfirmDelete(null); setDeleteError(''); }} disabled={deleting}>Cancel</Btn>
             <Btn variant="primary" onClick={handleDelete} disabled={deleting}
-              style={{ background: '#DC2626', borderColor: '#DC2626' }}>
+              style={{ background: 'var(--status-red)', borderColor: 'var(--status-red)' }}>
               {deleting ? 'Deleting…' : 'Delete course'}
             </Btn>
           </div>

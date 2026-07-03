@@ -103,8 +103,9 @@ export default function PageTopbar() {
   const pageTitle = useMemo(() => {
     const path = location.pathname;
     if (PAGE_TITLES[path]) return PAGE_TITLES[path];
-    // Partial match for dynamic routes
-    for (const [key, val] of Object.entries(PAGE_TITLES)) {
+    // Partial match for dynamic routes — longest prefix wins
+    const entries = Object.entries(PAGE_TITLES).sort((a, b) => b[0].length - a[0].length);
+    for (const [key, val] of entries) {
       if (path.startsWith(key + '/') || path === key) return val;
     }
     return 'Winnify';

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   CalendarDays, Mic, ClipboardList, FileText, Building2, BarChart3,
-  CheckCircle2, ArrowRight, Star, Users, BookOpen, Zap, Target, TrendingUp,
+  CheckCircle2, ArrowRight, Users, BookOpen, Zap, Target, TrendingUp,
   Flame, Sparkles,
 } from 'lucide-react';
 import { ScoreDial } from '@/components/ds';
@@ -24,20 +24,11 @@ const howItWorks = [
   { step: '04', title: 'Get Placement Ready',         description: 'Hit all milestone targets, earn your readiness seal, and apply to campus drives.' },
 ];
 
-const testimonials = [
-  { name: 'Priya Sharma', role: 'Placed at Microsoft', text: 'The Slog Overs plan kept me on track. WinSpeak improved my interview confidence dramatically.' },
-  { name: 'Rahul Verma',  role: 'Placed at Google',    text: 'Mock assessments were spot-on. The company OA practice matched real questions perfectly.' },
-  { name: 'Ananya Gupta', role: 'Placed at Amazon',    text: 'Resume ATS review helped me get shortlisted. The AI suggestions were incredibly specific.' },
+const heroPoints = [
+  'Personalized Slog Overs plan from day one',
+  'AI feedback on speech, code, and resumes',
+  'Company-specific OA practice built in',
 ];
-
-const stats = [
-  { value: '50K+', label: 'Students Placed' },
-  { value: '200+', label: 'Partner Companies' },
-  { value: '92%',  label: 'Placement Rate' },
-  { value: '4.8★', label: 'Student Rating' },
-];
-
-const companies = ['Google', 'Microsoft', 'Amazon', 'TCS', 'Infosys', 'Wipro', 'Razorpay', 'Zepto', 'Flipkart', 'Adobe'];
 
 const whyItems = [
   { icon: Target,     text: 'Personalized Slog Overs plans based on your branch, domain, and target companies' },
@@ -162,11 +153,11 @@ export default function Landing() {
               <p className="ds-rise" style={{ fontSize: 16, color: 'var(--text-2)', lineHeight: 1.65, maxWidth: 480, margin: '0 0 28px', fontFamily: 'var(--font-sans)', ...rise(2) }}>
                 Winnify is the career intelligence platform that prepares engineering students for placements with personalized plans, mock assessments, communication training, and AI-powered resume building.
               </p>
-              <div className="ds-rise" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 28px', marginBottom: 32, ...rise(3) }}>
-                {stats.map(s => (
-                  <div key={s.label}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h2)', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
-                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)', fontFamily: 'var(--font-sans)', letterSpacing: '0.02em' }}>{s.label}</div>
+              <div className="ds-rise" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32, ...rise(3) }}>
+                {heroPoints.map(p => (
+                  <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <CheckCircle2 size={16} color="var(--tint-teal-fg)" style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: 14.5, color: 'var(--text-2)', fontFamily: 'var(--font-sans)' }}>{p}</span>
                   </div>
                 ))}
               </div>
@@ -184,22 +175,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
-      {/* ── TRUSTED BY (marquee) ── */}
-      <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: '20px 0', background: 'var(--card)' }}>
-        <div style={wrap}>
-          <p style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.10em', textAlign: 'center', margin: '0 0 14px', fontFamily: 'var(--font-sans)' }}>
-            Students placed at
-          </p>
-          <div className="w-marquee-mask">
-            <div className="w-marquee">
-              {[...companies, ...companies].map((c, i) => (
-                <span key={`${c}-${i}`} style={{ fontSize: 14, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{c}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* ── FEATURES ── */}
       <section style={{ padding: '76px 0' }}>
@@ -251,41 +226,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
-      <section style={{ padding: '76px 0' }}>
-        <div style={wrap}>
-          <div style={{ textAlign: 'center', marginBottom: 'var(--sp-8)' }}>
-            <span style={sectionLabel}>Student Stories</span>
-            <h2 style={h2}>Placed at Top Companies</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--sp-4)' }}>
-            {testimonials.map((t, i) => (
-              <div key={t.name} className="lift ds-rise" style={{ ...card, display: 'flex', flexDirection: 'column', ...rise(i) }}>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Star key={j} size={13} fill="#F6A623" color="#F6A623" />
-                  ))}
-                </div>
-                <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', lineHeight: 'var(--lh-body)', margin: '0 0 16px', fontFamily: 'var(--font-sans)', flex: 1 }}>
-                  “{t.text}”
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--tint-brand-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 12, color: 'var(--tint-brand-fg)', flexShrink: 0 }}>
-                    {t.name.split(' ').map(w => w[0]).join('')}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--fs-small)', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)' }}>{t.name}</div>
-                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--tint-teal-fg)', fontFamily: 'var(--font-sans)', fontWeight: 600 }}>{t.role}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── WHY WINNIFY ── */}
-      <section style={{ padding: '76px 0', background: 'color-mix(in oklab, var(--brand) 4%, var(--app-bg))' }}>
+      <section style={{ padding: '76px 0' }}>
         <div style={wrap}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'clamp(32px, 5vw, 56px)', alignItems: 'center' }}>
             <div>
@@ -362,7 +304,7 @@ export default function Landing() {
               Your Placement Journey Starts Here
             </h2>
             <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.82)', maxWidth: 460, margin: '0 auto 32px', fontFamily: 'var(--font-sans)', lineHeight: 1.65, position: 'relative' }}>
-              Join thousands of engineering students who used Winnify to land their dream jobs. Start your Slog Overs plan today — it's free.
+              Build your personalized Slog Overs plan and track every step from revision to offer letter. Start today — it's free.
             </p>
             <Link to="/signup" className="lift" style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, height: 52, padding: '0 30px',

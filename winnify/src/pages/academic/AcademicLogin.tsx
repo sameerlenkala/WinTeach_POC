@@ -197,16 +197,9 @@ export default function AcademicLogin() {
           </form>
 
           {/* demo notice */}
-          <div style={{
-            marginTop: 24, padding: '12px 16px',
-            background: 'var(--tint-brand-bg)', borderRadius: 'var(--w-r4)',
-            display: 'flex', flexDirection: 'column', gap: 4,
-          }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)' }}>Demo credentials pre-filled</div>
-            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-2)' }}>
-              Switch role on the left to auto-fill the matching account.
-            </div>
-          </div>
+          <p style={{ marginTop: 18, fontSize: 'var(--fs-caption)', color: 'var(--text-3)', lineHeight: 'var(--lh-caption)' }}>
+            Demo credentials are pre-filled — switch role on the left to auto-fill the matching account.
+          </p>
 
           {/* back link */}
           <div style={{ marginTop: 28, fontSize: 'var(--fs-small)', color: 'var(--text-3)' }}>

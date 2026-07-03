@@ -47,19 +47,19 @@ function WinTeachSidebar() {
     <aside className="ws-shell fixed top-0 left-0 bottom-0 z-40 max-md:hidden">
 
       {/* Logo row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 16px 8px' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: '#efeefe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <GraduationCap size={18} color="#5b4bff" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px 16px' }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <GraduationCap size={15} color="#fff" />
         </div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: '#1c2030' }}>Winnify</div>
-          <div style={{ fontSize: 10, color: '#5b4bff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Faculty</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.01em' }}>WinTeach</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 10.5, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Studio</span>
         </div>
       </div>
 
       {/* Profile */}
       <div className="ws-user-section">
-        <div className="ws-avatar" style={{ background: '#5b4bff' }}>{initials}</div>
+        <div className="ws-avatar">{initials}</div>
         <div className="ws-user-info">
           <span className="ws-user-name">{user?.name ?? '—'}</span>
           <span className="ws-user-email">{user?.email ?? ''}</span>
@@ -76,7 +76,7 @@ function WinTeachSidebar() {
             <item.icon className="ws-nav-icon" />
             <span className="ws-nav-label">{item.label}</span>
             {item.count !== undefined && (
-              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 5px', background: 'rgba(91,75,255,0.10)', color: 'var(--brand)' }}>
+              <span className="wt-nav-count" style={{ marginLeft: 'auto', fontFamily: 'var(--font-display)', fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '1px 7px', background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', fontVariantNumeric: 'tabular-nums' }}>
                 {item.count}
               </span>
             )}
@@ -113,11 +113,11 @@ function LayoutInner() {
   const { toastMsg } = useWinTeach();
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", '--font-display': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" } as React.CSSProperties}>
+    <div className="wt-pro flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)', fontFamily: 'var(--font-sans)', color: 'var(--text)' }}>
       <WinTeachSidebar />
 
       {/* Content column */}
-      <div className="flex flex-col flex-1 min-w-0 md:ml-[284px]" style={{ background: 'var(--app-bg)' }}>
+      <div className="flex flex-col flex-1 min-w-0 md:ml-[252px]" style={{ background: 'var(--app-bg)' }}>
         <PageTitleInjector />
         <PageTopbar />
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>

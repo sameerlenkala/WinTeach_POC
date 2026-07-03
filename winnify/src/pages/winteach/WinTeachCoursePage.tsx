@@ -4,8 +4,8 @@ import { useWinTeach } from './WinTeachContext';
 import { useCourse, useCOs, useCOMap, useSetCourseStatus, useUnits, useSaveCOMap, useUpdateCO, useCourseProgress } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag, Badge } from './WinTeachUI';
-import { IBack, IEdit } from './WinTeachIcons';
+import { BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
+import { IBack, IEdit, IAssess, IDashboard, IArrow } from './WinTeachIcons';
 import { coRefFor } from './winteachData';
 import type { CourseOutcome, COMapping } from '@/api/types';
 import type { TopicProgress } from '@/api/generation';
@@ -37,9 +37,9 @@ function CellDropdown({ value, onChange, onClose }: { value: number; onChange: (
   ];
 
   return (
-    <div ref={ref} style={{ position: 'absolute', zIndex: 100, top: '100%', left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: '0 4px 16px rgba(60,50,140,.14)', padding: 6, minWidth: 130, marginTop: 4 }}>
+    <div ref={ref} style={{ position: 'absolute', zIndex: 100, top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(60,50,140,.14)', padding: 6, minWidth: 130, marginTop: 4 }}>
       {opts.map(o => (
-        <div key={o.v} onClick={() => { onChange(o.v); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: value === o.v ? '#efeefe' : 'transparent', fontWeight: 600, fontSize: 13, color: o.fg !== W.text3 ? o.fg : W.text }}>
+        <div key={o.v} onClick={() => { onChange(o.v); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: value === o.v ? 'var(--tint-brand-bg)' : 'transparent', fontWeight: 600, fontSize: 13, color: o.fg !== W.text3 ? o.fg : W.text }}>
           {o.v > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, background: o.bg, color: o.fg, fontSize: 12 }}>{o.v}</span>}
           {o.label}
         </div>
@@ -56,12 +56,12 @@ const BLOOM_LEVELS = ['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 
 type BloomLevel = typeof BLOOM_LEVELS[number];
 
 const BLOOM_COLORS: Record<BloomLevel, { bg: string; fg: string }> = {
-  Remember:   { bg: '#e8f5e9', fg: '#2e7d32' },
-  Understand: { bg: '#e3f2fd', fg: '#1565c0' },
-  Apply:      { bg: '#fff8e1', fg: '#f57f17' },
-  Analyze:    { bg: '#fce4ec', fg: '#c62828' },
-  Evaluate:   { bg: '#f3e5f5', fg: '#6a1b9a' },
-  Create:     { bg: '#e8eaf6', fg: '#283593' },
+  Remember:   { bg: 'var(--tint-blue-bg)', fg: 'var(--tint-blue-fg)' },
+  Understand: { bg: 'var(--tint-teal-bg)', fg: 'var(--tint-teal-fg)' },
+  Apply:      { bg: 'var(--tint-orange-bg)', fg: 'var(--tint-orange-fg)' },
+  Analyze:    { bg: 'var(--status-info-bg)', fg: 'var(--status-info)' },
+  Evaluate:   { bg: 'var(--tint-pink-bg)', fg: 'var(--tint-pink-fg)' },
+  Create:     { bg: 'var(--tint-violet-bg)', fg: 'var(--tint-violet-fg)' },
 };
 
 function BloomDropdown({ current, onSelect, onClose }: { current: string; onSelect: (b: BloomLevel) => void; onClose: () => void }) {
@@ -73,7 +73,7 @@ function BloomDropdown({ current, onSelect, onClose }: { current: string; onSele
   }, [onClose]);
 
   return (
-    <div ref={ref} style={{ position: 'absolute', zIndex: 200, top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: '0 4px 16px rgba(60,50,140,.14)', padding: 6, minWidth: 150 }}>
+    <div ref={ref} style={{ position: 'absolute', zIndex: 200, top: '100%', left: 0, marginTop: 4, background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(60,50,140,.14)', padding: 6, minWidth: 150 }}>
       {BLOOM_LEVELS.map(b => {
         const { bg, fg } = BLOOM_COLORS[b];
         const active = b === current;
@@ -119,6 +119,8 @@ export default function WinTeachCoursePage() {
   const { mutate: saveMap } = useSaveCOMap(id);
   const { mutate: updateCO } = useUpdateCO(id);
   const [openBloom, setOpenBloom] = useState<string | null>(null); // coId
+  const [showCOs, setShowCOs] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   void unitsLoading;
 
   // Local editable map: coId → col → level
@@ -212,9 +214,9 @@ export default function WinTeachCoursePage() {
 
   // CE section tag palette for CO attainment levels
   const mvStyle = (v: number): React.CSSProperties => {
-    if (v === 1) return { background: '#eef3ff', color: '#2b54c9' };   // read tag
-    if (v === 2) return { background: '#efeaff', color: '#5b4bff' };   // speak tag
-    if (v === 3) return { background: '#5b4bff', color: '#fff' };      // brand solid
+    if (v === 1) return { background: 'var(--tint-blue-bg)', color: 'var(--tint-blue-fg)' };   // read tag
+    if (v === 2) return { background: 'var(--tint-violet-bg)', color: 'var(--tint-violet-fg)' };   // speak tag
+    if (v === 3) return { background: 'var(--brand)', color: '#fff' };      // brand solid
     return {};
   };
 
@@ -236,31 +238,31 @@ export default function WinTeachCoursePage() {
           { label: courseCode },
         ]} />
 
-        {/* Hero header — ce-card exact, flat #f6f7fb header band */}
-        <div style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 18, boxShadow: '0 2px 10px rgba(28,32,48,.04)', marginBottom: 24, overflow: 'hidden' }}>
-          <div style={{ background: '#f6f7fb', borderBottom: '1px solid #e9eaf2', padding: '22px 28px' }}>
+        {/* Hero header */}
+        <div className="ds-rise" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-card)', marginBottom: 24, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--border)', padding: '22px 28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 280px', minWidth: 0 }}>
                 {/* ce-page__kicker */}
-                <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 4 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--brand)', marginBottom: 4 }}>
                   {courseCode} · {c?.institute || apiCourse?.code || 'Winnify'}
                 </div>
                 {/* ce-section-h2 */}
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 800, fontSize: '1.3rem', color: '#1c2030', marginBottom: 10 }}>{courseName}</div>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '1.3rem', color: 'var(--text)', marginBottom: 10 }}>{courseName}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button onClick={toggleStatus} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12,
                     borderRadius: 999, padding: '3px 11px',
-                    background: courseStatus === 'active' ? '#e7fbf5' : '#fff1e6',
-                    color: courseStatus === 'active' ? '#15a06a' : '#c9622b',
+                    background: courseStatus === 'active' ? 'var(--status-green-bg)' : 'var(--tint-orange-bg)',
+                    color: courseStatus === 'active' ? 'var(--status-green)' : 'var(--tint-orange-fg)',
                     border: 'none', cursor: 'pointer',
                   }}>
                     {courseStatus === 'active'
-                      ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15a06a', display: 'inline-block' }} />Active</>
+                      ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-green)', display: 'inline-block' }} />Active</>
                       : 'Draft'}
                   </button>
-                  <span style={{ fontSize: '.8rem', color: '#6b7080' }}>
+                  <span style={{ fontSize: '.8rem', color: 'var(--text-2)' }}>
                     {c?.program && `${c.program} · `}
                     {(apiCourse?.semester ?? c?.sem) && `Sem ${apiCourse?.semester ?? c?.sem} · `}
                     {(apiCourse?.credits ?? c?.credits) && `${apiCourse?.credits ?? c?.credits} credits · `}
@@ -268,17 +270,27 @@ export default function WinTeachCoursePage() {
                   </span>
                 </div>
               </div>
-              {/* Stat chips — ce-card mini, flat */}
-              <div style={{ display: 'flex', gap: 10, flex: '0 0 auto', flexWrap: 'wrap' }}>
+              {/* Progress dial + stat chips */}
+              <div style={{ display: 'flex', gap: 12, flex: '0 0 auto', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{
+                  width: 68, height: 68, borderRadius: '50%', flexShrink: 0,
+                  background: `conic-gradient(var(--brand) ${overallPct}%, var(--score-track) 0)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <b style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 14, lineHeight: 1, color: 'var(--brand)', fontVariantNumeric: 'tabular-nums' }}>{overallPct}%</b>
+                    <span style={{ fontSize: 7.5, color: W.text3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 1 }}>Gen</span>
+                  </div>
+                </div>
                 {([
                   ['Units', units.length],
                   ['Topics', totalTopics],
                   ['COs', cos.length],
                   ['Complete', `${genProgress.filter(p => topicGenState(p).label === 'Complete').length}/${totalTopics}`],
                 ] as [string, string | number][]).map(([l, v]) => (
-                  <div key={l} style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 14, padding: '10px 16px', minWidth: 80, textAlign: 'center' }}>
-                    <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'rgba(28,32,48,.45)', marginBottom: 3 }}>{l}</div>
-                    <div style={{ fontFamily: W.fontDisplay, fontWeight: 800, fontSize: '1.12rem', color: '#1c2030' }}>{v}</div>
+                  <div key={l} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 16px', minWidth: 80, textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--text-3)', marginBottom: 3 }}>{l}</div>
+                    <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: '1.12rem', color: 'var(--text)' }}>{v}</div>
                   </div>
                 ))}
               </div>
@@ -286,16 +298,53 @@ export default function WinTeachCoursePage() {
           </div>
         </div>
 
-        {/* Course Outcomes — ce-page__kicker */}
-        <div style={{ fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#5b4bff', marginBottom: 6 }}>Course Outcomes</div>
-        <Card style={{ marginBottom: 24 }}>
+        {/* Frameworks — compact tiles that open detail modals */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 24 }}>
+          {[
+            {
+              key: 'cos', icon: <IAssess />, kicker: 'Outcomes', title: 'Course Outcomes',
+              sub: cosLoading ? 'Loading…' : cos.length ? `${cos.length} outcome${cos.length !== 1 ? 's' : ''} defined` : 'None defined yet',
+              onClick: () => setShowCOs(true),
+            },
+            {
+              key: 'map', icon: <IDashboard />, kicker: 'Attainment', title: 'CO × PO / PSO Mapping',
+              sub: cos.length === 0 ? 'Add COs first' : cols.length ? 'Mapping saved' : 'Preview mapping',
+              onClick: () => setShowMap(true),
+            },
+          ].map(t => (
+            <button key={t.key} onClick={t.onClick} style={{
+              display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', width: '100%',
+              background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10,
+              padding: '18px 20px', cursor: 'pointer', font: 'inherit', color: 'inherit',
+              transition: 'border-color .15s, box-shadow .15s, transform .15s',
+            }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--brand)'; el.style.boxShadow = '0 6px 18px color-mix(in oklab, var(--brand) 12%, transparent)'; el.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--border)'; el.style.boxShadow = ''; el.style.transform = ''; }}
+            >
+              <div style={{ flex: 'none', width: 44, height: 44, borderRadius: 8, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ width: 22, height: 22, display: 'flex' }}>{t.icon}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--brand)', marginBottom: 3 }}>{t.kicker}</div>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>{t.title}</div>
+                <div style={{ fontSize: '.8rem', color: 'var(--text-2)', marginTop: 2 }}>{t.sub}</div>
+              </div>
+              <span style={{ flex: 'none', color: 'var(--text-2)', width: 16, height: 16, display: 'flex' }}><IArrow /></span>
+            </button>
+          ))}
+        </div>
+
+        {/* Course Outcomes modal */}
+        {showCOs && (
+        <Modal onClose={() => setShowCOs(false)} maxWidth={640} title="Course Outcomes"
+          subtitle={`${courseCode} · ${cos.length} outcome${cos.length !== 1 ? 's' : ''}`}>
           {cosLoading ? <Spinner /> : cos.length ? (() => {
             const bloomNameMap: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
             const normBloom = (v?: string) => v ? (bloomNameMap[v] ?? v) : '';
             return cos.map((co, i) => {
               const bloomLabel = normBloom(co.bloom_level);
               return (
-            <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid #e9eaf2', borderRadius: 14, marginBottom: i < cos.length - 1 ? 8 : 0, background: '#fff' }}>
+            <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid var(--border)', borderRadius: 10, marginBottom: i < cos.length - 1 ? 8 : 0, background: 'var(--card)' }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>CO{co.co_number || co.number || i + 1}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.description ?? (co as any).text}</div>
@@ -328,21 +377,24 @@ export default function WinTeachCoursePage() {
               </button>
             </div>
           )}
-        </Card>
+        </Modal>
+        )}
 
-        {/* CO × PO/PSO Mapping */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>CO × PO / PSO Mapping</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12.5, color: W.text2 }}>{c?.institute || ''} {c?.major ? `· ${c.major}` : ''}</span>
-            <button onClick={() => { setEditingMap(e => !e); setOpenCell(null); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${editingMap ? '#5b4bff' : '#e9eaf2'}`, background: editingMap ? '#efeefe' : '#fff', color: editingMap ? '#5b4bff' : W.text2, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>
-              <IEdit />
-              {editingMap ? 'Done' : 'Edit levels'}
-            </button>
-          </div>
-        </div>
-        <Card style={{ marginBottom: 24, overflowX: 'auto' }}>
+        {/* CO × PO/PSO Mapping modal */}
+        {showMap && (
+        <Modal onClose={() => { setShowMap(false); setEditingMap(false); setOpenCell(null); }} maxWidth={760}
+          title="CO × PO / PSO Mapping"
+          subtitle={`${c?.institute || courseCode}${c?.major ? ` · ${c.major}` : ''}`}>
+          {cos.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+              <button onClick={() => { setEditingMap(e => !e); setOpenCell(null); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${editingMap ? 'var(--brand)' : 'var(--border)'}`, background: editingMap ? 'var(--tint-brand-bg)' : 'var(--card)', color: editingMap ? 'var(--brand)' : W.text2, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>
+                <span style={{ width: 14, height: 14, display: 'inline-flex' }}><IEdit /></span>
+                {editingMap ? 'Done' : 'Edit levels'}
+              </button>
+            </div>
+          )}
+          <div style={{ overflowX: 'auto' }}>
           {(() => {
             if (mapLoading) return <Spinner />;
             if (cos.length === 0) return <div style={{ fontSize: 12.5, color: W.text2, padding: '8px 0' }}>Add COs first to build a mapping.</div>;
@@ -419,7 +471,7 @@ export default function WinTeachCoursePage() {
                   </tbody>
                 </table>
                 <div style={{ fontSize: 12.5, color: W.text2, marginTop: 16, display: 'flex', gap: 14 }}>
-                  {([['1', '#F0EFF9', '#7B6FBB', 'Low'], ['2', '#E5E2FB', '#5B4BDB', 'Medium'], ['3', '#6C5CE7', '#fff', 'High']]).map(([v, bg, fg, label]) => (
+                  {([['1', 'var(--tint-blue-bg)', 'var(--tint-blue-fg)', 'Low'], ['2', 'var(--tint-violet-bg)', 'var(--tint-violet-fg)', 'Medium'], ['3', 'var(--brand)', '#fff', 'High']]).map(([v, bg, fg, label]) => (
                     <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, background: bg, color: fg }}>{v}</span>
                       {label}
@@ -429,32 +481,66 @@ export default function WinTeachCoursePage() {
               </>
             );
           })()}
-        </Card>
+          </div>
+        </Modal>
+        )}
 
-        {/* Units & topics */}
+        {/* ── Curriculum: units & topics ── */}
         {units.length > 0 && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Units & topics</div>
-              <span style={{ fontSize: 12.5, color: W.text2 }}>
-                {overallPct}% generated{totalGenCost > 0 && <> · ${totalGenCost.toFixed(2)} spent</>}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--brand)', marginBottom: 3 }}>Curriculum</div>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 'var(--fs-h2)', color: W.text }}>Units & topics</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 150 }}><ProgressBar value={overallPct} /></div>
+                <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.text2, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {overallPct}% generated{totalGenCost > 0 && <> · ${totalGenCost.toFixed(2)}</>}
+                </span>
+              </div>
             </div>
 
             {units.map((u, ui) => {
               const unitNum = u.unit_number ?? u.n ?? ui + 1;
               const topics: any[] = u.topics ?? [];
               const unitDone = topics.filter(t => topicGenState(progById[t.id]).label === 'Complete').length;
+              const unitPct = topics.length
+                ? Math.round(topics.reduce((s, t) => s + topicGenState(progById[t.id]).pct, 0) / topics.length)
+                : 0;
+              const unitHours = topics.reduce((s, t) => s + (t.contact_hours ?? t.hours ?? 0), 0);
               return (
-              <div key={unitNum} style={{ border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 14, overflow: 'hidden', background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: W.surfaceMuted }}>
-                  <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>Unit {unitNum}</span>
-                  <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{u.title}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 12, color: W.text2 }}>
-                    {unitDone}/{topics.length} complete
-                  </span>
+              <div key={unitNum} className="ds-rise" style={{
+                border: `1px solid ${W.border}`, borderRadius: 12, marginBottom: 16, overflow: 'hidden',
+                background: 'var(--card)', boxShadow: W.shadowCard, animationDelay: `${ui * 70}ms`,
+              }}>
+                {/* unit header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 22px', background: W.surfaceMuted, borderBottom: `1px solid ${W.border}`, flexWrap: 'wrap' }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 8, flexShrink: 0,
+                    background: 'var(--app-bg-grad)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 15,
+                    boxShadow: '0 4px 10px -4px color-mix(in oklab, var(--brand) 50%, transparent)',
+                  }}>{unitNum}</div>
+                  <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                    <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 15.5, color: W.text, lineHeight: 1.25 }}>{u.title}</div>
+                    <div style={{ fontSize: 12, color: W.text2, marginTop: 1 }}>
+                      {topics.length} topic{topics.length !== 1 ? 's' : ''}{unitHours > 0 && <> · {unitHours} hrs</>} · {unitDone} complete
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+                    <div style={{ width: 120 }}><ProgressBar value={unitPct} /></div>
+                    <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: unitPct === 100 ? W.greenFg : W.text2, fontVariantNumeric: 'tabular-nums', width: 38, textAlign: 'right' }}>{unitPct}%</span>
+                  </div>
                 </div>
-                {topics.map((t, ti) => (
+
+                {/* topic rows */}
+                {topics.map((t, ti) => {
+                  const p = progById[t.id];
+                  const g = topicGenState(p);
+                  const cost = p?.cost_usd || 0;
+                  return (
                   <div
                     key={t.id}
                     className="wt-topic-item"
@@ -463,14 +549,25 @@ export default function WinTeachCoursePage() {
                       navigate(`/winteach/courses/${id}/topic/${t.id}`);
                     }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
+                      display: 'flex', alignItems: 'center', gap: 14, padding: '13px 22px',
                       borderBottom: ti < topics.length - 1 ? `1px solid ${W.border}` : 'none',
-                      cursor: 'pointer',
+                      cursor: 'pointer', transition: 'background .12s',
                     }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--row-hover)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                   >
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: g.label === 'Complete' ? W.greenBg : 'var(--tint-brand-bg)',
+                      color: g.label === 'Complete' ? W.greenFg : 'var(--tint-brand-fg)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 12,
+                    }}>
+                      {g.label === 'Complete' ? '✓' : ti + 1}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>{t.title ?? t.name}</div>
-                      <div style={{ fontSize: 12, color: W.text2, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text }}>{t.title ?? t.name}</div>
+                      <div style={{ fontSize: 12, color: W.text2, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {(t.subtopics ?? t.subs ?? []).length} subtopics
                         {cos.length > 0 && (
                           <><span>·</span><CoMapTag>{c ? coRefFor(c, ui) : `CO${ui + 1}`}</CoMapTag></>
@@ -480,18 +577,34 @@ export default function WinTeachCoursePage() {
                         )}
                       </div>
                     </div>
-                    {(() => { const g = topicGenState(progById[t.id]); const cost = progById[t.id]?.cost_usd || 0; return (
-                      <>
-                        <div style={{ width: 110, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <ProgressBar value={g.pct} />
-                          {cost > 0 && <span style={{ fontSize: 10.5, color: W.text3, textAlign: 'right' }}>${cost.toFixed(2)}</span>}
-                        </div>
-                        <Badge variant={g.variant}>{g.label}</Badge>
-                      </>
-                    ); })()}
-                    <span style={{ width: 18, height: 18, display: 'inline-flex', color: W.text3 }}><IChevronSvg /></span>
+                    {/* artifact pills — plan & notes progress from the generation pipeline */}
+                    {p && (p.has_plan || p.status) && (
+                      <div className="max-md:hidden" style={{ display: 'flex', gap: 5, flex: '0 0 auto' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: W.fontDisplay, fontWeight: 600,
+                          borderRadius: 6, padding: '2px 8px',
+                          background: p.has_plan ? W.greenBg : W.surfaceMuted,
+                          color: p.has_plan ? W.greenFg : W.text3,
+                        }}>Plan {p.has_plan ? '✓' : '—'}</span>
+                        {p.has_plan && p.concept_total > 0 && (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: W.fontDisplay, fontWeight: 600,
+                            borderRadius: 6, padding: '2px 8px', fontVariantNumeric: 'tabular-nums',
+                            background: p.notes_ready >= p.concept_total ? W.greenBg : 'var(--tint-brand-bg)',
+                            color: p.notes_ready >= p.concept_total ? W.greenFg : 'var(--tint-brand-fg)',
+                          }}>Notes {p.notes_ready}/{p.concept_total}</span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ width: 100, display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 auto' }} className="max-md:hidden">
+                      <ProgressBar value={g.pct} />
+                      {cost > 0 && <span style={{ fontSize: 10.5, color: W.text3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>${cost.toFixed(2)}</span>}
+                    </div>
+                    <Badge variant={g.variant}>{g.label}</Badge>
+                    <span style={{ width: 18, height: 18, display: 'inline-flex', color: W.text3, flexShrink: 0 }}><IChevronSvg /></span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               );
             })}

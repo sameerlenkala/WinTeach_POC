@@ -294,12 +294,6 @@ export default function SignIn() {
       {/* ── Right form panel ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 32px', position: 'relative' }}>
 
-        {/* domain pill */}
-        <div style={{ position: 'absolute', top: 20, right: 24, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-2)' }} />
-          <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: 'var(--text-2)' }}>student.vjit.winnify.in</span>
-        </div>
-
         <div style={{ width: '100%', maxWidth: 384 }}>
 
           {/* heading */}
@@ -388,14 +382,6 @@ export default function SignIn() {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* info notice */}
-          <div className="ds-rise" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--surface-muted)', border: '1px solid var(--border)', borderRadius: 'var(--w-r4)', padding: '12px 14px', marginTop: 20, ...rise(3) }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--tint-brand-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, color: 'var(--tint-brand-fg)', fontWeight: 700, marginTop: 1 }}>i</div>
-            <p style={{ fontSize: 'var(--fs-small)', color: 'var(--text-2)', margin: 0, lineHeight: 'var(--lh-small)' }}>
-              Accounts are created by your institution. If you can't sign in, contact <span style={{ color: 'var(--tint-brand-fg)', fontWeight: 600, cursor: 'pointer' }}>support</span>.
-            </p>
           </div>
 
           {/* footer */}

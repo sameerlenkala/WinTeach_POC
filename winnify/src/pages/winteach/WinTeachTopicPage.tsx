@@ -25,7 +25,7 @@ function ArtifactViewer({ jobId, artifactType, label, onClose }: { jobId: string
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 660, maxWidth: '94vw', maxHeight: '84vh', overflow: 'auto' }}>
+      <div style={{ background: 'var(--card)', borderRadius: 12, padding: 28, width: 660, maxWidth: '94vw', maxHeight: '84vh', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 18 }}>{label}</div>
           <Btn variant="ghost" sm onClick={onClose}>✕ Close</Btn>
@@ -93,7 +93,7 @@ export default function WinTeachTopicPage() {
     return (
       <>
         <WinTopbar title="Topic" />
-        <WinContent><div style={{ padding: 32, color: '#888' }}>Loading…</div></WinContent>
+        <WinContent><div style={{ padding: 32, color: 'var(--text-3)' }}>Loading…</div></WinContent>
       </>
     );
   }
@@ -128,9 +128,9 @@ export default function WinTeachTopicPage() {
     const apiType = k === 'flash' ? 'flashcards' : k;
 
     return (
-      <div key={k} style={{ border: '1.5px solid #e9eaf2', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div key={k} style={{ border: '1.5px solid var(--border)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 36px' }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 36px' }}>
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}>{artIcons[k]}</span>
           </div>
           <div style={{ flex: 1 }}>
@@ -198,8 +198,8 @@ export default function WinTeachTopicPage() {
 
               {/* Linked CO */}
               {(t.co?.text || apiCOs.length > 0) && (
-                <div style={{ background: '#efeefe', borderRadius: 14, padding: 18, marginBottom: 16 }}>
-                  <div style={{ fontSize: '.68rem', fontWeight: 700, color: '#5b4bff', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Linked course outcome</div>
+                <div style={{ background: 'var(--tint-brand-bg)', borderRadius: 10, padding: 18, marginBottom: 16 }}>
+                  <div style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Linked course outcome</div>
                   <div style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 8 }}>{t.co?.text || '—'}</div>
                   <BloomBadge bloom={(t as any).bloom_level ?? t.co?.bloom ?? ''} />
                 </div>
@@ -215,7 +215,7 @@ export default function WinTeachTopicPage() {
                     <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2, marginBottom: 16 }}>Subtopics</div>
                     {subs.map((s, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: i < subs.length - 1 ? `1px solid ${W.border}` : 'none' }}>
-                        <span style={{ width: 26, height: 26, borderRadius: 8, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12, flex: '0 0 26px' }}>{i + 1}</span>
+                        <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12, flex: '0 0 26px' }}>{i + 1}</span>
                         <div style={{ fontFamily: W.fontDisplay, fontWeight: 500, fontSize: 14 }}>{s}</div>
                       </div>
                     ))}
@@ -225,9 +225,9 @@ export default function WinTeachTopicPage() {
             </Card>
 
             {/* Topic info */}
-            <div style={{ border: '1px solid #e9eaf2', borderRadius: 18, padding: '28px 32px', background: '#fff', boxShadow: '0 2px 10px rgba(28,32,48,.04)' }}>
-              <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', color: '#5b4bff', marginBottom: 3 }}>Topic</div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1c2030', marginBottom: 16 }}>Topic info</div>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '28px 32px', background: 'var(--card)', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--brand)', marginBottom: 3 }}>Topic</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>Topic info</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
                 {[
                   ['Unit', unit ? `Unit ${unit.unit_number ?? unit.n} · ${unit.title}` : '—'],

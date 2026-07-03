@@ -141,15 +141,15 @@ export default function WinTeachCreateCourse() {
               <Field label="Major" optional>
                 <div style={{ position: 'relative' }}>
                   <button type="button" onClick={() => setMajorOpen(o => !o)}
-                    style={{ width: '100%', background: '#F1F2F7', border: `1px solid ${majorOpen ? W.brand : 'transparent'}`, borderRadius: 12, padding: '11px 14px', fontFamily: W.fontSans, fontSize: 14, color: majors.length ? W.text : W.text3, outline: 'none', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: majorOpen ? '0 0 0 3px rgba(108,92,231,0.12)' : 'none' }}>
+                    style={{ width: '100%', background: 'var(--input-bg)', border: `1px solid ${majorOpen ? W.brand : 'transparent'}`, borderRadius: 8, padding: '11px 14px', fontFamily: W.fontSans, fontSize: 14, color: majors.length ? W.text : W.text3, outline: 'none', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: majorOpen ? '0 0 0 3px rgba(108,92,231,0.12)' : 'none' }}>
                     <span>{majors.length ? majors.join(', ') : 'Select majors…'}</span>
                     <span style={{ fontSize: 10, color: W.text3 }}>▾</span>
                   </button>
                   {majorOpen && (
-                    <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: '0 4px 16px rgba(60,50,140,.12)', padding: 8, maxHeight: 220, overflowY: 'auto' }}>
+                    <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(60,50,140,.12)', padding: 8, maxHeight: 220, overflowY: 'auto' }}>
                       {MAJORS.map(m => (
                         <div key={m} onClick={() => toggleMajor(m)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: majors.includes(m) ? '#efeefe' : 'transparent' }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: majors.includes(m) ? 'var(--tint-brand-bg)' : 'transparent' }}>
                           <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${majors.includes(m) ? W.brand : W.border}`, background: majors.includes(m) ? W.brand : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {majors.includes(m) && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
                           </div>
@@ -345,11 +345,11 @@ export default function WinTeachCreateCourse() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
               {(['upload', 'paste'] as const).map(m => (
                 <button key={m} onClick={() => { if (!busy) setMethod(m); }} style={{
-                  height: 36, padding: '0 16px', borderRadius: 10,
-                  border: `1px solid ${method === m ? '#5b4bff' : '#e9eaf2'}`,
+                  height: 36, padding: '0 16px', borderRadius: 8,
+                  border: `1px solid ${method === m ? 'var(--brand)' : 'var(--border)'}`,
                   background: method === m ? '#fff' : 'transparent',
                   fontFamily: W.fontSans, fontWeight: 600, fontSize: '.84rem',
-                  color: method === m ? '#5b4bff' : '#6b7080',
+                  color: method === m ? 'var(--brand)' : 'var(--text-2)',
                   display: 'inline-flex', alignItems: 'center', gap: 8, cursor: busy ? 'not-allowed' : 'pointer', transition: '.15s',
                 }}>
                   <span style={{ width: 16, height: 16, display: 'inline-flex' }}>{m === 'upload' ? <IUpload /> : <IText />}</span>
@@ -392,11 +392,11 @@ export default function WinTeachCreateCourse() {
                   </>
                 )}
                 {(pendingFile?.name || draft!.fileName) && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#efeefe', color: '#5b4bff', borderRadius: 12, padding: '10px 14px', fontWeight: 500, fontSize: 14, marginTop: 14 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', borderRadius: 8, padding: '10px 14px', fontWeight: 500, fontSize: 14, marginTop: 14 }}>
                     <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IFile /></span>
                     {(pendingFile?.name || draft!.fileName)}
                     {(phase === 'ready' || phase === 'done') && (
-                      <span style={{ width: 16, height: 16, display: 'inline-flex', color: '#16A34A' }}><ICheck /></span>
+                      <span style={{ width: 16, height: 16, display: 'inline-flex', color: 'var(--status-green)' }}><ICheck /></span>
                     )}
                   </div>
                 )}
@@ -428,7 +428,7 @@ export default function WinTeachCreateCourse() {
                 ))}
                 {/* Unit skeleton cards */}
                 {[1, 2, 3].map(u => (
-                  <div key={u} style={{ border: `1px solid ${W.border}`, borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
+                  <div key={u} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 10 }}>
                     <div style={{ height: 14, borderRadius: 7, width: '45%', background: 'linear-gradient(90deg, #E5E2FB 25%, #F1F0FD 50%, #E5E2FB 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite', marginBottom: 10 }} />
                     {[65, 50, 58].map((w2, j) => (
                       <div key={j} style={{ height: 11, borderRadius: 6, width: `${w2}%`, background: 'linear-gradient(90deg, #EEEDF8 25%, #F5F4FC 50%, #EEEDF8 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite', marginBottom: 7, animationDelay: `${j * 0.1}s` }} />
@@ -441,7 +441,7 @@ export default function WinTeachCreateCourse() {
 
             {/* Error */}
             {phase === 'error' && (
-              <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 14, background: 'rgba(220,38,38,0.08)', color: '#DC2626', fontSize: 13 }}>
+              <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 10, background: 'rgba(220,38,38,0.08)', color: 'var(--status-red)', fontSize: 13 }}>
                 {errorMsg}
                 <button onClick={() => setPhase('ready')} style={{ marginLeft: 12, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, background: 'none', border: 'none', cursor: 'pointer' }}>Retry</button>
               </div>
@@ -598,7 +598,7 @@ export default function WinTeachCreateCourse() {
         {/* Full-screen saving overlay */}
         {saving && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(255,255,255,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <div style={{ width: 64, height: 64, borderRadius: 18, background: '#efeefe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: 12, background: 'var(--tint-brand-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ width: 28, height: 28, display: 'inline-flex', color: W.brand, animation: 'spin 1s linear infinite' }}><ISpark /></span>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -623,7 +623,7 @@ export default function WinTeachCreateCourse() {
             </div>
 
             {/* CO summary */}
-            <div style={{ background: '#f6f7fb', borderRadius: 14, padding: 18, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ background: 'var(--surface-muted)', borderRadius: 10, padding: 18, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 24 }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 30, color: W.brand, lineHeight: 1 }}>{cos.length}</div>
                 <div style={{ fontSize: 12.5, color: W.brand, fontWeight: 600 }}>Outcomes</div>
@@ -651,7 +651,7 @@ export default function WinTeachCreateCourse() {
             {cos.length ? cos.map((co, i) => {
               const isIndustry = (co as any).isIndustry;
               return (
-              <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${isIndustry ? W.blueFg : W.border}`, borderRadius: 16, marginBottom: 8, background: isIndustry ? 'rgba(37,99,235,.03)' : '#fff' }}>
+              <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${isIndustry ? W.blueFg : W.border}`, borderRadius: 10, marginBottom: 8, background: isIndustry ? 'rgba(37,99,235,.03)' : '#fff' }}>
                 <div style={{ flex: '0 0 56px', paddingTop: 2 }}>
                   <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: isIndustry ? W.blueFg : W.brand }}>{co.id}</div>
                   {isIndustry && <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 9, letterSpacing: '.06em', textTransform: 'uppercase', color: W.blueFg, marginTop: 2 }}>Industry</div>}
@@ -670,7 +670,7 @@ export default function WinTeachCreateCourse() {
                       <BloomBadge bloom={co.bloom || 'Set level'} />
                     </span>
                     {bloomDropIdx === i && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: W.shadowCard, zIndex: 50, minWidth: 180, padding: 6 }}>
+                      <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: W.shadowCard, zIndex: 50, minWidth: 180, padding: 6 }}>
                         {BLOOM.map(b => {
                           const isCurrentLevel = co.bloom?.toLowerCase() === b.toLowerCase();
                           const currentIdx = BLOOM.findIndex(x => x.toLowerCase() === co.bloom?.toLowerCase());
@@ -689,7 +689,7 @@ export default function WinTeachCreateCourse() {
                             >
                               <BloomBadge bloom={b} />
                               {isNextLevel && (
-                                <span style={{ fontSize: 10, fontWeight: 600, color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '1px 6px', marginLeft: 6 }}>↑ Upgrade</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tint-brand-fg)', background: 'var(--tint-brand-bg)', borderRadius: 6, padding: '1px 6px', marginLeft: 6 }}>↑ Upgrade</span>
                               )}
                             </div>
                           );
@@ -718,7 +718,7 @@ export default function WinTeachCreateCourse() {
                 </div>
               </div>
             );}) : (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: 16, border: `1px dashed ${W.border}`, borderRadius: 16, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 16, border: `1px dashed ${W.border}`, borderRadius: 10, marginBottom: 8 }}>
                 <span style={{ fontSize: 12.5, color: W.text2 }}>No course outcomes yet — add one above.</span>
               </div>
             )}
@@ -797,7 +797,7 @@ export default function WinTeachCreateCourse() {
               Each topic carries one mapped course outcome (Bloom-tagged). Edit topics or their outcomes, add a topic.
             </div>
             {e.units.map((u, ui) => (
-              <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 14, overflow: 'hidden', background: '#fff' }}>
+              <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', background: 'var(--card)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: W.surfaceMuted }}>
                   <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>Unit {u.n}</span>
                   <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{u.title}</span>
@@ -866,7 +866,7 @@ function ExtractedView({ extracted, onChange }: {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ background: W.greenBg, borderRadius: 16, padding: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: W.greenBg, borderRadius: 10, padding: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, borderRadius: W.r6, padding: '3px 11px', background: W.greenBg, color: W.greenFg }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />Extracted
         </span>
@@ -889,7 +889,7 @@ function ExtractedView({ extracted, onChange }: {
         </div>
       </div>
       {cosOpen && (e.cos || []).filter((co: any) => !co.isIndustry).map((co, i) => (
-        <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 8, background: '#fff' }}>
+        <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 10, marginBottom: 8, background: 'var(--card)' }}>
           <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px' }}>{co.id}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.text}</div>
@@ -899,10 +899,10 @@ function ExtractedView({ extracted, onChange }: {
                 <span style={{ fontSize: 10, color: W.text3 }}>▾</span>
               </button>
               {bloomDropIdx === i && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${W.border}`, borderRadius: 12, boxShadow: W.shadowCard, zIndex: 50, minWidth: 160, padding: 6 }}>
+                <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: W.shadowCard, zIndex: 50, minWidth: 160, padding: 6 }}>
                   {BLOOM.map(b => (
                     <div key={b} onClick={() => { co.bloom = b; setBloomDropIdx(null); onChange(); forceUpdate(n => n + 1); }}
-                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: co.bloom === b ? '#5b4bff' : W.text, background: co.bloom === b ? '#efeefe' : 'transparent' }}>
+                      style={{ padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: co.bloom === b ? 'var(--brand)' : W.text, background: co.bloom === b ? 'var(--tint-brand-bg)' : 'transparent' }}>
                       {b}
                     </div>
                   ))}
@@ -928,7 +928,7 @@ function ExtractedView({ extracted, onChange }: {
         </div>
       </div>
       {structOpen && e.units.map((u, ui) => (
-        <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 14, overflow: 'hidden', background: '#fff' }}>
+        <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', background: 'var(--card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: W.surfaceMuted }}>
             <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>Unit {u.n}</span>
             <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{u.title}</span>
@@ -1028,7 +1028,7 @@ function AddIndustryTopicsSection({ extracted, onChange }: { extracted: Course; 
               ? { background: '#F0EBFF', color: '#6C5CE7' }
               : { background: 'rgba(73,169,190,.14)', color: '#3895AD' };
             return (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 8, background: '#fff', opacity: dismissed ? 0.5 : 1 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: `1px solid ${W.border}`, borderRadius: 10, marginBottom: 8, background: 'var(--card)', opacity: dismissed ? 0.5 : 1 }}>
                 <div style={{ flex: '0 0 76px' }}>
                   <span style={{ display: 'inline-flex', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase', borderRadius: 6, padding: '2px 8px', ...catColor }}>
                     {s.cat}

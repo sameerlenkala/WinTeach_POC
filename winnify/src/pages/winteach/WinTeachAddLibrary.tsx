@@ -102,11 +102,11 @@ function CoEditModal({ cos, idx, onClose, onChange }: { cos: CO[]; idx: number |
   };
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.32)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 500, maxWidth: '92vw' }}>
+      <div style={{ background: 'var(--card)', borderRadius: 12, padding: 28, width: 500, maxWidth: '92vw' }}>
         <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 18, marginBottom: 20 }}>{editing ? 'Edit CO' : 'Add CO'}</div>
         <Field label="Outcome statement">
           <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Apply... / Implement... / Analyze..."
-            style={{ width: '100%', borderRadius: 10, border: `1.5px solid ${W.border}`, background: W.surfaceMuted, padding: '10px 14px', fontSize: 14, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            style={{ width: '100%', borderRadius: 8, border: `1.5px solid ${W.border}`, background: W.surfaceMuted, padding: '10px 14px', fontSize: 14, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </Field>
         <Field label="Bloom's level"><Select value={bloom} onChange={setBloom} options={[...BLOOM]} /></Field>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
@@ -139,8 +139,8 @@ function CatalogView() {
   return (
     <div>
       {/* Info banner */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(37,99,235,0.12)', borderRadius: 12, padding: '14px 16px', marginBottom: 18 }}>
-        <span style={{ width: 20, height: 20, color: '#2563EB', display: 'flex', flex: '0 0 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(37,99,235,0.12)', borderRadius: 8, padding: '14px 16px', marginBottom: 18 }}>
+        <span style={{ width: 20, height: 20, color: 'var(--tint-blue-fg)', display: 'flex', flex: '0 0 20px' }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         </span>
         <div style={{ fontSize: 13.5, color: W.text, lineHeight: 1.5 }}>
@@ -156,7 +156,7 @@ function CatalogView() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 8 }}>
             {section.topics.map(t => (
-              <div key={t.title} style={{ border: '1.5px solid #e9eaf2', borderRadius: 14, padding: '14px 16px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, transition: '.15s', cursor: 'default' }}>
+              <div key={t.title} style={{ border: '1.5px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--card)', display: 'flex', flexDirection: 'column', gap: 8, transition: '.15s', cursor: 'default' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase', borderRadius: 6, padding: '2px 8px', background: section.tagBg, color: section.tagColor }}>
                     {section.tag}
@@ -165,14 +165,14 @@ function CatalogView() {
                 </div>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{t.title}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, color: '#5b4bff', background: '#efeefe', borderRadius: 6, padding: '2px 8px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, color: 'var(--tint-brand-fg)', background: 'var(--tint-brand-bg)', borderRadius: 6, padding: '2px 8px' }}>
                     CO · {t.bloom}
                   </span>
                   <span style={{ fontSize: 12.5, color: W.text2 }}>{t.co}</span>
                 </div>
                 <div>
                   {t.subs.map(s => (
-                    <span key={s} style={{ display: 'inline-block', fontSize: 11, color: W.text2, background: '#F1F2F7', borderRadius: 6, padding: '2px 8px', margin: '2px 4px 0 0' }}>{s}</span>
+                    <span key={s} style={{ display: 'inline-block', fontSize: 11, color: W.text2, background: 'var(--surface-muted)', borderRadius: 6, padding: '2px 8px', margin: '2px 4px 0 0' }}>{s}</span>
                   ))}
                 </div>
               </div>
@@ -355,7 +355,7 @@ export default function WinTeachAddLibrary() {
         {stage === 'loading' && (
           <Card style={{ maxWidth: 700 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#efeefe', color: '#5b4bff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ width: 22, height: 22, display: 'inline-flex' }}><ISpark /></span>
               </div>
               <div>
@@ -374,7 +374,7 @@ export default function WinTeachAddLibrary() {
         {stage === 'extracted' && extraction && (
           <div style={{ maxWidth: 800 }}>
             {/* Summary banner */}
-            <div style={{ background: W.greenBg, borderRadius: 14, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <div style={{ background: W.greenBg, borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, borderRadius: 8, padding: '3px 11px', background: W.greenBg, color: W.greenFg }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} /> Extracted
               </span>
@@ -387,11 +387,11 @@ export default function WinTeachAddLibrary() {
 
             {/* Gap 2 — Per-field confidence panel */}
             {exMeta && (
-              <Card style={{ marginBottom: 16, background: '#FAFAFA' }}>
+              <Card style={{ marginBottom: 16, background: 'var(--surface-muted)' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Extraction confidence</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {(Object.entries(exMeta) as [string, FieldMeta][]).map(([key, { value, confidence }]) => (
-                    <div key={key} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${W.border}`, background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div key={key} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${W.border}`, background: 'var(--card)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: 11.5, fontWeight: 600, color: W.text2, textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
                         <ConfBadge conf={confidence as Confidence} />
@@ -438,7 +438,7 @@ export default function WinTeachAddLibrary() {
                 Detected structure — {extraction.course_name} {extraction.course_code && `(${extraction.course_code})`}
               </div>
               {extraction.units.map((u) => (
-                <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
+                <div key={u.n} style={{ border: `1px solid ${W.border}`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: W.surfaceMuted }}>
                     <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.brand }}>Unit {u.n}</span>
                     <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14 }}>{u.title}</span>
@@ -461,7 +461,7 @@ export default function WinTeachAddLibrary() {
             </Card>
 
             {/* Commit panel */}
-            <Card style={{ borderColor: '#e9eaf2' }}>
+            <Card style={{ borderColor: 'var(--border)' }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Apply to a course</div>
               <div style={{ fontSize: 13.5, color: W.text2, marginBottom: 16 }}>
                 Select an existing course to commit the extracted COs and topics into. Existing COs and topics are preserved.
@@ -504,14 +504,14 @@ export default function WinTeachAddLibrary() {
             </div>
 
             {/* Delta summary */}
-            <div style={{ background: W.surfaceMuted, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+            <div style={{ background: W.surfaceMuted, borderRadius: 10, padding: 18, marginBottom: 20 }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13.5, marginBottom: 12 }}>What changed</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
                   { label: 'Course Outcomes added', count: deltaResult.cos, color: W.brand },
                   { label: 'Topics added', count: deltaResult.topics, color: W.greenFg },
                 ].map(({ label, count, color }) => (
-                  <div key={label} style={{ background: '#fff', borderRadius: 10, padding: 16, border: `1px solid ${W.border}` }}>
+                  <div key={label} style={{ background: 'var(--card)', borderRadius: 8, padding: 16, border: `1px solid ${W.border}` }}>
                     <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 28, color, lineHeight: 1 }}>{count}</div>
                     <div style={{ fontSize: 12.5, color: W.text2, marginTop: 6 }}>{label}</div>
                   </div>

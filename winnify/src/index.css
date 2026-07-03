@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -320,7 +321,6 @@ input:focus, textarea:focus, select:focus {
    ════════════════════════════════════════════════════════════════════════════ */
 
 .ws-shell {
-  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   width: 284px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
@@ -476,6 +476,13 @@ input:focus, textarea:focus, select:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Count chip inside an active (brand-filled) nav item inverts for contrast */
+.ws-nav-item--active .wt-nav-count,
+.ws-nav-item[aria-current="page"] .wt-nav-count {
+  background: rgba(255,255,255,0.22) !important;
+  color: #fff !important;
 }
 
 /* ── Nav section group label (WinTeach / academic portals) ── */
@@ -751,17 +758,129 @@ input:focus, textarea:focus, select:focus {
 .lift { transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
 .lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
 
-/* Landing company marquee — pauses on hover, collapses under reduced motion */
-@keyframes w-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-.w-marquee-mask {
-  overflow: hidden;
-  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
-}
-.w-marquee { display: flex; width: max-content; gap: 40px; animation: w-marquee 30s linear infinite; }
-.w-marquee:hover { animation-play-state: paused; }
-
 @media (prefers-reduced-motion: reduce) {
-  .w-marquee { animation: none; width: 100%; flex-wrap: wrap; justify-content: center; }
   .lift:hover { transform: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   WT-PRO — professional theme scope for the WinTeach console only.
+   Overrides the playful DS (Fredoka, pill radii, gradients) with a sober,
+   enterprise look: Inter, 6–12px radii, flat indigo, hairline borders.
+   Applied on the WinTeachLayout root; nothing outside /winteach is affected.
+   ════════════════════════════════════════════════════════════════════════════ */
+.wt-pro {
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --brand:         #4f46e5;
+  --brand-2:       #4f46e5;                 /* collapses every gradient to solid */
+  --brand-hover:   #4338ca;
+  --app-bg-grad:   linear-gradient(135deg, #4f46e5, #4338ca);
+
+  --app-bg:        #f7f8fa;
+  --card:          #ffffff;
+  --sidebar-bg:    #ffffff;
+  --surface-muted: #f3f4f6;
+
+  --text:   #111827;
+  --text-2: #4b5563;
+  --text-3: #9aa1ad;
+  --nav-fg: #4b5563;
+
+  --border:        #e6e8ec;
+  --border-strong: #d2d6dc;
+  --input-bg:      #f9fafb;
+  --nav-hover:     #f3f4f6;
+  --row-hover:     #f9fafb;
+  --ring:          #4f46e5;
+
+  --tint-brand-bg:  #eef0fd;  --tint-brand-fg:  #4f46e5;
+  --tint-violet-bg: #f1eefe;  --tint-violet-fg: #6d5ae0;
+  --tint-blue-bg:   #eaf1fd;  --tint-blue-fg:   #2563eb;
+  --tint-teal-bg:   #e7f7f1;  --tint-teal-fg:   #0f766e;
+  --tint-orange-bg: #fdf3e7;  --tint-orange-fg: #b45309;
+  --tint-red-bg:    #fdeeee;  --tint-red-fg:    #dc2626;
+  --tint-pink-bg:   #fdeef6;  --tint-pink-fg:   #be3d84;
+  --status-green:   #16a34a;  --status-green-bg: #e9f9ef;
+  --score-top:      #4f46e5;  --score-track:     #eceef2;
+
+  --w-r4: 8px;
+  --w-r5: 12px;
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-pop:  0 12px 28px -8px rgba(16, 24, 40, 0.18);
+}
+
+.dark .wt-pro {
+  --app-bg:        #14161b;
+  --card:          #1c1f26;
+  --sidebar-bg:    #1c1f26;
+  --surface-muted: #23262e;
+
+  --brand:       #818cf8;
+  --brand-2:     #818cf8;
+  --brand-hover: #a5b0fc;
+  --app-bg-grad: linear-gradient(135deg, #4f46e5, #4338ca);
+
+  --text:   #f3f4f6;
+  --text-2: rgba(243,244,246,0.68);
+  --text-3: rgba(243,244,246,0.42);
+  --nav-fg: rgba(243,244,246,0.66);
+
+  --border:        rgba(255,255,255,0.09);
+  --border-strong: rgba(255,255,255,0.16);
+  --input-bg:      #23262e;
+  --nav-hover:     rgba(255,255,255,0.05);
+  --row-hover:     rgba(255,255,255,0.035);
+
+  --tint-brand-bg: rgba(129,140,248,0.14); --tint-brand-fg: #a5b0fc;
+  --score-track:   rgba(255,255,255,0.09);
+  --status-green-bg: rgba(22,163,74,0.14); --status-green: #4ade80;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.25);
+  --shadow-pop:  0 12px 28px -8px rgba(0,0,0,0.5);
+}
+
+/* Sidebar — compact, quiet, hairline */
+.wt-pro .ws-shell { width: 252px; padding: 14px 12px 10px; }
+.wt-pro .ws-nav-item {
+  height: 36px; padding: 0 10px; gap: 10px;
+  border-radius: 7px; font-size: 13.5px; font-weight: 500;
+}
+.wt-pro .ws-nav-icon { width: 17px; height: 17px; stroke-width: 1.9; }
+.wt-pro .ws-nav-item--active,
+.wt-pro .ws-nav-item[aria-current="page"] {
+  background: var(--tint-brand-bg) !important;
+  color: var(--tint-brand-fg) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+.wt-pro .ws-nav-item--active:hover,
+.wt-pro .ws-nav-item[aria-current="page"]:hover {
+  background: var(--tint-brand-bg) !important;
+  color: var(--tint-brand-fg) !important;
+}
+.wt-pro .ws-nav-item--active .wt-nav-count,
+.wt-pro .ws-nav-item[aria-current="page"] .wt-nav-count {
+  background: var(--card) !important;
+  color: var(--tint-brand-fg) !important;
+}
+.wt-pro .wt-nav-count { border-radius: 5px !important; }
+.wt-pro .ws-nav-group-label { font-size: 10.5px; letter-spacing: 0.07em; padding: 12px 10px 5px; font-weight: 600; }
+.wt-pro .ws-avatar {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--brand); box-shadow: none; font-size: 12.5px; font-weight: 600;
+}
+.wt-pro .ws-user-section { gap: 9px; margin-bottom: 10px; padding-bottom: 12px; }
+.wt-pro .ws-user-name { font-size: 13.5px; }
+.wt-pro .ws-user-email { font-size: 11.5px; }
+
+/* Topbar — solid surface with hairline bottom border */
+.wt-pro .ws-topbar {
+  height: 56px; padding: 0 28px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.wt-pro .ws-topbar-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+.wt-pro .ws-topbar-icon { width: 32px; height: 32px; border-radius: 7px; }
+.wt-pro .ws-topbar-user { border-radius: 7px; padding: 4px 8px; }
