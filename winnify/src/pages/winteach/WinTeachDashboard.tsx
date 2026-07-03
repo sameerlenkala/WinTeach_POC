@@ -252,7 +252,7 @@ export default function WinTeachDashboard() {
                 <div style={{ fontSize: '.8rem', color: 'var(--text-2)' }}>{courses.length} courses · {activeCount} live</div>
               </div>
             </div>
-            {snapColor('var(--brand-2)', 'Ready', ready)}
+            {snapColor('var(--status-green)', 'Ready', ready)}
             {snapColor('var(--brand)', 'Generating', generating)}
             {snapColor('var(--status-orange)', 'Not started', pending)}
           </div>

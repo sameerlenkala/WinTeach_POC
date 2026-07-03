@@ -202,7 +202,10 @@ export default function WinTeachGeneration() {
                       <XpBar value={topicPct(r.t)} />
                     </div>
                     <TopicBadge topic={r.t} />
-                    <div style={{ flex: '0 0 auto', minWidth: 96, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                    {/* Only the Generate button swallows the click — the chevron and
+                        Running… states should still open the topic via the row. */}
+                    <div style={{ flex: '0 0 auto', minWidth: 96, display: 'flex', justifyContent: 'flex-end' }}
+                      onClick={e => { if (topicState(r.t) === 'pending' && !activeJobs[r.t.id]) e.stopPropagation(); }}>
                       {topicState(r.t) === 'pending' && !activeJobs[r.t.id] ? (
                         <Btn sm variant="primary" onClick={() => generateTopic(r.c.id, r.t)}>
                           <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>Generate

@@ -57,13 +57,17 @@ function NotesArticle({ content }: { content: any }) {
   const opening = content?.opening ?? {};
   const closing = content?.closing ?? {};
   const def = core?.core_concept?.formal_definition;
-  const intuition = core?.core_concept?.intuition ?? opening?.hook;
+  const intuition = core?.core_concept?.mental_model_analogy ?? core?.core_concept?.intuition ?? opening?.hook;
   const mech = core?.deep_dive?.architecture_and_mechanism?.explanation;
   const code = core?.deep_dive?.code_or_formalization;
   const worked = core?.practical_understanding?.worked_example;
-  const applications = core?.practical_understanding?.real_world_applications;
+  const applications = core?.practical_understanding?.applications ?? core?.practical_understanding?.real_world_applications;
+  const hasApplications = Array.isArray(applications) ? applications.length > 0 : Boolean(applications);
   const mistakes = closing?.sections?.common_mistakes ?? [];
-  const summary = closing?.sections?.summary ?? closing?.summary;
+  const revision = closing?.sections?.revision_section;
+  const hasRevision = (revision?.key_takeaways?.length ?? 0) > 0
+    || (revision?.important_definitions?.length ?? 0) > 0
+    || (revision?.active_recall_prompts?.length ?? 0) > 0;
   let n = 0;
 
   return (
@@ -85,7 +89,7 @@ function NotesArticle({ content }: { content: any }) {
         </Section>
       )}
       {worked && <Section n={++n} title="Worked example"><p style={{ margin: 0 }}>{worked}</p></Section>}
-      {applications && (
+      {hasApplications && (
         <Section n={++n} title="Real-world applications">
           {Array.isArray(applications)
             ? <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>{applications.map((a: any, i: number) => <li key={i} style={{ marginBottom: 6 }}>{typeof a === 'string' ? a : a?.text ?? JSON.stringify(a)}</li>)}</ul>
@@ -104,7 +108,34 @@ function NotesArticle({ content }: { content: any }) {
           </div>
         </Section>
       )}
-      {summary && <Section n={++n} title="Summary"><p style={{ margin: 0 }}>{typeof summary === 'string' ? summary : JSON.stringify(summary)}</p></Section>}
+      {hasRevision && (
+        <Section n={++n} title="Summary & revision">
+          {(revision.key_takeaways?.length ?? 0) > 0 && (
+            <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>
+              {revision.key_takeaways.map((t: string, i: number) => <li key={i} style={{ marginBottom: 6 }}>{t}</li>)}
+            </ul>
+          )}
+          {(revision.important_definitions?.length ?? 0) > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+              {revision.important_definitions.map((d: any, i: number) => (
+                <div key={i} style={{ fontSize: 13.5 }}>
+                  <span style={{ fontWeight: 600, color: W.text }}>{d.term}</span> — {d.definition}
+                </div>
+              ))}
+            </div>
+          )}
+          {(revision.active_recall_prompts?.length ?? 0) > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+              {revision.active_recall_prompts.map((p: any, i: number) => (
+                <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px', background: W.card }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, color: W.text, marginBottom: 3 }}>{p.prompt}</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>{p.answer_explanation}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
     </>
   );
 }
@@ -143,15 +174,28 @@ export default function WinTeachNotesReader() {
     }).catch(() => setLoading(false));
   }, [topicId]);
 
-  // active concept content
+  // Poll while any notes are generating so status icons, progress, and the
+  // Approve button unfreeze once the backend finishes.
+  const generatingAny = (job?.concept_artifacts ?? []).some(a => a.artifact_type === 'student_notes' && a.status === 'generating');
   useEffect(() => {
-    if (!job || !conceptId) return;
+    if (!topicId || !generatingAny) return;
+    const t = setInterval(() => generationApi.getTopicJob(topicId).then(setJob).catch(() => {}), 2600);
+    return () => clearInterval(t);
+  }, [topicId, generatingAny]);
+
+  // Active concept content. Keyed on job.id + notes status (not the job object)
+  // so poll/approve refreshes don't clear the article, while a generating→ready
+  // flip fetches the finished notes.
+  const jobId = job?.id;
+  const nStatus = nState?.status;
+  useEffect(() => {
+    if (!jobId || !conceptId) return;
     setLoading(true); setContent(null);
-    generationApi.getConcept(job.id, conceptId, 'student_notes')
+    generationApi.getConcept(jobId, conceptId, 'student_notes')
       .then(r => setContent(r.content))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [job, conceptId]);
+  }, [jobId, conceptId, nStatus]);
 
   const goto = useCallback((cid: string) =>
     navigate(`/winteach/courses/${courseId}/topic/${topicId}/notes/${cid}`), [navigate, courseId, topicId]);

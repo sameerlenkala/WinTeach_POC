@@ -100,8 +100,19 @@ def delete_course(db: Client, user: dict, course_id: str) -> None:
     db.table("co_mappings").delete().eq("course_id", course_id).execute()
     # uploads.course_id / uploads.committed_to_course reference courses(id) WITHOUT
     # on-delete-cascade, so they must be cleared or the course delete raises a 500.
+    # Committed library uploads exist independently of the course (the link is only
+    # set by commit_upload) — clear the pointer instead of destroying the record.
+    db.table("uploads").update({"committed_to_course": None}).eq("committed_to_course", course_id).execute()
+    # Uploads owned by the course are removed; their file_url is the only reference
+    # to the storage object, so delete the blob before dropping the row.
+    owned = db.table("uploads").select("file_url").eq("course_id", course_id).execute().data or []
+    paths = [u["file_url"] for u in owned if u.get("file_url")]
+    if paths:
+        try:
+            db.storage.from_("syllabi").remove(paths)
+        except Exception:
+            pass  # Storage optional in local dev
     db.table("uploads").delete().eq("course_id", course_id).execute()
-    db.table("uploads").delete().eq("committed_to_course", course_id).execute()
     db.table("courses").delete().eq("id", course_id).execute()
 
 

@@ -143,12 +143,16 @@ export function Btn({
       onMouseEnter={e => {
         if (disabled) return;
         const el = e.currentTarget as HTMLElement;
+        // A caller-supplied background (e.g. a red destructive button) must not
+        // be clobbered by the variant hover color — darken it instead.
+        if (style?.background != null || style?.backgroundColor != null) { el.style.filter = 'brightness(0.94)'; return; }
         if (variant === 'primary') el.style.background = 'var(--brand-hover)';
         if (variant === 'secondary') el.style.background = 'var(--surface-muted)';
         if (variant === 'ghost') el.style.background = 'var(--nav-hover)';
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement;
+        if (style?.background != null || style?.backgroundColor != null) { el.style.filter = ''; return; }
         if (variant === 'primary') el.style.background = 'var(--brand)';
         else el.style.background = variant === 'secondary' ? 'var(--card)' : '';
       }}

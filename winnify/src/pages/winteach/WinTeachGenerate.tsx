@@ -229,14 +229,19 @@ function PipelineStage({ icon, label, count, state, last }: {
 
 /* ── artifact viewer modal (lazy content) ────────────────────────────────── */
 
-function ViewerModal({ title, subtitle, loading, children, onClose }: {
-  title: string; subtitle?: string; loading: boolean; children: React.ReactNode; onClose: () => void;
+function ViewerModal({ title, subtitle, loading, error, onRetry, children, onClose }: {
+  title: string; subtitle?: string; loading: boolean; error?: boolean; onRetry?: () => void; children: React.ReactNode; onClose: () => void;
 }) {
   return (
     <Modal onClose={onClose} title={title} subtitle={subtitle} maxWidth={720}>
-      {loading
-        ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '18px 0' }}><Spin /> Loading content…</div>
-        : children}
+      {error
+        ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.redFg, fontSize: 13.5, padding: '18px 0' }}>
+            Failed to load content.
+            {onRetry && <Btn sm onClick={onRetry}>Retry</Btn>}
+          </div>
+        : loading
+          ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '18px 0' }}><Spin /> Loading content…</div>
+          : children}
     </Modal>
   );
 }
@@ -249,11 +254,13 @@ function ConceptTile({ jobId, conceptId, conceptName, type, state, locked, onCha
 }) {
   const [content, setContent] = useState<any>(null);
   const [open, setOpen] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);
   const status = state?.status ?? 'not_generated';
   const approved = state?.approval_status === 'approved';
 
   const loadContent = useCallback(async () => {
-    try { setContent((await generationApi.getConcept(jobId, conceptId, type)).content); } catch { /* */ }
+    setLoadErr(false);
+    try { setContent((await generationApi.getConcept(jobId, conceptId, type)).content); } catch { setLoadErr(true); }
   }, [jobId, conceptId, type]);
 
   useEffect(() => { if (open && !content && status === 'ready') loadContent(); }, [open, status, content, loadContent]);
@@ -293,7 +300,7 @@ function ConceptTile({ jobId, conceptId, conceptName, type, state, locked, onCha
         {(state?.cost_usd ?? 0) > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{usd(state?.cost_usd)}</span>}
       </div>
       {open && (
-        <ViewerModal title={`${CONCEPT_LABEL[type]} — ${conceptName}`} subtitle={conceptId} loading={!content} onClose={() => setOpen(false)}>
+        <ViewerModal title={`${CONCEPT_LABEL[type]} — ${conceptName}`} subtitle={conceptId} loading={!content} error={loadErr} onRetry={loadContent} onClose={() => setOpen(false)}>
           {type === 'student_notes' ? <NotesBody content={content} /> : type === 'slides' ? <SlidesBody content={content} /> : <QuizBody content={content} />}
         </ViewerModal>
       )}
@@ -381,11 +388,13 @@ function TopicArtCard({ jobId, topicTitle, type, artifact, onChanged }: {
 }) {
   const [content, setContent] = useState<any>(null);
   const [open, setOpen] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);
   const status = artifact?.review_status;
   const gen = async () => { await generationApi.genTopicArtifact(jobId, type); setContent(null); onChanged(); };
   const view = async () => {
     setOpen(true);
-    if (!content) { try { setContent((await generationApi.getArtifact(jobId, type as ArtifactType)).content); } catch { /* */ } }
+    setLoadErr(false);
+    if (!content) { try { setContent((await generationApi.getArtifact(jobId, type as ArtifactType)).content); } catch { setLoadErr(true); } }
   };
   return (
     <div style={{ border: `1.5px solid ${W.border}`, borderRadius: 10, padding: '13px 14px', background: 'var(--card)' }}>
@@ -405,7 +414,7 @@ function TopicArtCard({ jobId, topicTitle, type, artifact, onChanged }: {
         {(artifact?.cost_usd ?? 0) > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{usd(artifact?.cost_usd)}</span>}
       </div>
       {open && (
-        <ViewerModal title={TOPIC_LABEL[type]} subtitle={topicTitle} loading={!content} onClose={() => setOpen(false)}>
+        <ViewerModal title={TOPIC_LABEL[type]} subtitle={topicTitle} loading={!content} error={loadErr} onRetry={view} onClose={() => setOpen(false)}>
           <TopicArtifactBody type={type} content={content} />
         </ViewerModal>
       )}
@@ -473,7 +482,7 @@ export default function WinTeachGenerate() {
     if (!courseId || !topicId) return;
     setStarting(true); setError('');
     try { await generationApi.startJob({ course_id: courseId, topic_id: topicId, artifact_types: ALL_TYPES }); await refetch(); }
-    catch (e: any) { setError(e?.message?.includes('409') ? 'A job already exists for this topic.' : 'Failed to start. Check the topic has an operative CO.'); }
+    catch (e: any) { setError(e?.status === 409 ? 'A job already exists for this topic.' : 'Failed to start. Check the topic has an operative CO.'); }
     finally { setStarting(false); }
   };
 
@@ -516,9 +525,14 @@ export default function WinTeachGenerate() {
   const conceptName = (cid: string) => concepts.find((c: any) => c.concept_id === cid)?.concept_name ?? cid;
 
   // Queue engine: watch the running item until it settles, then dispatch the next.
+  // queueWaiting guards the window between dispatch and the post-dispatch refetch:
+  // until it clears, `job` is a stale snapshot and a previous 'error'/'ready'
+  // status would settle the item instantly while the backend is still running it.
+  const queueWaiting = useRef(false);
   useEffect(() => {
     if (!job) return;
     if (queueRun) {
+      if (queueWaiting.current) return;
       const st = stateFor(queueRun, 'student_notes')?.status;
       if (st === 'ready') { setQueueDone(d => ({ ...d, [queueRun]: 'done' })); setQueueRun(null); }
       else if (st === 'error') { setQueueDone(d => ({ ...d, [queueRun]: 'failed' })); setQueueRun(null); }
@@ -527,10 +541,12 @@ export default function WinTeachGenerate() {
     if (queuePaused || queue.length === 0) return;
     const nextId = queue[0];
     setQueue(q => q.slice(1));
+    queueWaiting.current = true;
     setQueueRun(nextId);
     generationApi.genConcept(job.id, nextId, 'student_notes')
       .then(refetch)
-      .catch(() => { setQueueDone(d => ({ ...d, [nextId]: 'failed' })); setQueueRun(null); });
+      .then(() => { queueWaiting.current = false; })
+      .catch(() => { queueWaiting.current = false; setQueueDone(d => ({ ...d, [nextId]: 'failed' })); setQueueRun(null); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job, queue, queueRun, queuePaused]);
 
@@ -549,6 +565,31 @@ export default function WinTeachGenerate() {
   });
   const queueRemove = (i: number) => setQueue(q => q.filter((_, x) => x !== i));
   const queueVisible = queueRun !== null || queue.length > 0 || Object.keys(queueDone).length > 0;
+
+  // Persist the queue per topic so navigating away (e.g. View → notes reader)
+  // doesn't silently abandon a running batch; restore it on mount.
+  const queueKey = `wt-notes-queue:${topicId}`;
+  const [queueRestored, setQueueRestored] = useState(false);
+  useEffect(() => {
+    if (!topicId) return;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(queueKey) ?? 'null');
+      if (saved) {
+        setQueue(saved.queue ?? []);
+        setQueueRun(saved.queueRun ?? null);
+        setQueueDone(saved.queueDone ?? {});
+        setQueuePaused(saved.queuePaused ?? false);
+      }
+    } catch { /* */ }
+    setQueueRestored(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId]);
+  useEffect(() => {
+    if (!topicId || !queueRestored) return;
+    if (queueVisible) sessionStorage.setItem(queueKey, JSON.stringify({ queue, queueRun, queueDone, queuePaused }));
+    else sessionStorage.removeItem(queueKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId, queueRestored, queue, queueRun, queueDone, queuePaused, queueVisible]);
 
   // topic context (this page is the topic's home — no separate topic page)
   const tp = topic as any;

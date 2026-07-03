@@ -126,6 +126,8 @@ export default function WinTeachCoursePage() {
   // Local editable map: coId → col → level
   const [localMap, setLocalMap] = useState<Record<string, Record<string, number>>>({});
   const [openCell, setOpenCell] = useState<{ coId: string; col: string } | null>(null);
+  // Must stay above the loading/not-found early returns (Rules of Hooks).
+  const [editingMap, setEditingMap] = useState(false);
 
   // Seed placeholder values deterministically per CO×col so they never flicker
   const DEFAULT_COLS = ['PO1','PO2','PO3','PO4','PO5','PSO1','PSO2'];
@@ -209,8 +211,6 @@ export default function WinTeachCoursePage() {
     const next = courseStatus === 'active' ? 'draft' : 'active';
     setStatus({ id, status: next as 'draft' | 'active' | 'archived' });
   };
-
-  const [editingMap, setEditingMap] = useState(false);
 
   // CE section tag palette for CO attainment levels
   const mvStyle = (v: number): React.CSSProperties => {
