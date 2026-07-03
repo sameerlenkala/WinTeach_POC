@@ -94,6 +94,23 @@ class ScopePatchRequest(BaseModel):
     patch: list[dict] | dict
 
 
+class ConceptPatch(BaseModel):
+    """A faculty edit to one Topic Plan concept (interactive studio). Only the
+    provided fields are applied; the rest are left as-is."""
+    concept_id: str
+    primary_content_type: str | None = None
+    secondary_blocks: list[str] | None = None
+    flags: dict | None = None
+    flag_overrides: list[str] | None = None
+    complexity_tier: str | None = None
+    scope_in: list[str] | None = None
+    scope_out: list[str] | None = None
+
+
+class PlanEditRequest(BaseModel):
+    concepts: list[ConceptPatch] = []
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Topic Plan — strict output schema (Node A, §7.1 / §7.5)
 # ══════════════════════════════════════════════════════════════════════════════

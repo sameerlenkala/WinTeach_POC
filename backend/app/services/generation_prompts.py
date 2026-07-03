@@ -643,3 +643,112 @@ def build_slides_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
         topic_title=ctx.get("topic_title", ""), topic_hours=ctx.get("topic_hours_allocated", 0),
     )
     return system, user
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Concept-level fan-out — Slides + Quiz for ONE subtopic (interactive studio)
+# Source of truth: that concept's approved Student Notes. Introduce no content
+# absent from the notes (§7.4 SSOT).
+# ══════════════════════════════════════════════════════════════════════════════
+
+_CONCEPT_SLIDES_SYSTEM = """You convert ONE subtopic's approved Student Notes into a short classroom slide
+sequence for {subject_domain} at {audience_level}. REFORMAT for delivery — introduce NO
+definition, example, code, or claim absent from the notes. Build the sequence per the concept's
+Content Type ({content_type}): definition → 1–3 core builds → ≥1 misconception (Myth→Reality) →
+profile slides (P2 code+trace+complexity; P3 proof one step per build; P4 diagram+trade-off;
+P5 environment→procedure→output). Face ≤6 lines, ≤~10 words/line; depth goes to speaker_notes."""
+
+_CONCEPT_SLIDES_USER = """concept: {concept_name}  (Content Type {content_type})
+approved notes for this concept (the ONLY content source):
+{notes}
+
+Return ONLY JSON: {{"concept_id": "{concept_id}", "inherited_content_type": "{content_type}",
+"slides": [{{"slide_no": 1, "role": "definition|core|misconception|code|trace|proof|diagram|complexity|closing",
+"title": "a claim, not a generic noun", "body_blocks": ["≤6 lines"], "build_steps": ["one reveal each"],
+"speaker_notes": "teaching script", "source_ref": "notes section"}}]}}. ≥1 misconception slide."""
+
+
+def build_concept_slides_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, str]:
+    ct_ = unit.get("primary_content_type", "P1")
+    system = preamble(ctx) + "\n\n" + _CONCEPT_SLIDES_SYSTEM.format(
+        subject_domain=ctx.get("subject_domain") or "the discipline",
+        audience_level=ctx.get("audience_level", "UG"), content_type=ct_)
+    user = _CONCEPT_SLIDES_USER.format(concept_id=unit.get("concept_id", ""),
+        concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes))
+    return system, user
+
+
+_CONCEPT_QUIZ_SYSTEM = """You write a short formative quiz for ONE subtopic, answerable from its approved
+Student Notes ALONE. Every item is source_ref'd to a notes section; distractors map to the notes'
+common-misconceptions. Stay at or below Bloom {bloom_ceiling}. Item types key off the Content Type
+({content_type}): P2/P3 → trace-and-predict / complexity / spot-the-bug; P4 → diagram-reading;
+P1 → compare/classify/define. Never test anything not in the notes."""
+
+_CONCEPT_QUIZ_USER = """concept: {concept_name} (Content Type {content_type}, Bloom ceiling {bloom_ceiling})
+approved notes (the ONLY source):
+{notes}
+
+Return ONLY JSON: {{"concept_id": "{concept_id}",
+"mcq": [{{"question": "text", "options": ["A","B","C","D"], "answer_index": 0,
+"explanation": "why, teaching the misconception", "bloom_level": "L2..L{ceil}", "source_ref": "section"}}],
+"short_answer": [{{"question": "text", "model_answer": "text", "bloom_level": "L2..L{ceil}", "source_ref": "section"}}]}}.
+3–5 MCQs + 1–2 short-answer."""
+
+
+def build_concept_quiz_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, str]:
+    ct_ = unit.get("primary_content_type", "P1")
+    ceiling = (unit.get("bloom_ceiling") or "L3").replace("L", "")
+    system = preamble(ctx) + "\n\n" + _CONCEPT_QUIZ_SYSTEM.format(
+        content_type=ct_, bloom_ceiling=unit.get("bloom_ceiling", "L3"))
+    user = _CONCEPT_QUIZ_USER.format(concept_id=unit.get("concept_id", ""),
+        concept_name=unit.get("concept_name", ""), content_type=ct_,
+        bloom_ceiling=unit.get("bloom_ceiling", "L3"), ceil=ceiling, notes=_j(notes))
+    return system, user
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Topic-level artifacts — Summary / Assignment / Faculty Diagnostic / Flashcards
+# Source: the assembled approved Notes across all concepts (§7.4).
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _topic_source(ctx: dict, notes: dict) -> str:
+    return f"topic: {ctx.get('topic_title','')} | domain {ctx.get('subject_domain','')}\n" \
+           f"assembled approved notes (the ONLY content source):\n{_j(notes)}"
+
+
+def build_summary_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou compress the approved Student Notes into a one-page revision " \
+        "cheat-sheet (~10–15% length) for {d}. Every row carries a notes_ref; add nothing new.".format(
+            d=ctx.get("subject_domain") or "the discipline")
+    user = _topic_source(ctx, notes) + '\n\nReturn ONLY JSON: {"key_concepts":[{"concept":"","one_liner":"","notes_ref":""}],' \
+        '"formulas_or_syntax":[""],"common_mistakes":[""],"exam_pointers":[""]}.'
+    return system, user
+
+
+def build_assignment_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou write a topic assignment that APPLIES the approved Notes (never " \
+        "reproduces them), skewing one Bloom level above the quiz, with a criterion-referenced rubric " \
+        "whose points sum to the task marks. No Bloom's leakage above the topic ceiling."
+    user = _topic_source(ctx, notes) + '\n\nReturn ONLY JSON: {"tasks":[{"prompt":"","marks":10,' \
+        '"bloom_level":"L3","source_refs":[""]}],"rubric":[{"criterion":"","points":5,"descriptor":""}],' \
+        '"model_solution":"instructor copy","integrity_policy":""}.'
+    return system, user
+
+
+def build_faculty_diagnostic_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou write a PRIVATE faculty self-check (no pass/fail, nothing reported " \
+        "upward) across four dimensions: content mastery at the topic ceiling, misconception awareness " \
+        "from the notes' pitfalls, pedagogical readiness (this topic's teaching), and connection/depth. " \
+        "Every item ends in actionable remediation with a notes_ref."
+    user = _topic_source(ctx, notes) + '\n\nReturn ONLY JSON: {"dimensions":[{"name":"content_mastery|' \
+        'misconception_awareness|pedagogical_readiness|connection_depth","items":[{"prompt":"",' \
+        '"what_good_looks_like":"","remediation":"","notes_ref":""}]}],"gap_map":[""]}.'
+    return system, user
+
+
+def build_flashcards_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou make 10–15 spaced-repetition flashcards from the approved Notes ONLY. " \
+        "Front ≤15 words, back ≤50 words, low Bloom band, even coverage across concepts."
+    user = _topic_source(ctx, notes) + '\n\nReturn ONLY JSON: {"cards":[{"front":"","back":"",' \
+        '"concept_ref":"","bloom_level":"L1|L2","source_ref":""}]}.'
+    return system, user

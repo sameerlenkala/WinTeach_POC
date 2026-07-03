@@ -7,7 +7,6 @@ import { WinTopbar, WinContent } from './WinTeachLayout';
 import { TopicBadge, XpBar, Card, Btn, IconBtn, DeltaBanner } from './WinTeachUI';
 import { IBell, ISpark } from './WinTeachIcons';
 import { allTopics, topicState, topicPct, newArtifacts } from './winteachData';
-import { generationApi } from '@/api/generation';
 import type { Topic } from './winteachData';
 
 // One loader per course — renders null, just loads units via hook
@@ -62,43 +61,11 @@ export default function WinTeachGeneration() {
   const rows = [...dbRows, ...localRows.filter(r => !dbCourseIds.has((r.c as any).id))];
   const pend = rows.filter(r => topicState(r.t) !== 'ready').length;
 
+  // This board is a lightweight overview + preview animation. Real generation
+  // (per-unit review, approvals, fan-out) runs in the topic's Generation Studio.
   const generateTopic = (courseId: string | undefined, t: Topic) => {
-    if (!courseId) { runTopicFlow(t, () => forceUpdate(n => n + 1)); return; }
-
-    generationApi.createJob({
-      course_id: courseId,
-      topic_id: t.id,
-      artifact_types: ['notes', 'preassess', 'quiz', 'flashcards'],
-    }).then(job => {
-      activeJobs[t.id] = job.id;
-      const es = generationApi.streamJob(job.id);
-
-      es.addEventListener('progress', (ev: MessageEvent) => {
-        try {
-          const data = JSON.parse(ev.data) as { artifact_type: string; progress: number };
-          const key = data.artifact_type === 'flashcards' ? 'flash' : data.artifact_type;
-          if (key in t.artifacts) {
-            (t.artifacts as Record<string, number>)[key] = data.progress;
-            forceUpdate(n => n + 1);
-          }
-        } catch { /* ignore */ }
-      });
-
-      es.addEventListener('done', () => {
-        (['notes', 'preassess', 'quiz', 'flash'] as const).forEach(k => { t.artifacts[k] = 100; });
-        delete activeJobs[t.id];
-        forceUpdate(n => n + 1);
-        es.close();
-      });
-
-      es.addEventListener('error', () => {
-        es.close();
-        delete activeJobs[t.id];
-        runTopicFlow(t, () => forceUpdate(n => n + 1));
-      });
-    }).catch(() => {
-      runTopicFlow(t, () => forceUpdate(n => n + 1));
-    });
+    if (courseId) { navigate(`/winteach/courses/${courseId}/topic/${t.id}/generate`); return; }
+    runTopicFlow(t, () => forceUpdate(n => n + 1));
   };
 
   const generateAll = () => {

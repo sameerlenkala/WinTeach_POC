@@ -15,15 +15,72 @@ interface ComplexityRequest {
   hours?: number;
 }
 
-// TODO(§8.1): migrate this union — and the artifact card model across
-// WinTeachGeneration/WinTeachTopicPage/WinTeachContext + types.ts — to the eight
-// backend artifact_type names (topic_plan, student_notes, slides, summary, quiz,
-// assignment, faculty_diagnostic, flashcards). Deferred to the G2/G3 review-surface
-// stories so the current POC UI keeps compiling.
+// The eight Stage-6 artifact types (byte-identical to the backend enum, §8.1).
+export type ArtifactType =
+  | 'topic_plan' | 'student_notes' | 'slides' | 'summary'
+  | 'quiz' | 'assignment' | 'faculty_diagnostic' | 'flashcards';
+
+export const FANOUT_TYPES: ArtifactType[] = [
+  'slides', 'summary', 'quiz', 'assignment', 'faculty_diagnostic', 'flashcards',
+];
+
+export type JobPhase =
+  | 'generating_topic_plan' | 'topic_plan_validate' | 'plan_ready' | 'error';
+
+export type ConceptArtType = 'student_notes' | 'slides' | 'quiz';
+export const CONCEPT_TYPES: ConceptArtType[] = ['student_notes', 'slides', 'quiz'];
+
+export type TopicArtType = 'summary' | 'assignment' | 'faculty_diagnostic' | 'flashcards';
+export const TOPIC_ART_TYPES: TopicArtType[] = ['summary', 'assignment', 'faculty_diagnostic', 'flashcards'];
+
+export type ArtStatus = 'not_generated' | 'generating' | 'ready' | 'error';
+
+export interface ConceptArtifactState {
+  concept_id: string;
+  artifact_type: ConceptArtType;
+  status: ArtStatus;
+  approval_status: 'pending' | 'approved';
+  cost_usd?: number;
+  token_count?: number;
+  error?: string | null;
+}
+
+export interface GenJobArtifact {
+  id: string;
+  type: ArtifactType;
+  review_status: string;               // ready | generating | error | ...
+  is_stale?: boolean;
+  artifact_version?: string | null;
+  cost_usd?: number;
+}
+
+export interface GenJob {
+  id: string;
+  topic_id: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  phase: JobPhase;
+  error_msg?: string | null;
+  token_count?: number;
+  cost_usd?: number;
+  est_cost_usd?: number | null;
+  artifacts: GenJobArtifact[];         // topic-level (topic_plan + summary/…)
+  concept_artifacts: ConceptArtifactState[];
+}
+
+export interface ArtifactPayload {
+  content: any;
+  status: string;
+  validation?: { all_pass?: boolean; failures?: { name: string; detail: string }[] } | null;
+  version?: string | null;
+  derived_from?: { notes_version?: string | null; content_hash?: string | null };
+}
+
+type FinalizeDecision = 'approve' | 'revise' | 'ship' | 'release';
+
 interface JobCreatePayload {
   course_id: string;
   topic_id: string;
-  artifact_types?: ('notes' | 'preassess' | 'quiz' | 'flashcards')[];
+  artifact_types?: ArtifactType[];
 }
 
 export const generationApi = {
@@ -36,6 +93,37 @@ export const generationApi = {
     ),
 
   createJob: (data: JobCreatePayload) => api.post<GenerationJob>('/generate/jobs', data),
+
+  // ── Stage-6 studio (real pipeline) ──
+  startJob: (data: JobCreatePayload) => api.post<GenJob>('/generate/jobs', data),
+
+  getGenJob: (jobId: string) => api.get<GenJob>(`/generate/jobs/${jobId}`),
+
+  /** Latest job for a topic (to resume the studio after reload). Throws 404 if none. */
+  getTopicJob: (topicId: string) => api.get<GenJob>(`/generate/topics/${topicId}/job`),
+
+  getArtifact: (jobId: string, type: ArtifactType) =>
+    api.get<ArtifactPayload>(`/generate/jobs/${jobId}/artifact/${type}`),
+
+  // ── interactive studio ──
+  savePlan: (jobId: string, concepts: any[]) =>
+    api.put<any>(`/generate/jobs/${jobId}/plan`, { concepts }),
+
+  genConcept: (jobId: string, conceptId: string, type: ConceptArtType) =>
+    api.post<any>(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/generate`),
+
+  approveConcept: (jobId: string, conceptId: string, type: ConceptArtType) =>
+    api.post<any>(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/approve`),
+
+  getConcept: (jobId: string, conceptId: string, type: ConceptArtType) =>
+    api.get<{ content: any; status: ArtStatus; approval_status: string; cost_usd?: number; error?: string }>(
+      `/generate/jobs/${jobId}/concepts/${conceptId}/${type}`),
+
+  genTopicArtifact: (jobId: string, type: TopicArtType) =>
+    api.post<any>(`/generate/jobs/${jobId}/topic/${type}/generate`),
+
+  finalize: (jobId: string, type: ArtifactType, body: { decision: FinalizeDecision; unit_id?: string; instruction?: string }) =>
+    api.post<any>(`/generate/jobs/${jobId}/artifact/${type}/finalize`, body),
 
   getJob: (jobId: string) => api.get<GenerationJob>(`/generate/jobs/${jobId}`),
 

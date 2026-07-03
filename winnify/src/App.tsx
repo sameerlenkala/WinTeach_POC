@@ -69,6 +69,7 @@ import WinTeachCourses from './pages/winteach/WinTeachCourses';
 import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
 import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
 import WinTeachTopicPage from './pages/winteach/WinTeachTopicPage';
+import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
 import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
 import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
@@ -163,6 +164,7 @@ export default function App() {
             <Route path="courses/:id/edit" element={<WinTeachCreateCourse />} />
             <Route path="courses/:id" element={<WinTeachCoursePage />} />
             <Route path="courses/:id/topic/:topicId" element={<WinTeachTopicPage />} />
+            <Route path="courses/:id/topic/:topicId/generate" element={<WinTeachGenerate />} />
             <Route path="generation" element={<WinTeachGeneration />} />
             <Route path="library" element={<WinTeachLibrary />} />
             <Route path="add-library" element={<WinTeachAddLibrary />} />

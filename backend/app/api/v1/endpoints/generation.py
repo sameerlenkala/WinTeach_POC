@@ -23,6 +23,7 @@ from app.schemas.generation import (
     GranularityRequest,
     HoursAllocateRequest,
     JobCreateRequest,
+    PlanEditRequest,
     ScopePatchRequest,
 )
 from app.services import generation_service as gen
@@ -93,16 +94,41 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
             "phase": "generating_topic_plan", "artifact_types": payload.artifact_types}
 
 
+@router.get("/topics/{topic_id}/job")
+def get_topic_job(topic_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    """Latest generation job for a topic (so the studio can resume after reload)."""
+    r = (
+        db.table("generation_jobs").select("*").eq("topic_id", topic_id)
+        .order("created_at", desc=True).limit(1).execute()
+    )
+    if not r.data:
+        raise HTTPException(status_code=404, detail="No job for topic")
+    return _job_detail(db, r.data[0])
+
+
 @router.get("/jobs/{job_id}")
 def get_job(job_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     result = db.table("generation_jobs").select("*").eq("id", job_id).single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Job not found")
+    return _job_detail(db, result.data)
+
+
+def _job_detail(db: Client, job: dict) -> dict:
+    """Job row (incl. token_count / cost_usd / est_cost_usd) + topic-level artifact
+    summary + concept-level artifact states for the interactive studio."""
+    topic_id = job["topic_id"]
     artifacts = (
-        db.table("artifacts").select("type,review_status,progress,is_stale,artifact_version")
-        .eq("job_id", job_id).execute()
+        db.table("artifacts")
+        .select("id,type,review_status,is_stale,artifact_version,cost_usd")
+        .eq("topic_id", topic_id).execute().data or []
     )
-    return {**result.data, "artifacts": artifacts.data or []}
+    concept_artifacts = (
+        db.table("concept_artifacts")
+        .select("concept_id,artifact_type,status,approval_status,cost_usd,token_count,error")
+        .eq("topic_id", topic_id).execute().data or []
+    )
+    return {**job, "artifacts": artifacts, "concept_artifacts": concept_artifacts}
 
 
 @router.get("/jobs/{job_id}/stream")
@@ -149,3 +175,67 @@ def finalize_artifact(job_id: str, artifact_type: str, payload: FinalizeRequest,
         raise HTTPException(status_code=422,
                             detail="unit_id is required for per-unit student_notes decisions.")
     return gen.finalize(db, user, job_id, artifact_type, payload)
+
+
+# ── Interactive studio: editable plan + on-demand concept/topic artifacts ─────
+
+_CONCEPT_TYPES = {"student_notes", "slides", "quiz"}
+_TOPIC_ART_TYPES = {"summary", "assignment", "faculty_diagnostic", "flashcards"}
+
+
+def _topic_of(db: Client, job_id: str) -> str:
+    r = db.table("generation_jobs").select("topic_id").eq("id", job_id).single().execute()
+    if not r.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return r.data["topic_id"]
+
+
+@router.put("/jobs/{job_id}/plan")
+def edit_plan(job_id: str, payload: PlanEditRequest,
+              user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Persist faculty edits to the Topic Plan concepts (content type, secondary
+    blocks, flags, complexity, scope). Read by later per-concept generation."""
+    topic_id = _topic_of(db, job_id)
+    return gen.save_plan_edits(db, topic_id, [c.model_dump() for c in payload.concepts])
+
+
+@router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/generate", status_code=202)
+def gen_concept(job_id: str, concept_id: str, artifact_type: str,
+                user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Generate or regenerate one concept-level artifact (notes/slides/quiz)."""
+    if artifact_type not in _CONCEPT_TYPES:
+        raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
+    topic_id = _topic_of(db, job_id)
+    gen.enqueue_concept_artifact(job_id, topic_id, concept_id, artifact_type)
+    return {"status": "generating", "concept_id": concept_id, "artifact_type": artifact_type}
+
+
+@router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/approve")
+def approve_concept(job_id: str, concept_id: str, artifact_type: str,
+                    user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    topic_id = _topic_of(db, job_id)
+    return gen.approve_concept_artifact(db, user, topic_id, concept_id, artifact_type)
+
+
+@router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}")
+def get_concept(job_id: str, concept_id: str, artifact_type: str,
+                user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    topic_id = _topic_of(db, job_id)
+    row = gen._concept_row(db, topic_id, concept_id, artifact_type)
+    if not row:
+        raise HTTPException(status_code=404, detail="Not generated yet")
+    return {"content": row.get("content"), "status": row.get("status"),
+            "approval_status": row.get("approval_status"),
+            "cost_usd": row.get("cost_usd"), "error": row.get("error")}
+
+
+@router.post("/jobs/{job_id}/topic/{artifact_type}/generate", status_code=202)
+def gen_topic_artifact(job_id: str, artifact_type: str,
+                       user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Generate or regenerate a topic-level artifact (summary/assignment/
+    faculty_diagnostic/flashcards) from the concept notes."""
+    if artifact_type not in _TOPIC_ART_TYPES:
+        raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_TOPIC_ART_TYPES}")
+    topic_id = _topic_of(db, job_id)
+    gen.enqueue_topic_artifact(job_id, topic_id, artifact_type)
+    return {"status": "generating", "artifact_type": artifact_type}

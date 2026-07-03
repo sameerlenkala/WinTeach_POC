@@ -204,6 +204,39 @@ def is_coding_subject(subject_type_label: str | None) -> bool:
     return any(marker in label for marker in _CODING_SUBJECT_MARKERS)
 
 
+# ── Cost model (gpt-4o) ───────────────────────────────────────────────────────
+#
+# Approximate pricing in USD per 1M tokens; update if OpenAI rates change.
+GPT4O_INPUT_PER_1M = 2.50
+GPT4O_OUTPUT_PER_1M = 10.00
+
+
+def usd_cost(prompt_tokens: int, completion_tokens: int) -> float:
+    """USD cost for a token spend at the configured gpt-4o rates."""
+    return round((prompt_tokens or 0) / 1e6 * GPT4O_INPUT_PER_1M
+                 + (completion_tokens or 0) / 1e6 * GPT4O_OUTPUT_PER_1M, 4)
+
+
+# Rough (input, output) token estimates per generation call — for the upfront
+# cost estimate only (actuals come from resp.usage). student_notes covers the
+# three per-unit calls combined.
+ARTIFACT_TOKEN_ESTIMATE: dict[str, tuple[int, int]] = {
+    "topic_plan":         (4000, 3000),
+    "student_notes":      (9000, 7000),
+    "slides":             (3500, 2500),
+    "quiz":               (2500, 1800),
+    "summary":            (4000, 2500),
+    "assignment":         (3500, 2500),
+    "faculty_diagnostic": (3500, 2500),
+    "flashcards":         (2500, 1500),
+}
+
+
+def estimate_artifact_cost(artifact_type: str) -> float:
+    ins, outs = ARTIFACT_TOKEN_ESTIMATE.get(artifact_type, (3000, 2000))
+    return usd_cost(ins, outs)
+
+
 # ── Bloom band + verb bank (§10.3 Verb check, §7.0 invariant 3) ───────────────
 
 BLOOM_ORDER = ("L1", "L2", "L3", "L4", "L5", "L6")
@@ -230,13 +263,17 @@ BANNED_VERBS = (
 # stored in lemma form; the verb check lemmatizes the leading verb before match.
 APPROVED_VERBS: dict[str, set[str]] = {
     "L1": {"define", "list", "state", "name", "recall", "identify", "label",
-           "recognize", "cite", "record", "match"},
+           "recognize", "cite", "record", "match", "describe"},
+    # L2 (Understand) legitimately spans many common teaching verbs — including
+    # define/identify/list/compare — since students name, describe and contrast
+    # concepts while building understanding.
     "L2": {"explain", "describe", "summarize", "classify", "interpret",
            "paraphrase", "illustrate", "distinguish", "discuss", "restate",
-           "outline", "represent"},
+           "outline", "represent", "define", "identify", "list", "compare",
+           "differentiate", "recognize", "characterize", "categorize", "relate"},
     "L3": {"apply", "implement", "solve", "compute", "demonstrate", "construct",
            "use", "execute", "calculate", "model", "modify", "operate",
-           "produce", "predict"},
+           "produce", "predict", "illustrate", "organize"},
     "L4": {"analyze", "compare", "examine", "investigate", "differentiate",
            "contrast", "categorize", "deconstruct", "diagnose", "correlate",
            "trace", "test"},

@@ -45,10 +45,10 @@ function ArtifactViewer({ jobId, artifactType, label, onClose }: { jobId: string
 export default function WinTeachTopicPage() {
   const navigate = useNavigate();
   const { id: courseId, topicId } = useParams<{ id: string; topicId: string }>();
-  const { courses, currentCourse, setCurrentCourse, currentTopic, setCurrentTopic, runTopicFlow, toast } = useWinTeach();
+  const { courses, currentCourse, setCurrentCourse, currentTopic, setCurrentTopic, toast } = useWinTeach();
   const [, forceUpdate] = useState(0);
   const [coModal, setCoModal] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ jobId: string; type: string; label: string } | null>(null);
 
   // Fetch real COs so we can persist edits back to the API
@@ -149,44 +149,11 @@ export default function WinTeachTopicPage() {
     );
   };
 
-  const streamGenerate = (topic: Topic) => {
-    const courseUUID = c?.id;
-    if (!courseUUID) { runTopicFlow(topic, () => forceUpdate(n => n + 1)); return; }
-
-    generationApi.createJob({
-      course_id: courseUUID,
-      topic_id: topic.id,
-      artifact_types: ['notes', 'preassess', 'quiz', 'flashcards'] as ('notes' | 'preassess' | 'quiz' | 'flashcards')[],
-    }).then(job => {
-      setActiveJobId(job.id);
-      const es = generationApi.streamJob(job.id);
-      es.addEventListener('progress', (ev: MessageEvent) => {
-        try {
-          const d = JSON.parse(ev.data) as { artifact_type: string; progress: number };
-          const key = d.artifact_type === 'flashcards' ? 'flash' : d.artifact_type;
-          if (key in topic.artifacts) {
-            (topic.artifacts as Record<string, number>)[key] = d.progress;
-            forceUpdate(n => n + 1);
-          }
-        } catch { /* ignore */ }
-      });
-      es.addEventListener('done', () => {
-        (['notes', 'lesson_plan', 'preassess', 'quiz', 'flash'] as Array<keyof typeof topic.artifacts>).forEach(k => { topic.artifacts[k] = 100; });
-        forceUpdate(n => n + 1);
-        es.close();
-        toast('All artifacts ready');
-      });
-      es.addEventListener('error', () => { es.close(); runTopicFlow(topic, () => forceUpdate(n => n + 1)); });
-    }).catch(() => runTopicFlow(topic, () => forceUpdate(n => n + 1)));
-  };
-
-  const doGenerate = () => streamGenerate(t);
-
-  const doRegenerate = () => {
-    t.artifacts = newArtifacts();
-    forceUpdate(n => n + 1);
-    streamGenerate(t);
-  };
+  // The real Stage-6 pipeline runs in the Generation Studio (per-unit review,
+  // approvals, fan-out). This page's cards are a lightweight preview.
+  const openStudio = () => navigate(`/winteach/courses/${courseId}/topic/${t.id}/generate`);
+  const doGenerate = openStudio;
+  const doRegenerate = openStudio;
 
   const state = topicState(t);
 
