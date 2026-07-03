@@ -372,19 +372,25 @@ export default function WinTeachGenerate() {
   const anyNotesReady = (job?.concept_artifacts ?? []).some(c => c.artifact_type === 'student_notes' && c.status === 'ready');
   const planGenerating = job && (job.phase === 'generating_topic_plan' || job.phase === 'topic_plan_validate');
 
+  // topic context (this page is the topic's home — no separate topic page)
+  const tp = topic as any;
+  const linkedCo = tp?.linked_co;
+  const bloom = tp?.bloom_level ?? linkedCo?.bloom_level;
+  const subtopics: string[] = (tp?.subtopics ?? []).map((s: any) => s.title ?? s);
+  const hours = tp?.contact_hours ?? tp?.hours;
+
   return (
     <>
       <WinTopbar title="Generation Studio" actions={
-        <Btn variant="ghost" onClick={() => navigate(`/winteach/courses/${courseId}/topic/${topicId}`)}>
-          <span style={{ width: 16, height: 16, display: 'inline-flex' }}><IBack /></span>Back to topic
+        <Btn variant="ghost" onClick={() => navigate(`/winteach/courses/${courseId}`)}>
+          <span style={{ width: 16, height: 16, display: 'inline-flex' }}><IBack /></span>Back to {courseCode}
         </Btn>
       } />
       <WinContent>
         <Breadcrumb items={[
           { label: 'Courses', onClick: () => navigate('/winteach/courses') },
           { label: courseCode, onClick: () => navigate(`/winteach/courses/${courseId}`) },
-          { label: topicTitle, onClick: () => navigate(`/winteach/courses/${courseId}/topic/${topicId}`) },
-          { label: 'Generate' },
+          { label: topicTitle },
         ]} />
 
         <div style={{ maxWidth: 900 }}>
@@ -409,21 +415,41 @@ export default function WinTeachGenerate() {
             </div>
           )}
 
+          {/* topic header — this page is the topic's home */}
           <div style={{ margin: '4px 0 16px' }}>
-            <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 22 }}>{topicTitle}</div>
-            <div style={{ color: W.text3, fontSize: 13 }}>Generate the plan, then produce Notes · Slides · Quiz per subtopic, and topic-wide artifacts.</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 22 }}>{topicTitle}</div>
+              {bloom && <Badge variant="blue">{bloom}</Badge>}
+              {subtopics.length > 0 && <Badge variant="muted">{subtopics.length} subtopics</Badge>}
+              {hours != null && <Badge variant="muted">{hours} hrs</Badge>}
+            </div>
+            {linkedCo?.description && (
+              <div style={{ fontSize: 12.5, color: W.text2, marginTop: 6 }}>
+                <b style={{ color: W.brand }}>Linked CO:</b> {linkedCo.description}
+              </div>
+            )}
           </div>
 
           {error && <div style={{ background: W.redBg, color: W.redFg, borderRadius: 12, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>{error}</div>}
 
-          {/* empty state */}
+          {/* empty state — show the syllabus subtopics so the page has context pre-plan */}
           {resumed && !job && (
             <Card>
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ padding: '8px 0' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Ready to generate</div>
-                <div style={{ color: W.text2, fontSize: 13.5, maxWidth: 460, margin: '0 auto 18px', lineHeight: 1.6 }}>
-                  We'll generate & validate the Topic Plan, then stop. You then edit the plan and generate each subtopic's Notes, Slides and Quiz on demand.
+                <div style={{ color: W.text2, fontSize: 13.5, maxWidth: 560, marginBottom: 16, lineHeight: 1.6 }}>
+                  We'll generate & validate the Topic Plan (which decomposes this topic into teachable concepts), then stop. You then edit the plan and generate each concept's Notes, Slides and Quiz on demand — plus topic-wide artifacts.
                 </div>
+                {subtopics.length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: W.text3, marginBottom: 8 }}>SYLLABUS SUBTOPICS ({subtopics.length})</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {subtopics.map((s, i) => (
+                        <span key={i} style={{ fontSize: 12, color: W.text2, background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 8, padding: '4px 10px' }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Btn variant="primary" onClick={start} disabled={starting}>
                   <span style={{ width: 16, height: 16, display: 'inline-flex' }}><ISpark /></span>{starting ? 'Starting…' : 'Generate Topic Plan'}
                 </Btn>

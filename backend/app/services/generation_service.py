@@ -1522,3 +1522,39 @@ def generate_topic_artifact(db, job_id, topic_id, artifact_type) -> None:
                      derived_from_hash=notes["topic_header"]["content_hash"],
                      token_count=p_tok + c_tok, cost_usd=cost)
     _add_job_cost(db, job_id, p_tok + c_tok, cost)
+
+
+def course_progress(db, course_id: str) -> list[dict]:
+    """Real per-topic generation progress for the course board: latest job phase,
+    plan status, per-concept notes counts, and cost. One call for the whole course."""
+    units = db.table("units").select("id").eq("course_id", course_id).execute().data or []
+    unit_ids = [u["id"] for u in units]
+    if not unit_ids:
+        return []
+    topics = (db.table("topics").select("id,title,unit_id")
+              .in_("unit_id", unit_ids).execute().data or [])
+    out = []
+    for t in topics:
+        tid = t["id"]
+        job = (db.table("generation_jobs").select("phase,status,cost_usd,est_cost_usd")
+               .eq("topic_id", tid).order("created_at", desc=True).limit(1).execute().data)
+        job = job[0] if job else None
+        plan = _topic_plan_content(db, tid)
+        concept_total = len(plan.get("concept_inventory", []) or [])
+        cas = (db.table("concept_artifacts").select("artifact_type,status,approval_status")
+               .eq("topic_id", tid).execute().data or [])
+        notes = [c for c in cas if c["artifact_type"] == "student_notes"]
+        notes_ready = sum(1 for c in notes if c["status"] == "ready")
+        notes_approved = sum(1 for c in notes if c["approval_status"] == "approved")
+        out.append({
+            "topic_id": tid,
+            "phase": (job or {}).get("phase"),
+            "status": (job or {}).get("status"),
+            "has_plan": bool(concept_total),
+            "concept_total": concept_total,
+            "notes_ready": notes_ready,
+            "notes_approved": notes_approved,
+            "cost_usd": (job or {}).get("cost_usd") or 0,
+            "est_cost_usd": (job or {}).get("est_cost_usd"),
+        })
+    return out

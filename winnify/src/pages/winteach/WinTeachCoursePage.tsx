@@ -1,13 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWinTeach } from './WinTeachContext';
-import { useCourse, useCOs, useCOMap, useSetCourseStatus, useUnits, useSaveCOMap, useUpdateCO } from '@/api/hooks';
+import { useCourse, useCOs, useCOMap, useSetCourseStatus, useUnits, useSaveCOMap, useUpdateCO, useCourseProgress } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { TopicBadge, BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag } from './WinTeachUI';
-import { IBack, IEdit, ISpark } from './WinTeachIcons';
-import { allTopics, topicState, topicPct, coursePct, coRefFor } from './winteachData';
+import { BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag, Badge } from './WinTeachUI';
+import { IBack, IEdit } from './WinTeachIcons';
+import { coRefFor } from './winteachData';
 import type { CourseOutcome, COMapping } from '@/api/types';
+import type { TopicProgress } from '@/api/generation';
+
+/** Real generation status for a topic, from the course-progress endpoint. */
+function topicGenState(p?: TopicProgress): { label: string; variant: 'green' | 'info' | 'muted' | 'orange'; pct: number } {
+  if (!p || (!p.has_plan && !p.status)) return { label: 'Not started', variant: 'muted', pct: 0 };
+  if (p.status === 'failed') return { label: 'Plan failed', variant: 'orange', pct: 0 };
+  if (!p.has_plan) return { label: 'Planning…', variant: 'info', pct: 5 };
+  const total = p.concept_total || 1;
+  if (p.notes_approved >= total && total > 0) return { label: 'Complete', variant: 'green', pct: 100 };
+  if (p.notes_ready > 0) return { label: `${p.notes_ready}/${total} notes`, variant: 'info', pct: Math.round((p.notes_ready / total) * 100) };
+  return { label: 'Plan ready', variant: 'info', pct: 8 };
+}
 
 function CellDropdown({ value, onChange, onClose }: { value: number; onChange: (v: number) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -89,14 +101,20 @@ function Spinner() {
 export default function WinTeachCoursePage() {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
-  const { courses, runTopicFlow } = useWinTeach();
-  const [, forceUpdate] = useState(0);
+  const { courses } = useWinTeach();
 
   // Real API data
   const { data: apiCourse, isLoading: courseLoading } = useCourse(id);
   const { data: apiCOs = [], isLoading: cosLoading } = useCOs(id);
   const { data: apiUnits = [], isLoading: unitsLoading } = useUnits(id);
   const { data: apiMap = [], isLoading: mapLoading } = useCOMap(id);
+  const { data: genProgress = [] } = useCourseProgress(id);
+  const progById: Record<string, TopicProgress> = {};
+  genProgress.forEach(p => { progById[p.topic_id] = p; });
+  const overallPct = genProgress.length
+    ? Math.round(genProgress.reduce((s, p) => s + topicGenState(p).pct, 0) / genProgress.length)
+    : 0;
+  const totalGenCost = genProgress.reduce((s, p) => s + (p.cost_usd || 0), 0);
   const { mutate: setStatus } = useSetCourseStatus();
   const { mutate: saveMap } = useSaveCOMap(id);
   const { mutate: updateCO } = useUpdateCO(id);
@@ -185,17 +203,6 @@ export default function WinTeachCoursePage() {
   const totalTopics = apiUnits.length
     ? apiUnits.reduce((acc: number, u: any) => acc + (u.topics?.length ?? 0), 0)
     : 0;
-  const ts = c ? allTopics(c) : [];
-  const ready = ts.filter(x => topicState(x.topic) === 'ready').length;
-
-  const generateAll = () => {
-    ts.forEach((x, i) => {
-      if (topicState(x.topic) !== 'ready') {
-        setTimeout(() => runTopicFlow(x.topic, () => forceUpdate(n => n + 1)), i * 180);
-      }
-    });
-  };
-
   const toggleStatus = () => {
     const next = courseStatus === 'active' ? 'draft' : 'active';
     setStatus({ id, status: next as 'draft' | 'active' | 'archived' });
@@ -221,11 +228,6 @@ export default function WinTeachCoursePage() {
           <Btn onClick={() => navigate(`/winteach/courses/${id}/edit`)}>
             <span style={{ width: 16, height: 16, display: 'inline-flex' }}><IEdit /></span>Edit course
           </Btn>
-          {ready < ts.length && ts.length > 0 && (
-            <Btn variant="primary" onClick={generateAll}>
-              <span style={{ width: 16, height: 16, display: 'inline-flex' }}><ISpark /></span>Generate pending
-            </Btn>
-          )}
         </>
       } />
       <WinContent>
@@ -270,9 +272,9 @@ export default function WinTeachCoursePage() {
               <div style={{ display: 'flex', gap: 10, flex: '0 0 auto', flexWrap: 'wrap' }}>
                 {([
                   ['Units', units.length],
-                  ['Topics', totalTopics || ts.length],
+                  ['Topics', totalTopics],
                   ['COs', cos.length],
-                  ['Ready', `${ready}/${ts.length}`],
+                  ['Complete', `${genProgress.filter(p => topicGenState(p).label === 'Complete').length}/${totalTopics}`],
                 ] as [string, string | number][]).map(([l, v]) => (
                   <div key={l} style={{ background: '#fff', border: '1px solid #e9eaf2', borderRadius: 14, padding: '10px 16px', minWidth: 80, textAlign: 'center' }}>
                     <div style={{ fontSize: '.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'rgba(28,32,48,.45)', marginBottom: 3 }}>{l}</div>
@@ -434,19 +436,22 @@ export default function WinTeachCoursePage() {
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>Units & topics</div>
-              <span style={{ fontSize: 12.5, color: W.text2 }}>{c ? coursePct(c) : 0}% generated overall</span>
+              <span style={{ fontSize: 12.5, color: W.text2 }}>
+                {overallPct}% generated{totalGenCost > 0 && <> · ${totalGenCost.toFixed(2)} spent</>}
+              </span>
             </div>
 
             {units.map((u, ui) => {
               const unitNum = u.unit_number ?? u.n ?? ui + 1;
               const topics: any[] = u.topics ?? [];
+              const unitDone = topics.filter(t => topicGenState(progById[t.id]).label === 'Complete').length;
               return (
               <div key={unitNum} style={{ border: `1px solid ${W.border}`, borderRadius: 16, marginBottom: 14, overflow: 'hidden', background: '#fff' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: W.surfaceMuted }}>
                   <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand }}>Unit {unitNum}</span>
                   <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15 }}>{u.title}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: W.text2 }}>
-                    {topics.filter(t => topicState(t) === 'ready').length}/{topics.length} ready
+                    {unitDone}/{topics.length} complete
                   </span>
                 </div>
                 {topics.map((t, ti) => (
@@ -475,8 +480,15 @@ export default function WinTeachCoursePage() {
                         )}
                       </div>
                     </div>
-                    <div style={{ width: 120 }}><ProgressBar value={topicPct(t)} /></div>
-                    <TopicBadge topic={t} />
+                    {(() => { const g = topicGenState(progById[t.id]); const cost = progById[t.id]?.cost_usd || 0; return (
+                      <>
+                        <div style={{ width: 110, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <ProgressBar value={g.pct} />
+                          {cost > 0 && <span style={{ fontSize: 10.5, color: W.text3, textAlign: 'right' }}>${cost.toFixed(2)}</span>}
+                        </div>
+                        <Badge variant={g.variant}>{g.label}</Badge>
+                      </>
+                    ); })()}
                     <span style={{ width: 18, height: 18, display: 'inline-flex', color: W.text3 }}><IChevronSvg /></span>
                   </div>
                 ))}

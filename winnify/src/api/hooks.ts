@@ -143,6 +143,15 @@ export const useUnits = (courseId: string) =>
 export const useTopic = (courseId: string, topicId: string) =>
   useQuery({ queryKey: ['courses', courseId, 'topics', topicId], queryFn: () => coursesApi.getTopic(courseId, topicId), enabled: !!courseId && !!topicId });
 
+export const useCourseProgress = (courseId: string) =>
+  useQuery({
+    queryKey: ['courses', courseId, 'gen-progress'],
+    queryFn: () => generationApi.getCourseProgress(courseId),
+    enabled: !!courseId,
+    refetchInterval: 5000,       // live-ish while topics generate
+    staleTime: 3000,
+  });
+
 export const useAddCOs = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({

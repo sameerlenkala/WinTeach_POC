@@ -94,6 +94,12 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
             "phase": "generating_topic_plan", "artifact_types": payload.artifact_types}
 
 
+@router.get("/courses/{course_id}/progress")
+def course_progress(course_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    """Live per-topic generation progress for the course board."""
+    return gen.course_progress(db, course_id)
+
+
 @router.get("/topics/{topic_id}/job")
 def get_topic_job(topic_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     """Latest generation job for a topic (so the studio can resume after reload)."""

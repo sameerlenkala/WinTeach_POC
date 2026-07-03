@@ -68,7 +68,6 @@ import WinTeachDashboard from './pages/winteach/WinTeachDashboard';
 import WinTeachCourses from './pages/winteach/WinTeachCourses';
 import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
 import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
-import WinTeachTopicPage from './pages/winteach/WinTeachTopicPage';
 import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
 import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
@@ -163,7 +162,8 @@ export default function App() {
             <Route path="courses/new" element={<WinTeachCreateCourse />} />
             <Route path="courses/:id/edit" element={<WinTeachCreateCourse />} />
             <Route path="courses/:id" element={<WinTeachCoursePage />} />
-            <Route path="courses/:id/topic/:topicId" element={<WinTeachTopicPage />} />
+            {/* Topic → the generation studio directly (no redundant topic page) */}
+            <Route path="courses/:id/topic/:topicId" element={<WinTeachGenerate />} />
             <Route path="courses/:id/topic/:topicId/generate" element={<WinTeachGenerate />} />
             <Route path="generation" element={<WinTeachGeneration />} />
             <Route path="library" element={<WinTeachLibrary />} />

@@ -54,6 +54,18 @@ export interface GenJobArtifact {
   cost_usd?: number;
 }
 
+export interface TopicProgress {
+  topic_id: string;
+  phase?: string | null;
+  status?: string | null;
+  has_plan: boolean;
+  concept_total: number;
+  notes_ready: number;
+  notes_approved: number;
+  cost_usd: number;
+  est_cost_usd?: number | null;
+}
+
 export interface GenJob {
   id: string;
   topic_id: string;
@@ -101,6 +113,10 @@ export const generationApi = {
 
   /** Latest job for a topic (to resume the studio after reload). Throws 404 if none. */
   getTopicJob: (topicId: string) => api.get<GenJob>(`/generate/topics/${topicId}/job`),
+
+  /** Live per-topic generation progress for a whole course (course board). */
+  getCourseProgress: (courseId: string) =>
+    api.get<TopicProgress[]>(`/generate/courses/${courseId}/progress`),
 
   getArtifact: (jobId: string, type: ArtifactType) =>
     api.get<ArtifactPayload>(`/generate/jobs/${jobId}/artifact/${type}`),
