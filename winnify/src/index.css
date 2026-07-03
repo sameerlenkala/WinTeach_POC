@@ -192,6 +192,85 @@
   --shadow-pop:  0 12px 32px -8px rgba(0,0,0,0.40);
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   DS v4 — system tokens (type · spacing · tints · score bands · motion)
+   Palette anchored on the CE file: brand #5b4bff · teal #00b39a · ink #1c2030.
+   Everything below is consumed by src/components/ds/*.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Type scale — 1.25 modular, Fredoka display / DM Sans body */
+  --fs-display: 40px;  --lh-display: 1.1;   /* score reveals, hero numerals   */
+  --fs-h1:      28px;  --lh-h1:      1.2;
+  --fs-h2:      22px;  --lh-h2:      1.25;
+  --fs-h3:      17px;  --lh-h3:      1.3;
+  --fs-body:    14px;  --lh-body:    1.5;
+  --fs-small:   12.5px;--lh-small:   1.45;
+  --fs-caption: 11px;  --lh-caption: 1.35;  /* uppercase labels, +0.06em      */
+
+  /* Spacing — 4px grid */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 48px;
+
+  /* Tint family (CE) — icon tiles, chips, row accents. Pastel fill + ink-safe fg */
+  --tint-brand-bg:  #f0eeff;  --tint-brand-fg:  #5b4bff;
+  --tint-violet-bg: #efeaff;  --tint-violet-fg: #7b3bff;
+  --tint-teal-bg:   #e7fbf5;  --tint-teal-fg:   #0e7a50;   /* darkened for 4.5:1 text */
+  --tint-blue-bg:   #eef3ff;  --tint-blue-fg:   #2b54c9;
+  --tint-red-bg:    #fdecef;  --tint-red-fg:    #e23b5a;
+  --tint-orange-bg: #fff1e6;  --tint-orange-fg: #c9622b;
+  --tint-pink-bg:   #fdeaf3;  --tint-pink-fg:   #c0357f;
+
+  /* Score bands — dials/bars (non-text graphics ≥3:1 on white) */
+  --score-low:  #e23b5a;   /* 0–49  needs work    */
+  --score-mid:  #c9622b;   /* 50–69 getting there */
+  --score-good: #15a06a;   /* 70–84 strong        */
+  --score-top:  #5b4bff;   /* 85+   excellent     */
+  --score-track: #eceef6;
+
+  /* Motion */
+  --dur-fast: 120ms; --dur-med: 200ms; --dur-slow: 360ms; --dur-reveal: 900ms;
+  --ease-out:    cubic-bezier(0.22, 0.9, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dark {
+  --tint-brand-bg:  rgba(123,109,255,0.16);  --tint-brand-fg:  #a99cff;
+  --tint-violet-bg: rgba(155,107,255,0.16);  --tint-violet-fg: #c2a8ff;
+  --tint-teal-bg:   rgba(0,179,154,0.14);    --tint-teal-fg:   #4fd8bb;
+  --tint-blue-bg:   rgba(90,130,235,0.14);   --tint-blue-fg:   #8fb0ff;
+  --tint-red-bg:    rgba(226,59,90,0.14);    --tint-red-fg:    #ff8ba0;
+  --tint-orange-bg: rgba(201,98,43,0.16);    --tint-orange-fg: #f2a36a;
+  --tint-pink-bg:   rgba(192,53,127,0.14);   --tint-pink-fg:   #f28bc4;
+
+  --score-low:  #ff7d92; --score-mid: #f2a36a;
+  --score-good: #43cf9c; --score-top: #a99cff;
+  --score-track: rgba(255,255,255,0.10);
+}
+
+/* DS keyframes */
+@keyframes ds-rise   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ds-pop    { 0% { transform: scale(0.85); opacity: 0; } 70% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes ds-shimmer{ from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes ds-flame  { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+.ds-rise { animation: ds-rise var(--dur-slow) var(--ease-out) both; }
+.ds-pop  { animation: ds-pop  var(--dur-slow) var(--ease-spring) both; }
+
+.ds-skeleton {
+  background: linear-gradient(90deg, var(--surface-muted) 25%,
+              color-mix(in oklab, var(--surface-muted) 60%, var(--card)) 37%,
+              var(--surface-muted) 63%);
+  background-size: 200% 100%;
+  animation: ds-shimmer 1.4s ease infinite;
+  border-radius: var(--w-r3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-rise, .ds-pop { animation: none; }
+  .ds-skeleton { animation: none; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
 /* ── Base ─────────────────────────────────────────────────────────────────── */
 body {
   font-family: var(--font-sans);
@@ -616,3 +695,73 @@ input:focus, textarea:focus, select:focus {
   color: var(--text) !important;
 }
 .dark .bg-background { background-color: var(--app-bg); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DS v4 — auth + landing utilities (consumed by Landing / SignIn / AcademicLogin)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Icon-in-input field. The wrapper owns the focus ring; the inner input stays bare. */
+.w-field {
+  display: flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 14px;
+  border-radius: var(--w-r4);
+  border: 1.5px solid var(--border);
+  background: var(--input-bg);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow   var(--dur-fast) var(--ease-out),
+              background   var(--dur-fast) var(--ease-out);
+}
+.w-field:focus-within {
+  border-color: var(--brand);
+  background: var(--card);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 15%, transparent);
+}
+.w-field > input {
+  flex: 1; min-width: 0; border: none; background: transparent;
+  font: 500 14px/1.5 var(--font-sans); color: var(--text); outline: none;
+}
+.w-field > input:focus { box-shadow: none; border-color: transparent !important; }
+.w-field > svg { color: var(--text-3); flex-shrink: 0; }
+.w-field:focus-within > svg { color: var(--brand); }
+
+/* Primary / ghost buttons */
+.w-btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; padding: 0 24px; border-radius: var(--w-r4);
+  background: var(--brand); color: var(--brand-fg);
+  font: 600 15px var(--font-display); border: none; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.w-btn-primary:hover:not(:disabled)  { background: var(--brand-hover); }
+.w-btn-primary:active:not(:disabled) { transform: scale(0.98); }
+.w-btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.w-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  height: 48px; padding: 0 20px; border-radius: var(--w-r4);
+  background: var(--card); color: var(--text);
+  font: 500 14px var(--font-sans);
+  border: 1.5px solid var(--border); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.w-btn-ghost:hover:not(:disabled) { border-color: var(--brand); background: var(--surface-muted); }
+.w-btn-ghost:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Hover lift — transform/box-shadow only (compositor-friendly) */
+.lift { transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+
+/* Landing company marquee — pauses on hover, collapses under reduced motion */
+@keyframes w-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.w-marquee-mask {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+}
+.w-marquee { display: flex; width: max-content; gap: 40px; animation: w-marquee 30s linear infinite; }
+.w-marquee:hover { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .w-marquee { animation: none; width: 100%; flex-wrap: wrap; justify-content: center; }
+  .lift:hover { transform: none; }
+}

@@ -1,49 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Sparkles, Users, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+
 type Role = 'hod' | 'faculty' | 'winteach';
 
-const ROLES: { id: Role; label: string; sub: string; initials: string; email: string; dest: string }[] = [
-  { id: 'winteach', label: 'WinTeach Console', sub: 'Content author · AI generation',   initials: 'WT', email: 'content@winnify.in',  dest: '/winteach' },
-  { id: 'hod',      label: 'Head of Department', sub: 'Approvals · Analytics · Faculty', initials: 'HD', email: 'hod@vjit.ac.in',      dest: '/academic/hod' },
-  { id: 'faculty',  label: 'Faculty',             sub: 'Courses · Lectures · Attendance', initials: 'FC', email: 'faculty@vjit.ac.in',  dest: '/academic/faculty' },
+const ROLES: { id: Role; label: string; sub: string; Icon: React.ElementType; email: string; dest: string }[] = [
+  { id: 'winteach', Icon: Sparkles,      label: 'WinTeach Console',   sub: 'Content author · AI generation',   email: 'content@winnify.in', dest: '/winteach' },
+  { id: 'hod',      Icon: Users,         label: 'Head of Department', sub: 'Approvals · Analytics · Faculty',  email: 'hod@vjit.ac.in',     dest: '/academic/hod' },
+  { id: 'faculty',  Icon: GraduationCap, label: 'Faculty',            sub: 'Courses · Lectures · Attendance',  email: 'faculty@vjit.ac.in', dest: '/academic/faculty' },
 ];
 
-/* ── token shortcuts — CE lesson template palette ── */
-const T = {
-  brand:      '#5b4bff',
-  brandBright:'#7b3bff',
-  brand2:     '#00b39a',
-  wordmark:   '#F6A623',
-  bg:         '#f6f7fb',
-  card:       '#ffffff',
-  surface:    '#f6f7fb',
-  border:     '#e9eaf2',
-  borderStr:  '#d8d9e8',
-  text:       '#1c2030',
-  text2:      '#6b7080',
-  text3:      'rgba(28,32,48,.45)',
-  pillBg:     '#eef3ff',
-  green:      '#15a06a',
-  greenBg:    '#e7fbf5',
-  shadow:     '0 1px 2px rgba(20,20,50,.04),0 8px 24px -12px rgba(60,50,140,.12)',
-  shadowPop:  '0 12px 32px -8px rgba(91,75,255,.20)',
-  fontD:      "'Fredoka',system-ui,sans-serif",
-  fontS:      "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
-  r4:         '12px',
-  r5:         '20px',
-  r6:         '48px',
-  gradient:   'linear-gradient(135deg,#5b4bff,#7b3bff 58%,#00b39a)',
-};
+/* Demo accounts seed themselves server-side with this password on first login. */
+const DEMO_PASSWORD = 'demo@123';
+
+const rise = (i: number): React.CSSProperties => ({ animationDelay: `${i * 80}ms` });
 
 export default function AcademicLogin() {
   const navigate = useNavigate();
   const { signIn } = useAuth();
 
-  const [role,    setRole]    = useState<Role>('winteach');
-  const [email,   setEmail]   = useState('content@winnify.in');
-  const [password,setPassword]= useState('demo123');
+  const [role,      setRole]      = useState<Role>('winteach');
+  const [email,     setEmail]     = useState('content@winnify.in');
+  const [password,  setPassword]  = useState(DEMO_PASSWORD);
   const [showPw,    setShowPw]    = useState(false);
   const [error,     setError]     = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -73,184 +52,171 @@ export default function AcademicLogin() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: T.bg, fontFamily: T.fontS, padding: '24px',
+      background: 'var(--app-bg)', fontFamily: 'var(--font-sans)', padding: 24,
     }}>
-      <div style={{
-        display: 'flex', width: '100%', maxWidth: 920, borderRadius: T.r5,
-        boxShadow: T.shadowPop, overflow: 'hidden', background: T.card,
-        minHeight: 560,
+      <div className="ds-rise" style={{
+        display: 'flex', width: '100%', maxWidth: 920, borderRadius: 'var(--w-r5)',
+        boxShadow: 'var(--shadow-pop)', overflow: 'hidden', background: 'var(--card)',
+        border: '1px solid var(--border)', minHeight: 560,
       }}>
 
         {/* ── Left brand panel ── */}
-        <div style={{
-          flex: '0 0 300px', background: T.gradient,
-          padding: '36px 28px', display: 'flex', flexDirection: 'column', color: '#fff',
+        <div className="hidden md:flex" style={{
+          flex: '0 0 320px', background: 'var(--app-bg-grad)',
+          padding: '36px 28px', flexDirection: 'column', color: '#fff',
+          position: 'relative', overflow: 'hidden',
         }}>
-          {/* Wordmark */}
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 26, color: T.wordmark, letterSpacing: '.2px' }}>
+          {/* decorative rings */}
+          <div aria-hidden style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.12)', top: -110, right: -90 }} />
+          <div aria-hidden style={{ position: 'absolute', width: 170, height: 170, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.08)', bottom: -60, left: -50 }} />
+
+          {/* wordmark */}
+          <div style={{ marginBottom: 32, position: 'relative' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, color: '#F6A623', letterSpacing: '0.02em' }}>
               Winnify
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.65)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>
               Academic Console
             </div>
           </div>
 
-          {/* Role selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-            <div style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 4 }}>
+          {/* role selector */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, position: 'relative' }} role="tablist" aria-label="Sign in as">
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-caption)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>
               Sign in as
             </div>
-            {ROLES.map(r => {
+            {ROLES.map((r, i) => {
               const isActive = role === r.id;
               return (
-                <button key={r.id} onClick={() => handleRoleSwitch(r)} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 14px', borderRadius: T.r4, border: 'none', cursor: 'pointer',
-                  background: isActive ? 'rgba(255,255,255,.18)' : 'transparent',
-                  boxShadow: isActive ? '0 0 0 1.5px rgba(255,255,255,.35)' : 'none',
-                  transition: 'background .12s',
-                  textAlign: 'left',
-                }}>
+                <button key={r.id} onClick={() => handleRoleSwitch(r)} role="tab" aria-selected={isActive}
+                  className="ds-rise"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, minHeight: 60,
+                    padding: '12px 14px', borderRadius: 'var(--w-r4)', border: 'none', cursor: 'pointer',
+                    background: isActive ? 'rgba(255,255,255,0.18)' : 'transparent',
+                    boxShadow: isActive ? 'inset 0 0 0 1.5px rgba(255,255,255,0.40)' : 'none',
+                    transition: 'background var(--dur-fast) var(--ease-out)',
+                    textAlign: 'left', ...rise(i + 1),
+                  }}
+                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
                   <div style={{
-                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                    background: isActive ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)',
+                    width: 38, height: 38, borderRadius: 'var(--w-r3)', flexShrink: 0,
+                    background: isActive ? '#fff' : 'rgba(255,255,255,0.14)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: T.fontD, fontWeight: 600, fontSize: 13, color: '#fff',
-                  }}>{r.initials}</div>
+                    transition: 'background var(--dur-fast) var(--ease-out)',
+                  }}>
+                    <r.Icon size={17} color={isActive ? '#5b4bff' : '#fff'} />
+                  </div>
                   <div>
-                    <div style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 14, color: '#fff', lineHeight: 1.2 }}>{r.label}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 }}>{r.sub}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fff', lineHeight: 1.2 }}>{r.label}</div>
+                    <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.62)', marginTop: 2 }}>{r.sub}</div>
                   </div>
                 </button>
               );
             })}
           </div>
 
-          {/* Footer */}
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', marginTop: 32 }}>
+          <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.45)', marginTop: 32, position: 'relative' }}>
             Powered by Winnify · campx.in
           </div>
         </div>
 
         {/* ── Right form panel ── */}
-        <div style={{ flex: 1, padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ flex: 1, padding: 'clamp(28px, 5vw, 44px) clamp(24px, 4vw, 40px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
 
-          {/* Header */}
+          {/* header */}
           <div style={{ marginBottom: 28 }}>
             <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: T.pillBg, borderRadius: T.r6, padding: '4px 14px',
-              fontFamily: T.fontD, fontWeight: 500, fontSize: 13, color: T.brand, marginBottom: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: 'var(--tint-brand-bg)', borderRadius: 999, padding: '4px 14px',
+              fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'var(--fs-small)',
+              color: 'var(--tint-brand-fg)', marginBottom: 14,
             }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.brand2 }} />
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-2)' }} />
               {active.label}
             </div>
-            <h1 style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 26, color: T.text, lineHeight: 1.15, marginBottom: 6 }}>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h1)', color: 'var(--text)', lineHeight: 'var(--lh-h1)', margin: '0 0 6px' }}>
               Welcome back
             </h1>
-            <p style={{ fontSize: 14, color: T.text2 }}>Sign in to your {active.label} account</p>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)', margin: 0 }}>Sign in to your {active.label} account</p>
           </div>
 
-          {/* Error */}
           {error && (
-            <div style={{
-              background: 'rgba(220,33,51,.08)', border: '1px solid rgba(220,33,51,.2)',
-              borderRadius: T.r4, padding: '10px 14px', fontSize: 13,
-              color: '#DC2133', marginBottom: 18,
+            <div role="alert" style={{
+              background: 'var(--tint-red-bg)', color: 'var(--tint-red-fg)',
+              border: '1px solid color-mix(in oklab, var(--tint-red-fg) 25%, transparent)',
+              borderRadius: 'var(--w-r4)', padding: '10px 14px',
+              fontSize: 'var(--fs-small)', marginBottom: 18,
             }}>{error}</div>
           )}
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Email */}
-            <div>
-              <label style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 13, color: T.text, display: 'block', marginBottom: 6 }}>
+            {/* email */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-small)', color: 'var(--text)' }}>
                 Email address
               </label>
-              <input
-                type="email" required value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@institution.edu"
-                style={{
-                  width: '100%', height: 46, padding: '0 14px',
-                  background: T.surface, border: '1px solid transparent',
-                  borderRadius: T.r4, fontFamily: T.fontS, fontSize: 14,
-                  color: T.text, outline: 'none', transition: 'border .12s, background .12s',
-                }}
-                onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brand; }}
-                onBlur={e => { e.target.style.background = T.surface; e.target.style.borderColor = 'transparent'; }}
-              />
+              <div className="w-field">
+                <input
+                  type="email" required value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@institution.edu"
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            {/* Password */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <label style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 13, color: T.text }}>Password</label>
-                <button type="button" style={{ fontSize: 12.5, color: T.brand, background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.fontS }}>
+            {/* password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-small)', color: 'var(--text)' }}>Password</label>
+                <button type="button" style={{ fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', padding: 0 }}>
                   Forgot password?
                 </button>
               </div>
-              <div style={{ position: 'relative' }}>
+              <div className="w-field">
                 <input
                   type={showPw ? 'text' : 'password'} required value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  style={{
-                    width: '100%', height: 46, padding: '0 44px 0 14px',
-                    background: T.surface, border: '1px solid transparent',
-                    borderRadius: T.r4, fontFamily: T.fontS, fontSize: 14,
-                    color: T.text, outline: 'none', transition: 'border .12s, background .12s',
-                  }}
-                  onFocus={e => { e.target.style.background = '#fff'; e.target.style.borderColor = T.brand; }}
-                  onBlur={e => { e.target.style.background = T.surface; e.target.style.borderColor = 'transparent'; }}
+                  autoComplete="current-password"
                 />
-                <button type="button" onClick={() => setShowPw(!showPw)} style={{
-                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer', color: T.text3,
-                  display: 'flex', alignItems: 'center',
-                }}>
-                  {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Hide password' : 'Show password'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            {/* Submit */}
-            <button type="submit" disabled={isLoading} style={{
-              height: 46, borderRadius: T.r4, background: T.brand, color: '#fff',
-              border: 'none', fontFamily: T.fontD, fontWeight: 500, fontSize: 15,
-              cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.75 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'background .12s', marginTop: 4,
-            }}
-              onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = '#4a3aee'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.brand; }}
-            >
-              {isLoading ? <><Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> Signing in…</> : 'Sign in'}
+            {/* submit */}
+            <button type="submit" disabled={isLoading} className="w-btn-primary" style={{ marginTop: 4 }}>
+              {isLoading ? <><Loader2 size={16} className="animate-spin" /> Signing in…</> : 'Sign in'}
             </button>
           </form>
 
-          {/* Demo credentials notice */}
+          {/* demo notice */}
           <div style={{
             marginTop: 24, padding: '12px 16px',
-            background: T.pillBg, borderRadius: T.r4,
+            background: 'var(--tint-brand-bg)', borderRadius: 'var(--w-r4)',
             display: 'flex', flexDirection: 'column', gap: 4,
           }}>
-            <div style={{ fontFamily: T.fontD, fontWeight: 600, fontSize: 12.5, color: T.brand }}>Demo credentials pre-filled</div>
-            <div style={{ fontSize: 12, color: T.text2 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)' }}>Demo credentials pre-filled</div>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-2)' }}>
               Switch role on the left to auto-fill the matching account.
             </div>
           </div>
 
-          {/* Back link */}
-          <div style={{ marginTop: 28, fontSize: 13, color: T.text3 }}>
+          {/* back link */}
+          <div style={{ marginTop: 28, fontSize: 'var(--fs-small)', color: 'var(--text-3)' }}>
             Student?{' '}
-            <a href="/signin" style={{ color: T.brand, textDecoration: 'none', fontWeight: 500 }}>
+            <a href="/signin" style={{ color: 'var(--tint-brand-fg)', textDecoration: 'none', fontWeight: 500 }}>
               Go to student login →
             </a>
           </div>
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

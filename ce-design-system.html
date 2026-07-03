@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CE Design System · Winnify</title>
+<style>
+/* ===================== WINNIFY CE DESIGN SYSTEM =====================
+   All tokens and component styles extracted from communicative-english-lesson-template.html
+   Use this file as a live reference when authoring new lessons.
+================================================================== */
+
+/* ── DESIGN TOKENS ── */
+:root {
+  --ce-card:    #fff;
+  --ce-ink:     #1c2030;
+  --ce-muted:   #6b7080;
+  --ce-brand:   #5b4bff;
+  --ce-brand2:  #00b39a;
+  --ce-warn:    #e23b5a;
+  --ce-ok:      #15a06a;
+  --ce-line:    #e9eaf2;
+  --ce-soft:    #f6f7fb;
+  --ce-radius:  18px;
+}
+
+/* ── BASE ── */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ce-ink);
+  line-height: 1.6;
+  background: #f2f3f8;
+  margin: 0;
+}
+
+/* ── DOC LAYOUT ── */
+.ds-wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.ds-header { text-align: center; padding: 48px 0 40px; }
+.ds-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; margin: 0 0 8px; color: var(--ce-ink); }
+.ds-header p { color: var(--ce-muted); font-size: 1rem; margin: 0; }
+.ds-header__badge { display: inline-block; background: var(--ce-brand); color: #fff; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 5px 14px; border-radius: 999px; margin-bottom: 16px; }
+.ds-nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 48px; }
+.ds-nav a { color: var(--ce-brand); font-size: .84rem; font-weight: 600; text-decoration: none; background: #fff; border: 1px solid var(--ce-line); padding: 6px 14px; border-radius: 999px; transition: .12s; }
+.ds-nav a:hover { background: var(--ce-brand); color: #fff; border-color: var(--ce-brand); }
+
+.ds-section { background: #fff; border: 1px solid var(--ce-line); border-radius: var(--ce-radius); padding: 32px; margin: 0 0 28px; }
+.ds-section-title { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; color: var(--ce-brand); margin: 0 0 6px; }
+.ds-section-h2 { font-size: 1.3rem; font-weight: 800; color: var(--ce-ink); margin: 0 0 24px; padding-bottom: 16px; border-bottom: 1px solid var(--ce-line); }
+.ds-subsection { margin: 28px 0 0; }
+.ds-subsection-h3 { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ce-muted); margin: 0 0 14px; }
+.ds-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.ds-col { flex: 1; min-width: 200px; }
+.ds-label { font-size: .68rem; font-weight: 700; color: var(--ce-muted); text-transform: uppercase; letter-spacing: .08em; margin-top: 8px; display: block; }
+.ds-code { display: inline-block; font-family: "SF Mono", "Fira Code", monospace; font-size: .78rem; background: var(--ce-soft); border: 1px solid var(--ce-line); border-radius: 6px; padding: 2px 7px; color: var(--ce-ink); margin-top: 4px; }
+.ds-divider { border: none; border-top: 1px solid var(--ce-line); margin: 24px 0; }
+.ds-note { background: #fff8ec; border: 1px solid #f0d9b5; border-radius: 10px; padding: 10px 14px; font-size: .87rem; color: #7a4a10; margin-bottom: 16px; }
+.ds-note b { color: #5a3300; }
+
+/* ===================== CE COMPONENT STYLES (verbatim from template) ===================== */
+
+.ce-lesson {
+  --ce-card: #fff; --ce-ink: #1c2030; --ce-muted: #6b7080; --ce-brand: #5b4bff; --ce-brand2: #00b39a;
+  --ce-warn: #e23b5a; --ce-ok: #15a06a; --ce-line: #e9eaf2; --ce-soft: #f6f7fb; --ce-radius: 18px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ce-ink); line-height: 1.6; box-sizing: border-box;
+}
+.ce-lesson *, .ce-lesson *::before, .ce-lesson *::after { box-sizing: border-box; }
+.ce-h2 { font-size: 1.32rem; margin: 0 0 .35rem; letter-spacing: -.01em; }
+.ce-lead { color: var(--ce-muted); font-size: .95rem; margin: 0 0 1.1rem; }
+.ce-muted { color: var(--ce-muted); font-size: .92rem; }
+.ce-byline { font-weight: 400; font-style: italic; color: var(--ce-muted); font-size: .92rem; }
+.ce-part { font-size: 1.02rem; color: var(--ce-brand); margin: 22px 0 6px; font-weight: 700; }
+.ce-prose { max-width: 68ch; }
+.ce-prose p { margin: .85rem 0; font-size: 1.02rem; line-height: 1.75; }
+
+/* Cards */
+.ce-card {
+  background: var(--ce-card); border: 1px solid var(--ce-line); border-radius: var(--ce-radius);
+  padding: 28px 32px; margin: 18px 0; box-shadow: 0 2px 10px rgba(28,32,48,.04);
+}
+.ce-section--done { border-color: #bfe9d6; }
+
+/* Section tags */
+.ce-block__tag { display: inline-block; font-size: .74rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; margin-bottom: 12px; }
+.ce-tag--read    { background: #eef3ff; color: #2b54c9; }
+.ce-tag--listen  { background: #e7fbf5; color: #08907b; }
+.ce-tag--speak   { background: #efeaff; color: #5b4bff; }
+.ce-tag--grammar { background: #fff1e6; color: #c9622b; }
+.ce-tag--vocab   { background: #fdeaf3; color: #c0357f; }
+.ce-tag--write   { background: #eefbe9; color: #3a8f1d; }
+
+/* Buttons */
+.ce-btn { border: none; border-radius: 11px; padding: 11px 18px; font-size: .92rem; font-weight: 600; cursor: pointer; margin-top: 0; color: #fff; background: var(--ce-brand); font-family: inherit; }
+.ce-btn--check { background: var(--ce-brand); }
+.ce-btn--check:hover { filter: brightness(1.07); }
+.ce-btn--speak { background: linear-gradient(135deg, #5b4bff, #7b3bff); }
+.ce-btn--speak:hover { filter: brightness(1.07); }
+.ce-btn--big { display: inline-block; padding: 13px 22px; font-size: 1rem; background: linear-gradient(135deg, #5b4bff, #00b39a); }
+.ce-btn--back { background: #eceef6; color: var(--ce-ink); }
+.ce-btn--back:hover { background: #e2e5f2; }
+
+/* Flash cards */
+.ce-flash { perspective: 1200px; margin: 14px 0 6px; max-width: 560px; cursor: pointer; outline: none; }
+.ce-flash__inner { position: relative; width: 100%; min-height: 130px; transition: transform .55s cubic-bezier(.4,.2,.2,1); transform-style: preserve-3d; }
+.ce-flash--flipped .ce-flash__inner { transform: rotateY(180deg); }
+.ce-flash__face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--ce-line); }
+.ce-flash__front { background: linear-gradient(135deg, #faf9ff, #eef3ff); }
+.ce-flash__back { background: linear-gradient(135deg, #eafaf3, #e7fbf5); transform: rotateY(180deg); }
+.ce-flash__tag { font-size: .7rem; font-weight: 700; color: var(--ce-brand); margin-bottom: 8px; letter-spacing: .03em; }
+.ce-flash__back .ce-flash__tag { color: var(--ce-ok); }
+.ce-flash__q { margin: 0; font-weight: 600; font-size: 1.02rem; }
+.ce-flash__a { margin: 0; font-size: .98rem; line-height: 1.6; }
+.ce-flash__hint { margin-top: 10px; font-size: .74rem; color: var(--ce-muted); }
+.ce-flash--done .ce-flash__front { box-shadow: inset 0 0 0 2px #bfe9d6; }
+
+/* Quiz */
+.ce-quiz { margin: 16px 0; padding-top: 16px; border-top: 1px solid var(--ce-line); }
+.ce-quiz__q { margin: 0 0 10px; font-weight: 500; }
+.ce-quiz__opts { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.ce-opt { width: 100%; text-align: left; background: #fff; border: 1.5px solid var(--ce-line); padding: 13px 16px; border-radius: 11px; cursor: pointer; font-size: .96rem; transition: .15s; font-family: inherit; }
+.ce-opt:hover { border-color: var(--ce-brand); background: #f8f8ff; }
+.ce-opt--right { border-color: var(--ce-ok); background: #eafaf3; }
+.ce-opt--wrong { border-color: var(--ce-warn); background: #fdecef; }
+.ce-opt[disabled] { cursor: default; opacity: .85; }
+.ce-quiz__fb { margin: 10px 0 0; font-size: .9rem; font-weight: 600; min-height: 1.1em; }
+.ce-quiz__fb--ok { color: var(--ce-ok); }
+.ce-quiz__fb--no { color: var(--ce-warn); }
+
+/* Topics & Level map */
+.ce-topics, .ce-levelmap { display: grid; gap: 11px; margin-top: 6px; }
+.ce-topic, .ce-level {
+  display: flex; align-items: center; gap: 13px; text-align: left; width: 100%;
+  background: #fff; border: 1.5px solid var(--ce-line); border-radius: 14px; padding: 14px 16px;
+  cursor: pointer; transition: .15s; font-family: inherit; color: inherit;
+}
+.ce-topic:hover, .ce-level:hover { border-color: var(--ce-brand); box-shadow: 0 6px 18px rgba(91,75,255,.12); transform: translateY(-1px); }
+.ce-topic__num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ce-brand2); color: #fff; font-weight: 700; flex: none; }
+.ce-topic__body, .ce-level__body { flex: 1; display: flex; flex-direction: column; }
+.ce-topic__body b, .ce-level__body b { font-size: .98rem; }
+.ce-topic__body small, .ce-level__body small { color: var(--ce-muted); font-size: .8rem; }
+.ce-topic__status, .ce-level__status { color: var(--ce-brand); font-weight: 700; flex: none; }
+.ce-topic--done, .ce-level--done { border-color: #bfe9d6; background: #f4fcf8; }
+.ce-topic--done .ce-topic__status, .ce-level--done .ce-level__status { color: var(--ce-ok); }
+.ce-topic--done .ce-topic__num { background: var(--ce-ok); }
+.ce-level__badge { font-size: 1.4rem; width: 38px; text-align: center; flex: none; color: var(--ce-brand); }
+
+/* Page head */
+.ce-page__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--ce-line); }
+.ce-page__kicker { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; font-weight: 700; color: var(--ce-brand); }
+.ce-page__title { margin: 3px 0 0; font-size: 1.12rem; font-weight: 700; color: var(--ce-ink); }
+
+/* Timer */
+.ce-timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05rem; background: #f0eeff; color: var(--ce-brand); border-radius: 10px; padding: 7px 13px; }
+.ce-timer--warn { background: #fdecef; color: var(--ce-warn); }
+
+/* Tip card */
+.ce-tipcard { display: flex; gap: 10px; align-items: flex-start; background: #eef3ff; border: 1px solid #d8e3fb; border-radius: 12px; padding: 11px 14px; font-size: .9rem; }
+.ce-tipcard p { margin: 0; line-height: 1.5; }
+.ce-tipcard b { color: #22417f; }
+
+/* Example card */
+.ce-example { display: flex; gap: 10px; align-items: flex-start; background: #fff7ec; border: 1px solid #f0d9b5; border-radius: 12px; padding: 11px 14px; font-size: .92rem; }
+.ce-example__tag { flex: none; background: #c9622b; color: #fff; font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 8px; border-radius: 999px; margin-top: 1px; }
+.ce-example p { margin: 0; line-height: 1.5; }
+
+/* XP bar */
+.ce-xp { margin: 0 0 14px; font-size: .82rem; color: var(--ce-muted); font-weight: 600; }
+.ce-xp__track { height: 9px; background: #eceef6; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+.ce-xp__track > i { display: block; height: 100%; background: linear-gradient(90deg, #5b4bff, #00b39a); transition: width .4s ease; }
+
+/* Audio */
+.ce-audio { display: flex; align-items: center; gap: 13px; background: #fff; border: 1px solid var(--ce-line); border-radius: 12px; padding: 11px 15px; }
+.ce-audio__btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: var(--ce-brand2); color: #fff; font-size: 1.05rem; cursor: pointer; flex: none; }
+.ce-audio__track { flex: 1; height: 8px; background: #dfe1ee; border-radius: 999px; overflow: hidden; }
+.ce-audio__fill { height: 100%; width: 40%; background: var(--ce-brand2); }
+.ce-audio__time { font-variant-numeric: tabular-nums; font-size: .82rem; color: var(--ce-muted); min-width: 36px; }
+.ce-audio__speed { border: 1px solid var(--ce-line); background: #fff; border-radius: 8px; padding: 5px 9px; cursor: pointer; font-size: .8rem; font-family: inherit; }
+
+/* WinSpeak */
+.ce-ws { background: #fff; border: 1px solid #e2dcff; border-radius: 13px; padding: 16px 18px; }
+.ce-ws__prompt { margin: 0 0 12px; }
+.ce-ws__result { margin-top: 14px; background: #f7f5ff; border: 1px solid #e2dcff; border-radius: 11px; padding: 14px; }
+.ce-ws__rubric { list-style: none; display: flex; gap: 7px; flex-wrap: wrap; padding: 0; margin: 8px 0 0; }
+.ce-ws__rubric li { background: #efeaff; color: #5b4bff; font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.ce-ws__bar { height: 11px; background: #eee; border-radius: 999px; overflow: hidden; margin: 7px 0 10px; }
+.ce-ws__bar > i { display: block; height: 100%; background: linear-gradient(90deg, #5b4bff, #00b39a); }
+.ce-winspeak-wrap { background: linear-gradient(180deg,#faf9ff,#fff); border: 1px solid #e7e2ff; border-radius: var(--ce-radius); padding: 24px; }
+
+/* Drag & drop */
+.ce-dnd__sentence { font-size: 1.06rem; line-height: 2.2; background: var(--ce-soft); border: 1px solid var(--ce-line); border-radius: 13px; padding: 16px 18px; }
+.ce-slot { display: inline-block; min-width: 92px; border-bottom: 2px dashed var(--ce-brand); margin: 0 3px; padding: 2px 8px; text-align: center; vertical-align: middle; border-radius: 6px 6px 0 0; background: #fff; }
+.ce-slot.right { border-color: var(--ce-ok); background: #eafaf3; border-bottom-style: solid; }
+.ce-slot.wrong { border-color: var(--ce-warn); background: #fdecef; border-bottom-style: solid; }
+.ce-dnd__pool { display: flex; flex-wrap: wrap; gap: 9px; margin: 14px 0; }
+.ce-chip { display: inline-block; background: #fff; border: 1.5px solid var(--ce-brand); color: var(--ce-brand); border-radius: 10px; padding: 8px 14px; font-weight: 600; cursor: grab; user-select: none; font-size: .95rem; transition: .12s; font-family: inherit; }
+.ce-chip:hover { background: #f0eeff; }
+.ce-chip.used { opacity: .35; pointer-events: none; }
+
+/* Memory match */
+.ce-memory { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin: 10px 0; }
+.ce-mcard { perspective: 800px; height: 92px; cursor: pointer; }
+.ce-mcard__in { position: relative; width: 100%; height: 100%; transition: transform .4s; transform-style: preserve-3d; }
+.ce-mcard.flip .ce-mcard__in, .ce-mcard.done .ce-mcard__in { transform: rotateY(180deg); }
+.ce-mcard__f { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; font-size: .86rem; font-weight: 600; }
+.ce-mcard__front { background: linear-gradient(135deg,#5b4bff,#7b3bff); color: #fff; font-size: 1.5rem; }
+.ce-mcard__back { background: #fff; border: 1.5px solid var(--ce-brand); color: var(--ce-ink); transform: rotateY(180deg); }
+.ce-mcard.done .ce-mcard__back { border-color: var(--ce-ok); background: #eafaf3; }
+
+/* Passage */
+.ce-passage { background: var(--ce-soft); border: 1px solid var(--ce-line); border-radius: 13px; padding: 14px 18px; max-width: 70ch; }
+.ce-passage p { margin: .55rem 0; line-height: 1.75; font-size: 1.01rem; }
+
+/* Scan sentences */
+.ce-scansent { text-align: left; background: #fff; border: 1.5px solid var(--ce-line); border-radius: 10px; padding: 11px 14px; cursor: pointer; font-size: 1rem; font-family: inherit; line-height: 1.5; transition: .12s; color: inherit; display: block; width: 100%; margin-bottom: 7px; }
+.ce-scansent:hover { border-color: var(--ce-brand); background: #f8f8ff; }
+.ce-scansent.right { border-color: var(--ce-ok); background: #eafaf3; }
+
+/* Write block */
+.ce-write { width: 100%; border: 1.5px solid var(--ce-line); border-radius: 12px; padding: 13px; font-size: 1rem; font-family: inherit; resize: vertical; }
+.ce-write:focus { outline: none; border-color: var(--ce-brand); }
+.ce-write__bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.ce-write__bar span { font-size: .82rem; color: var(--ce-muted); }
+.ce-write__checklist { margin: 12px 0 0; padding-left: 1.2rem; font-size: .88rem; }
+.ce-write__checklist li { margin: .3rem 0; color: var(--ce-warn); }
+.ce-write__checklist li.ce-pass { color: var(--ce-ok); }
+
+/* Results */
+.ce-results { text-align: center; background: linear-gradient(135deg,#faf9ff,#e7fbf5); border: 1px solid var(--ce-line); border-radius: 16px; padding: 24px; }
+.ce-results__score { font-size: 2.2rem; font-weight: 800; color: var(--ce-brand); }
+.ce-results__msg { color: var(--ce-muted); margin: 6px 0 14px; }
+
+/* Home dashboard card */
+.ce-hcard { display: flex; align-items: center; gap: 14px; text-align: left; background: #fff; border: 1px solid var(--ce-line); border-radius: 14px; padding: 15px 16px; cursor: pointer; transition: .15s; font: inherit; color: inherit; width: 100%; }
+.ce-hcard:hover { border-color: var(--ce-brand); box-shadow: 0 6px 18px rgba(30,30,60,.07); transform: translateY(-1px); }
+.ce-hcard__ico { flex: none; width: 40px; height: 40px; border-radius: 11px; background: #efeefe; display: flex; align-items: center; justify-content: center; color: var(--ce-brand); font-size: 1.4rem; }
+.ce-hcard.is-done .ce-hcard__ico { background: #e7f7ef; color: var(--ce-ok); }
+.ce-hcard__body { flex: 1; min-width: 0; }
+.ce-hcard__name { font-weight: 700; font-size: .94rem; color: var(--ce-ink); }
+.ce-hcard__sum { display: block; font-size: .8rem; color: var(--ce-muted); margin: 3px 0 9px; line-height: 1.4; }
+.ce-hcard__bar { display: block; height: 5px; background: #eceef6; border-radius: 99px; overflow: hidden; }
+.ce-hcard__bar i { display: block; height: 100%; background: var(--ce-brand); border-radius: 99px; }
+.ce-hcard.is-done .ce-hcard__bar i { background: var(--ce-ok); }
+.ce-hcard__cta { flex: none; color: var(--ce-muted); font-size: 1.1rem; align-self: center; }
+
+/* Top bar */
+.ce-top { display: flex; align-items: center; gap: 14px; padding: 16px 18px 12px; background: #fff; border-bottom: 1px solid var(--ce-line); border-radius: var(--ce-radius) var(--ce-radius) 0 0; }
+.ce-top__btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--ce-line); background: #fff; color: var(--ce-ink); font: inherit; font-size: .84rem; font-weight: 600; padding: 9px 14px; border-radius: 10px; cursor: pointer; transition: .15s; flex: none; }
+.ce-top__btn:hover { border-color: var(--ce-brand); color: var(--ce-brand); }
+.ce-top__title { flex: 1; text-align: center; }
+.ce-top__kicker { font-size: .62rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ce-muted); font-weight: 700; }
+.ce-top__name { font-size: 1rem; font-weight: 700; color: var(--ce-ink); }
+.ce-top__pct { font-size: 1rem; font-weight: 800; color: var(--ce-brand); }
+.ce-topbar { height: 4px; background: var(--ce-line); overflow: hidden; }
+.ce-topbar__fill { display: block; height: 100%; background: var(--ce-brand); border-radius: 99px; }
+
+/* Dock */
+.ce-dock-demo { background: rgba(255,255,255,.96); border: 1px solid var(--ce-line); border-radius: 14px; box-shadow: 0 8px 28px rgba(20,20,45,.10); }
+.ce-dock__inner { display: flex; align-items: center; gap: 14px; padding: 12px 18px; }
+.ce-dock__btn { display: inline-flex; align-items: center; gap: 7px; flex: none; border: 1px solid var(--ce-line); background: #fff; color: var(--ce-ink); font: inherit; font-size: .92rem; font-weight: 600; padding: 11px 18px; border-radius: 11px; cursor: pointer; transition: .15s; }
+.ce-dock__btn:hover { border-color: var(--ce-brand); color: var(--ce-brand); }
+.ce-dock__btn--next { background: var(--ce-brand); border-color: var(--ce-brand); color: #fff; margin-left: auto; }
+.ce-dock__mid { flex: 1; text-align: center; }
+.ce-dock__step { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ce-muted); font-weight: 700; }
+.ce-dock__label { font-size: .85rem; font-weight: 600; color: var(--ce-ink); }
+
+/* Parts of speech */
+.ce-pos__sentence { font-size: 1.08rem; line-height: 2.6; background: var(--ce-soft); border: 1px solid var(--ce-line); border-radius: 13px; padding: 16px 18px; }
+.ce-posword { display: inline-block; border: 1.5px solid transparent; border-radius: 8px; padding: 1px 7px; margin: 0 1px; cursor: pointer; transition: .12s; vertical-align: middle; }
+.ce-posword:hover { background: #fff; border-color: var(--ce-line); }
+.ce-posword__tag { display: block; font-size: .6rem; font-weight: 700; line-height: 1; margin-top: 1px; text-align: center; letter-spacing: .02em; }
+.ce-posword.is-noun { background: #eef3ff; border-color: #2b54c9; color: #2b54c9; }
+.ce-posword.is-verb { background: #eafaf3; border-color: #15a06a; color: #15a06a; }
+.ce-posword.is-adjective { background: #fff1e6; border-color: #c9622b; color: #c9622b; }
+.ce-posword.is-adverb { background: #efeaff; border-color: #7b3bff; color: #7b3bff; }
+
+/* Sort */
+.ce-sort__target { font-size: 1.1rem; margin-bottom: 12px; }
+.ce-sort__target b { color: var(--ce-brand); }
+.ce-sort__buckets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.ce-sort__bucket { border: 1.5px solid var(--ce-line); border-radius: 13px; overflow: hidden; }
+.ce-sort__label { background: var(--ce-soft); padding: 8px 12px; font-weight: 700; font-size: .86rem; text-align: center; border-bottom: 1px solid var(--ce-line); }
+.ce-sort__bucket[data-bucket="syn"] .ce-sort__label { color: #15a06a; }
+.ce-sort__bucket[data-bucket="ant"] .ce-sort__label { color: #c0357f; }
+.ce-sort__zone { min-height: 62px; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; align-content: flex-start; }
+.ce-sort__pool { display: flex; flex-wrap: wrap; gap: 8px; min-height: 44px; }
+.ce-sortchip { background: #fff; border: 1.5px solid var(--ce-brand); color: var(--ce-brand); border-radius: 10px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: .95rem; font-family: inherit; }
+
+/* Word tile */
+.ce-wtile { display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1.5px solid var(--ce-brand); color: var(--ce-brand); border-radius: 10px; padding: 8px 13px; font-weight: 600; font-size: .96rem; cursor: pointer; font-family: inherit; }
+.ce-wtile:hover { background: #f0eeff; }
+
+/* Mono icons */
+.ce-ico { width: 1.1em; height: 1.1em; display: inline-block; vertical-align: -.16em; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ce-block__tag .ce-ico { width: 1.05em; height: 1.05em; margin-right: 3px; vertical-align: -.13em; }
+
+/* Home chip */
+.ce-home__chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--ce-line); color: var(--ce-ink); font-size: .78rem; font-weight: 600; padding: 7px 12px; border-radius: 999px; }
+
+/* Timed quiz item */
+.ce-q { background: var(--ce-soft); border: 1px solid var(--ce-line); border-radius: 13px; padding: 14px 16px; }
+.ce-q__q { margin: 0 0 10px; font-weight: 600; }
+.ce-q__opts { display: grid; gap: 8px; }
+.ce-q__opts button { text-align: left; background: #fff; border: 1.5px solid var(--ce-line); border-radius: 10px; padding: 11px 14px; cursor: pointer; font-size: .94rem; font-family: inherit; transition: .12s; }
+.ce-q__opts button:hover { border-color: var(--ce-brand); }
+.ce-q__opts button.sel { border-color: var(--ce-brand); background: #f0eeff; font-weight: 600; }
+.ce-q__opts button.right { border-color: var(--ce-ok); background: #eafaf3; }
+.ce-q__opts button.wrong { border-color: var(--ce-warn); background: #fdecef; }
+
+/* ── DOC-ONLY color swatch ── */
+.ds-swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.ds-swatch { border-radius: 12px; overflow: hidden; border: 1px solid var(--ce-line); }
+.ds-swatch__color { height: 64px; }
+.ds-swatch__info { padding: 8px 10px; background: #fff; }
+.ds-swatch__name { font-size: .78rem; font-weight: 700; color: var(--ce-ink); }
+.ds-swatch__hex { font-size: .72rem; color: var(--ce-muted); font-family: monospace; }
+
+/* ── Typography scale ── */
+.ds-type-row { padding: 10px 0; border-bottom: 1px solid var(--ce-line); display: flex; align-items: baseline; gap: 20px; }
+.ds-type-row:last-child { border-bottom: none; }
+.ds-type-meta { min-width: 160px; font-size: .72rem; color: var(--ce-muted); font-family: monospace; }
+
+/* ── Gradient samples ── */
+.ds-grad { height: 48px; border-radius: 10px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<!-- SVG icon sprite (verbatim from template) -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false">
+  <symbol id="ce-i-home"       viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></symbol>
+  <symbol id="ce-i-arrow-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="ce-i-check"      viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></symbol>
+  <symbol id="ce-i-clock"      viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+  <symbol id="ce-i-target"     viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/></symbol>
+  <symbol id="ce-i-book-open"  viewBox="0 0 24 24"><path d="M12 6c-2-1.3-4.6-2-8-2v13c3.4 0 6 .7 8 2 2-1.3 4.6-2 8-2V4c-3.4 0-6 .7-8 2z"/><path d="M12 6v13"/></symbol>
+  <symbol id="ce-i-search"     viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.6-4.6"/></symbol>
+  <symbol id="ce-i-headphones" viewBox="0 0 24 24"><path d="M5 13v-1a7 7 0 0114 0v1"/><rect x="3.5" y="13" width="3.6" height="6.4" rx="1.6"/><rect x="16.9" y="13" width="3.6" height="6.4" rx="1.6"/></symbol>
+  <symbol id="ce-i-mic"        viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></symbol>
+  <symbol id="ce-i-pencil"     viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 6l4 4"/></symbol>
+  <symbol id="ce-i-doc"        viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7"/><path d="M9 16h7"/></symbol>
+  <symbol id="ce-i-books"      viewBox="0 0 24 24"><path d="M6 4h4v16H6z"/><path d="M10 4h4v16h-4z"/><path d="M14 5l4 1-3 14.5-4-1"/></symbol>
+  <symbol id="ce-i-blocks"     viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/></symbol>
+  <symbol id="ce-i-grid"       viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></symbol>
+  <symbol id="ce-i-layers"     viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></symbol>
+  <symbol id="ce-i-tag"        viewBox="0 0 24 24"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1.4"/></symbol>
+</svg>
+
+<div class="ds-wrap">
+
+  <!-- ── HEADER ── -->
+  <div class="ds-header">
+    <div class="ds-header__badge">Winnify · CE Design System</div>
+    <h1>Communicative English<br>Design System</h1>
+    <p>A live reference for every token, component, and pattern used in CE lesson templates.</p>
+  </div>
+
+  <!-- ── JUMP NAV ── -->
+  <nav class="ds-nav">
+    <a href="#tokens">Tokens</a>
+    <a href="#typography">Typography</a>
+    <a href="#tags">Section Tags</a>
+    <a href="#buttons">Buttons</a>
+    <a href="#cards">Cards</a>
+    <a href="#feedback">Feedback</a>
+    <a href="#navigation">Navigation</a>
+    <a href="#quiz">Quiz &amp; MCQ</a>
+    <a href="#flashcards">Flash Cards</a>
+    <a href="#audio">Audio</a>
+    <a href="#winspeak">WinSpeak</a>
+    <a href="#games">Games</a>
+    <a href="#writing">Writing</a>
+    <a href="#chrome">App Chrome</a>
+  </nav>
+
+
+  <!-- ══════════════════════════════════════════════
+       1. DESIGN TOKENS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section" id="tokens">
+    <div class="ds-section-title">Foundation</div>
+    <h2 class="ds-section-h2">Design Tokens</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Color palette</div>
+      <div class="ds-swatch-grid">
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#5b4bff"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Brand / Primary</div><code class="ds-swatch__hex">--ce-brand · #5b4bff</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#00b39a"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Brand 2 / Accent</div><code class="ds-swatch__hex">--ce-brand2 · #00b39a</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#15a06a"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Success / OK</div><code class="ds-swatch__hex">--ce-ok · #15a06a</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#e23b5a"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Error / Warning</div><code class="ds-swatch__hex">--ce-warn · #e23b5a</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#1c2030"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Ink / Body text</div><code class="ds-swatch__hex">--ce-ink · #1c2030</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#6b7080"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Muted / Secondary</div><code class="ds-swatch__hex">--ce-muted · #6b7080</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#e9eaf2"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Line / Border</div><code class="ds-swatch__hex">--ce-line · #e9eaf2</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#f6f7fb"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Soft / Surface</div><code class="ds-swatch__hex">--ce-soft · #f6f7fb</code></div>
+        </div>
+        <div class="ds-swatch">
+          <div class="ds-swatch__color" style="background:#ffffff;border:1px solid #e9eaf2"></div>
+          <div class="ds-swatch__info"><div class="ds-swatch__name">Card / White</div><code class="ds-swatch__hex">--ce-card · #ffffff</code></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Gradients</div>
+      <div class="ds-row">
+        <div class="ds-col">
+          <div class="ds-grad" style="background:linear-gradient(135deg,#5b4bff,#7b3bff 58%,#00b39a)"></div>
+          <span class="ds-label">Hero gradient</span>
+          <code class="ds-code">linear-gradient(135deg, #5b4bff, #7b3bff 58%, #00b39a)</code>
+        </div>
+        <div class="ds-col">
+          <div class="ds-grad" style="background:linear-gradient(90deg,#5b4bff,#00b39a)"></div>
+          <span class="ds-label">Progress / XP bar</span>
+          <code class="ds-code">linear-gradient(90deg, #5b4bff, #00b39a)</code>
+        </div>
+        <div class="ds-col">
+          <div class="ds-grad" style="background:linear-gradient(135deg,#5b4bff,#00b39a)"></div>
+          <span class="ds-label">Big button</span>
+          <code class="ds-code">linear-gradient(135deg, #5b4bff, #00b39a)</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Spacing &amp; Shape</div>
+      <div class="ds-row" style="align-items:center;gap:20px">
+        <div>
+          <div style="width:64px;height:64px;background:#f0eeff;border-radius:18px;border:1px solid #e9eaf2"></div>
+          <span class="ds-label">--ce-radius · 18px</span>
+        </div>
+        <div>
+          <div style="width:64px;height:64px;background:#f0eeff;border-radius:14px;border:1px solid #e9eaf2"></div>
+          <span class="ds-label">Card inner · 14px</span>
+        </div>
+        <div>
+          <div style="width:64px;height:64px;background:#f0eeff;border-radius:11px;border:1px solid #e9eaf2"></div>
+          <span class="ds-label">Buttons · 11px</span>
+        </div>
+        <div>
+          <div style="width:64px;height:64px;background:#f0eeff;border-radius:999px;border:1px solid #e9eaf2"></div>
+          <span class="ds-label">Pills / chips · 999px</span>
+        </div>
+        <div>
+          <div style="width:64px;height:64px;background:#f0eeff;border-radius:50%;border:1px solid #e9eaf2"></div>
+          <span class="ds-label">Circles · 50%</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       2. TYPOGRAPHY
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="typography">
+    <div class="ds-section-title">Foundation</div>
+    <h2 class="ds-section-h2">Typography</h2>
+    <p style="font-size:.85rem;color:var(--ce-muted);margin:0 0 20px">Font: <code class="ds-code">-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif</code> — Line height: <code class="ds-code">1.6</code></p>
+
+    <div class="ds-type-row">
+      <div class="ds-type-meta">2rem · 800 · -.03em<br>.ce-home__title</div>
+      <div style="font-size:2rem;font-weight:800;letter-spacing:-.03em;color:#1c2030">The Gift of the Magi</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">1.7rem · 800<br>.ce-home__title (sm)</div>
+      <div style="font-size:1.7rem;font-weight:800;color:#1c2030">The Gift of the Magi</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">1.32rem · 700<br>.ce-h2</div>
+      <div class="ce-h2">Skim &amp; Scan</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">1.12rem · 700<br>.ce-page__title</div>
+      <div style="font-size:1.12rem;font-weight:700;color:#1c2030">Introduce yourself</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">1.02rem · 700<br>.ce-part (brand color)</div>
+      <div class="ce-part" style="margin:0">Part 1 — A meagre saving</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">1.02rem · 400<br>.ce-prose p (lh 1.75)</div>
+      <div style="font-size:1.02rem;line-height:1.75;color:#1c2030;max-width:52ch">One dollar and eighty-seven cents. That was all. Pennies saved one and two at a time.</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">.95rem · 400<br>.ce-lead (muted)</div>
+      <div class="ce-lead" style="margin:0">Read each part, then use the arrows to move through the story.</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">.88rem · 400<br>Body / default</div>
+      <div style="font-size:.88rem;color:#1c2030">Tap a word to label it. Keep tapping to change the label. Then press Check.</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">.82rem · 600<br>Meta / counts</div>
+      <div style="font-size:.82rem;font-weight:600;color:#6b7080">0 / 3 tasks done</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">.72rem · 700 · uppercase<br>Kicker / eyebrow</div>
+      <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#5b4bff">Communicative English · Unit 1</div>
+    </div>
+    <div class="ds-type-row">
+      <div class="ds-type-meta">.68rem · 700 · uppercase<br>.ce-page__kicker</div>
+      <div style="font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5b4bff">Reading · Skim</div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       3. SECTION TAGS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="tags">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Section Tags <code class="ds-code">.ce-block__tag</code></h2>
+    <p class="ds-note"><b>Usage:</b> Place at the top of a <code>.ce-card</code> to identify the activity type. Add the appropriate modifier class alongside <code>.ce-block__tag</code>.</p>
+    <div class="ds-row">
+      <div>
+        <div class="ce-block__tag ce-tag--read"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-search"></use></svg>Reading</div>
+        <span class="ds-label">.ce-tag--read</span>
+      </div>
+      <div>
+        <div class="ce-block__tag ce-tag--listen"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-headphones"></use></svg>Listening</div>
+        <span class="ds-label">.ce-tag--listen</span>
+      </div>
+      <div>
+        <div class="ce-block__tag ce-tag--speak"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-mic"></use></svg>Speaking · WinSpeak</div>
+        <span class="ds-label">.ce-tag--speak</span>
+      </div>
+      <div>
+        <div class="ce-block__tag ce-tag--grammar"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-pencil"></use></svg>Grammar Quest</div>
+        <span class="ds-label">.ce-tag--grammar</span>
+      </div>
+      <div>
+        <div class="ce-block__tag ce-tag--vocab"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-books"></use></svg>Vocabulary Arcade</div>
+        <span class="ds-label">.ce-tag--vocab</span>
+      </div>
+      <div>
+        <div class="ce-block__tag ce-tag--write"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-doc"></use></svg>Writing</div>
+        <span class="ds-label">.ce-tag--write</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       4. BUTTONS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="buttons">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Buttons <code class="ds-code">.ce-btn</code></h2>
+    <div class="ds-row" style="align-items:flex-end">
+      <div>
+        <button class="ce-btn">Primary / Check</button>
+        <span class="ds-label">.ce-btn</span>
+        <code class="ds-code">.ce-btn--check</code>
+      </div>
+      <div>
+        <button class="ce-btn ce-btn--speak"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-mic"></use></svg>Start</button>
+        <span class="ds-label">.ce-btn--speak</span>
+      </div>
+      <div>
+        <button class="ce-btn ce-btn--big">Spin!</button>
+        <span class="ds-label">.ce-btn--big</span>
+      </div>
+      <div>
+        <button class="ce-btn ce-btn--back">← Back</button>
+        <span class="ds-label">.ce-btn--back</span>
+      </div>
+    </div>
+    <hr class="ds-divider">
+    <div class="ds-subsection-h3">States</div>
+    <div class="ds-row" style="align-items:flex-end">
+      <div>
+        <button class="ce-btn" disabled style="opacity:.35;cursor:default">Disabled</button>
+        <span class="ds-label">disabled attr</span>
+      </div>
+      <div>
+        <button class="ce-btn" style="filter:brightness(1.07)">Hover</button>
+        <span class="ds-label">:hover state</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       5. CARDS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="cards">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Cards &amp; Containers</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Section card <code class="ds-code">.ce-card</code></div>
+      <div class="ce-card" style="margin:0">
+        <div class="ce-block__tag ce-tag--read"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-search"></use></svg>Reading</div>
+        <h2 class="ce-h2">Skim &amp; Scan</h2>
+        <p class="ce-lead">Read the passage on screen, then practise the two core skills.</p>
+      </div>
+      <span class="ds-label">Default state</span>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Done state <code class="ds-code">.ce-card.ce-section--done</code></div>
+      <div class="ce-card ce-section--done" style="margin:0">
+        <div class="ce-block__tag ce-tag--read"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-search"></use></svg>Reading</div>
+        <h2 class="ce-h2">Skim &amp; Scan</h2>
+        <p class="ce-lead">All tasks complete — green border indicates completion.</p>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Tip card <code class="ds-code">.ce-tipcard</code></div>
+      <div class="ce-tipcard">
+        <svg class="ce-ico" aria-hidden="true" style="color:#2b54c9;flex:none;margin-top:1px"><use href="#ce-i-book-open"></use></svg>
+        <p><b>Skim first:</b> read the first line of each paragraph quickly. You're after the overall idea, not every detail.</p>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Worked example card <code class="ds-code">.ce-example</code></div>
+      <div class="ce-example">
+        <span class="ce-example__tag">Worked example</span>
+        <p>In "the <b>grey</b> cat", <b>grey</b> describes the cat → it is an <b>adjective</b>.</p>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Dashboard activity card <code class="ds-code">.ce-hcard</code></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <button class="ce-hcard">
+          <div class="ce-hcard__ico">📖</div>
+          <div class="ce-hcard__body">
+            <div class="ce-hcard__name">Reading: Skim &amp; Scan</div>
+            <span class="ce-hcard__sum">Skim for the gist, scan for facts.</span>
+            <span class="ce-hcard__bar"><i style="width:33%"></i></span>
+          </div>
+          <span class="ce-hcard__cta">›</span>
+        </button>
+        <button class="ce-hcard is-done">
+          <div class="ce-hcard__ico">✓</div>
+          <div class="ce-hcard__body">
+            <div class="ce-hcard__name">Grammar Quest</div>
+            <span class="ce-hcard__sum">Four hands-on games, then say it out loud.</span>
+            <span class="ce-hcard__bar"><i style="width:100%"></i></span>
+          </div>
+          <span class="ce-hcard__cta">›</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Home chips <code class="ds-code">.ce-home__chip</code></div>
+      <div style="display:flex;flex-wrap:wrap;gap:9px">
+        <span class="ce-home__chip"><svg class="ce-ico" style="color:#5b4bff" aria-hidden="true"><use href="#ce-i-clock"></use></svg>~60 min</span>
+        <span class="ce-home__chip"><svg class="ce-ico" style="color:#5b4bff" aria-hidden="true"><use href="#ce-i-layers"></use></svg>7 activities · 29 steps</span>
+        <span class="ce-home__chip"><svg class="ce-ico" style="color:#5b4bff" aria-hidden="true"><use href="#ce-i-mic"></use></svg>Speaking with WinSpeak</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       6. FEEDBACK
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="feedback">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Feedback States</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Quiz feedback text <code class="ds-code">.ce-quiz__fb</code></div>
+      <p class="ce-quiz__fb ce-quiz__fb--ok" style="min-height:0">✓ Correct! The whole story builds to the shared sacrifice.</p>
+      <p class="ce-quiz__fb ce-quiz__fb--no" style="min-height:0">✗ Not quite — the highlighted answer is correct. <span style="color:#6b7080;font-weight:400">$1.87 saved and an $8-a-week flat tell you they are poor.</span></p>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">XP progress bar <code class="ds-code">.ce-xp</code></div>
+      <div class="ce-xp">
+        <span>2 / 5 tasks done</span>
+        <div class="ce-xp__track"><i style="width:40%"></i></div>
+      </div>
+      <div class="ce-xp">
+        <span>5 / 5 cleared ✓</span>
+        <div class="ce-xp__track"><i style="width:100%"></i></div>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Results screen <code class="ds-code">.ce-results</code></div>
+      <div class="ce-results">
+        <div class="ce-results__score">8 / 10</div>
+        <p class="ce-results__msg">Good effort — review the parts you missed.</p>
+        <button class="ce-btn ce-btn--back" style="margin-right:8px">↻ Try again</button>
+        <button class="ce-btn">← Back to reading</button>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Timer <code class="ds-code">.ce-timer</code></div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="ce-timer">4:32</div>
+        <span class="ds-label" style="margin:0">Normal state</span>
+        <div class="ce-timer ce-timer--warn">0:28</div>
+        <span class="ds-label" style="margin:0">.ce-timer--warn (&lt;30s)</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       7. NAVIGATION COMPONENTS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="navigation">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Navigation</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Topic list <code class="ds-code">.ce-topics</code></div>
+      <div class="ce-topics" style="max-width:560px">
+        <button class="ce-topic">
+          <span class="ce-topic__num">1</span>
+          <span class="ce-topic__body"><b>Gist &amp; tone</b><small>Catch the overall idea and mood</small></span>
+          <span class="ce-topic__status">▶</span>
+        </button>
+        <button class="ce-topic ce-topic--done">
+          <span class="ce-topic__num">2</span>
+          <span class="ce-topic__body"><b>Characters &amp; choices</b><small>Who did what, and why</small></span>
+          <span class="ce-topic__status">✓</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Level map <code class="ds-code">.ce-levelmap</code></div>
+      <div class="ce-levelmap" style="max-width:560px">
+        <button class="ce-level ce-level--done">
+          <span class="ce-level__badge"><svg class="ce-ico" style="width:25px;height:25px" aria-hidden="true"><use href="#ce-i-blocks"></use></svg></span>
+          <span class="ce-level__body"><b>1 · Sentence Builder</b><small>Drop the right word into each gap</small></span>
+          <span class="ce-level__status">✓</span>
+        </button>
+        <button class="ce-level">
+          <span class="ce-level__badge"><svg class="ce-ico" style="width:25px;height:25px" aria-hidden="true"><use href="#ce-i-tag"></use></svg></span>
+          <span class="ce-level__body"><b>2 · Parts of Speech</b><small>Tap each word to label it</small></span>
+          <span class="ce-level__status">▶</span>
+        </button>
+        <button class="ce-level">
+          <span class="ce-level__badge"><svg class="ce-ico" style="width:25px;height:25px" aria-hidden="true"><use href="#ce-i-mic"></use></svg></span>
+          <span class="ce-level__body"><b>5 · Speak it</b><small>Talk it through with WinSpeak</small></span>
+          <span class="ce-level__status">▶</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Page header <code class="ds-code">.ce-page__head</code></div>
+      <div class="ce-page__head">
+        <div>
+          <span class="ce-page__kicker">Reading · Timed challenge</span>
+          <h3 class="ce-page__title">Answer all 10 before the timer runs out</h3>
+        </div>
+        <div class="ce-timer">5:00</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       8. QUIZ & MCQ
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="quiz">
+    <div class="ds-section-title">Interactive</div>
+    <h2 class="ds-section-h2">Quiz &amp; MCQ</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Single-answer MCQ <code class="ds-code">[data-ce-quiz="single"]</code></div>
+      <div class="ce-quiz" style="border-top:none;padding-top:0">
+        <p class="ce-quiz__q">1. What is the passage mainly about?</p>
+        <ul class="ce-quiz__opts">
+          <li><button class="ce-opt ce-opt--right" disabled>A couple who each sacrifice a treasure to give the other a gift</button></li>
+          <li><button class="ce-opt" disabled>Tips for saving money at Christmas</button></li>
+          <li><button class="ce-opt ce-opt--wrong" disabled>How to sell hair for a good price</button></li>
+        </ul>
+        <p class="ce-quiz__fb ce-quiz__fb--ok">✓ Correct! <span style="color:#6b7080;font-weight:400">Skim the whole text — every paragraph builds to the shared sacrifice.</span></p>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Timed quiz item <code class="ds-code">.ce-q</code></div>
+      <div class="ce-q">
+        <p class="ce-q__q">1. What is the central message of the story?</p>
+        <div class="ce-q__opts">
+          <button class="right" disabled>True love is shown through selfless sacrifice.</button>
+          <button disabled>Saving money is the key to a happy marriage.</button>
+          <button disabled>Expensive gifts make people happiest.</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       9. FLASH CARDS
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="flashcards">
+    <div class="ds-section-title">Interactive</div>
+    <h2 class="ds-section-h2">Flash Cards <code class="ds-code">.ce-flash</code></h2>
+    <p class="ds-note"><b>Interaction:</b> Click/tap or press Enter/Space to flip. JS adds <code>.ce-flash--flipped</code> for the 3D rotation and <code>.ce-flash--done</code> once seen.</p>
+
+    <div class="ds-row">
+      <div class="ds-col">
+        <div class="ds-subsection-h3">Front (unflipped)</div>
+        <div class="ce-flash" tabindex="0" role="button" aria-label="Flash card — tap to flip">
+          <div class="ce-flash__inner">
+            <div class="ce-flash__face ce-flash__front">
+              <span class="ce-flash__tag">📇 Flash card · Part 1</span>
+              <p class="ce-flash__q">How much had Della saved, and how does she feel about it?</p>
+              <span class="ce-flash__hint">Tap to reveal</span>
+            </div>
+            <div class="ce-flash__face ce-flash__back">
+              <span class="ce-flash__tag">✓ Key idea</span>
+              <p class="ce-flash__a"><b>$1.87</b> — saved penny by penny. She is heartbroken because it is far too little to buy Jim a worthy gift.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-col">
+        <div class="ds-subsection-h3">Back (flipped) <code class="ds-code">.ce-flash--flipped</code></div>
+        <div class="ce-flash ce-flash--flipped" tabindex="0" role="button">
+          <div class="ce-flash__inner">
+            <div class="ce-flash__face ce-flash__front">
+              <span class="ce-flash__tag">📇 Flash card · Part 2</span>
+              <p class="ce-flash__q">What did Della sell, and what did she buy for Jim?</p>
+              <span class="ce-flash__hint">Tap to reveal</span>
+            </div>
+            <div class="ce-flash__face ce-flash__back">
+              <span class="ce-flash__tag">✓ Key idea</span>
+              <p class="ce-flash__a">She sold her prized <b>long hair</b> for $20 and bought Jim a <b>platinum fob chain</b> for his gold watch.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.querySelectorAll('.ce-flash').forEach(function(fc) {
+        fc.addEventListener('click', function() { fc.classList.toggle('ce-flash--flipped'); });
+        fc.addEventListener('keydown', function(e) { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fc.classList.toggle('ce-flash--flipped'); } });
+      });
+    </script>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       10. AUDIO PLAYER
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="audio">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">Audio Player <code class="ds-code">.ce-audio</code></h2>
+    <p class="ds-note"><b>Usage:</b> Set <code>data-src</code> to the audio URL. JS handles play/pause, progress bar, and speed toggle. If no valid src, <code>[data-ce-audio-fallback]</code> is shown.</p>
+    <div class="ce-audio">
+      <button class="ce-audio__btn" aria-label="Play">▶</button>
+      <div class="ce-audio__track"><div class="ce-audio__fill"></div></div>
+      <span class="ce-audio__time">1:24</span>
+      <button class="ce-audio__speed">1×</button>
+    </div>
+    <div class="ce-audio" style="margin-top:10px">
+      <button class="ce-audio__btn" aria-label="Pause">⏸</button>
+      <div class="ce-audio__track"><div class="ce-audio__fill" style="width:62%"></div></div>
+      <span class="ce-audio__time">0:48</span>
+      <button class="ce-audio__speed">1.25×</button>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       11. WINSPEAK
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="winspeak">
+    <div class="ds-section-title">Components</div>
+    <h2 class="ds-section-h2">WinSpeak Block <code class="ds-code">.ce-ws</code></h2>
+    <p class="ds-note"><b>Attributes:</b> <code>data-winspeak-id</code> (unique task ID), <code>data-winspeak-mode</code> (conversation | presentation | roleplay), <code>data-winspeak-rubric</code> (comma-separated criteria).</p>
+
+    <div class="ce-winspeak-wrap">
+      <div class="ce-block__tag ce-tag--speak"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-mic"></use></svg>Speaking · powered by WinSpeak</div>
+      <h2 class="ce-h2">Speaking studio</h2>
+      <div class="ce-tipcard">
+        <svg class="ce-ico" aria-hidden="true" style="color:#2b54c9;flex:none;margin-top:1px"><use href="#ce-i-mic"></use></svg>
+        <p><b>Cover three things:</b> who you are, what you study, and one interest.</p>
+      </div>
+      <div class="ce-ws" data-ce-winspeak data-winspeak-id="demo-1" data-winspeak-mode="conversation" data-winspeak-rubric="fluency,pronunciation,vocabulary,grammar,coherence">
+        <p class="ce-ws__prompt"><b>Introduce yourself</b> — Speak 60–90s about your family, studies, and one interest.</p>
+        <button class="ce-btn ce-btn--speak"><svg class="ce-ico" aria-hidden="true"><use href="#ce-i-mic"></use></svg>Start</button>
+        <div class="ce-ws__result" style="display:block;margin-top:14px">
+          <ul class="ce-ws__rubric">
+            <li>Fluency</li><li>Pronunciation</li><li>Vocabulary</li><li>Grammar</li><li>Coherence</li>
+          </ul>
+          <div class="ce-ws__bar"><i style="width:78%"></i></div>
+          <p style="margin:0;font-size:.9rem;color:#1c2030">Good fluency and clear pronunciation. Try varying your sentence structure more.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">WinSpeak modes</div>
+      <div class="ds-row">
+        <div><code class="ds-code">conversation</code> — back-and-forth AI dialogue (e.g. Task 1, Task 5)</div>
+        <div><code class="ds-code">presentation</code> — one-way monologue scored on delivery (e.g. Task 2, 4)</div>
+        <div><code class="ds-code">roleplay</code> — prompted character scenario (e.g. Task 3)</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       12. GAMES
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="games">
+    <div class="ds-section-title">Interactive Games</div>
+    <h2 class="ds-section-h2">Game Components</h2>
+
+    <!-- Drag & Drop -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Drag &amp; drop sentence builder <code class="ds-code">.ce-dnd</code></div>
+      <div class="ce-dnd__sentence">
+        Della <span class="ce-slot right">counted</span> the money three times, and the next day
+        <span class="ce-slot">would</span> be Christmas. Jim <span class="ce-slot wrong">counted</span> his watch.
+      </div>
+      <div class="ce-dnd__pool">
+        <span class="ce-chip">counted</span>
+        <span class="ce-chip">sold</span>
+        <span class="ce-chip used">would</span>
+        <span class="ce-chip">was</span>
+      </div>
+      <div class="ds-subsection-h3" style="margin-top:12px">Slot states</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div><span class="ce-slot">_____</span><span class="ds-label">Empty</span></div>
+        <div><span class="ce-slot right">counted</span><span class="ds-label">.right</span></div>
+        <div><span class="ce-slot wrong">sold</span><span class="ds-label">.wrong</span></div>
+      </div>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Parts of Speech -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Parts of speech tagger <code class="ds-code">.ce-posword</code></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <span style="font-size:.82rem;font-weight:600;color:#2b54c9">● Noun</span>
+        <span style="font-size:.82rem;font-weight:600;color:#15a06a">▲ Verb</span>
+        <span style="font-size:.82rem;font-weight:600;color:#c9622b">■ Adjective</span>
+        <span style="font-size:.82rem;font-weight:600;color:#7b3bff">◆ Adverb</span>
+      </div>
+      <div class="ce-pos__sentence">
+        <span class="ce-posword">Her</span>
+        <span class="ce-posword is-adjective">beautiful<span class="ce-posword__tag">ADJ</span></span>
+        <span class="ce-posword is-noun">hair<span class="ce-posword__tag">NOUN</span></span>
+        <span class="ce-posword is-verb">rippled<span class="ce-posword__tag">VERB</span></span>
+        <span class="ce-posword is-adverb">softly<span class="ce-posword__tag">ADV</span></span>
+        <span class="ce-posword">.</span>
+      </div>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Memory Match -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Memory match cards <code class="ds-code">.ce-mcard</code></div>
+      <div class="ce-memory" style="max-width:400px">
+        <div class="ce-mcard"><div class="ce-mcard__in"><div class="ce-mcard__f ce-mcard__front">?</div><div class="ce-mcard__f ce-mcard__back">instigate</div></div></div>
+        <div class="ce-mcard"><div class="ce-mcard__in"><div class="ce-mcard__f ce-mcard__front">?</div><div class="ce-mcard__f ce-mcard__back">parsimony</div></div></div>
+        <div class="ce-mcard flip"><div class="ce-mcard__in"><div class="ce-mcard__f ce-mcard__front">?</div><div class="ce-mcard__f ce-mcard__back">to provoke /<br>bring about</div></div></div>
+        <div class="ce-mcard done"><div class="ce-mcard__in"><div class="ce-mcard__f ce-mcard__front">?</div><div class="ce-mcard__f ce-mcard__back">extreme thrift</div></div></div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+        <div><span class="ds-label">Default (face-down)</span></div>
+        <div><span class="ds-label">.flip (face-up)</span></div>
+        <div><span class="ds-label">.done (matched ✓)</span></div>
+      </div>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Synonym / Antonym Sort -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Synonym / Antonym sort <code class="ds-code">.ce-sort</code></div>
+      <div class="ce-sort__target">Word: <b>shabby</b></div>
+      <div class="ce-sort__buckets">
+        <div class="ce-sort__bucket" data-bucket="syn">
+          <div class="ce-sort__label">Synonyms (same)</div>
+          <div class="ce-sort__zone">
+            <button class="ce-sortchip right" disabled>worn</button>
+            <button class="ce-sortchip right" disabled>run-down</button>
+          </div>
+        </div>
+        <div class="ce-sort__bucket" data-bucket="ant">
+          <div class="ce-sort__label">Antonyms (opposite)</div>
+          <div class="ce-sort__zone">
+            <button class="ce-sortchip wrong" disabled>expensive</button>
+          </div>
+        </div>
+      </div>
+      <div class="ce-sort__pool">
+        <button class="ce-sortchip">smart</button>
+        <button class="ce-sortchip">new</button>
+      </div>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Word tiles -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Word tiles <code class="ds-code">.ce-wtile</code> &amp; chips <code class="ds-code">.ce-chip</code></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="ce-wtile">What</button>
+        <button class="ce-wtile">did</button>
+        <button class="ce-wtile used" disabled>Della</button>
+        <button class="ce-wtile">sell</button>
+        <button class="ce-wtile">?</button>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="ce-chip">unselfish</span>
+        <span class="ce-chip">worthless</span>
+        <span class="ce-chip used">biography</span>
+      </div>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Scan sentences -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Scan sentences <code class="ds-code">.ce-scansent</code></div>
+      <div style="font-weight:700;font-size:1.06rem;margin-bottom:12px">Find the sentence that says how much money Della had saved.</div>
+      <button class="ce-scansent ce-scansent right">One dollar and eighty-seven cents was all that Della had saved.</button>
+      <button class="ce-scansent">The next day would be Christmas.</button>
+      <button class="ce-scansent">The young couple lived in a furnished flat at eight dollars a week.</button>
+    </div>
+
+    <hr class="ds-divider">
+
+    <!-- Reading passage -->
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Reading passage <code class="ds-code">.ce-passage</code></div>
+      <div class="ce-passage">
+        <p>One dollar and eighty-seven cents. That was all. Three times Della counted it, and the next day would be Christmas. There was nothing to do but cry on the shabby little couch.</p>
+        <p>The young couple lived in a furnished flat at $8 a week. Della had saved every penny for months, yet she had only $1.87 to buy Jim a Christmas present.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       13. WRITING BLOCK
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="writing">
+    <div class="ds-section-title">Interactive</div>
+    <h2 class="ds-section-h2">Writing Block <code class="ds-code">.ce-writeblock</code></h2>
+    <div class="ce-example">
+      <span class="ce-example__tag">Starter</span>
+      <p>Try opening with: "The story teaches that love is shown through…" Then give an example from the story. Aim for 4–6 sentences.</p>
+    </div>
+    <p class="ce-quiz__q">What does the story teach about love? (4+ sentences)</p>
+    <textarea class="ce-write" rows="5" placeholder="Start writing…">The story teaches that love is shown through sacrifice, not material wealth. Della sells her beautiful hair to buy Jim a gift, even though it was her greatest treasure.</textarea>
+    <div class="ce-write__bar">
+      <span>24 words</span>
+      <button class="ce-btn ce-btn--check">Self-check</button>
+    </div>
+    <ul class="ce-write__checklist" style="display:block">
+      <li class="ce-pass" style="list-style:none">✓ Starts with a capital letter</li>
+      <li class="ce-pass" style="list-style:none">✓ Ends with . ! or ?</li>
+      <li style="list-style:none;color:#e23b5a">✗ At least 4 sentences</li>
+    </ul>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       14. APP CHROME
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section ce-lesson" id="chrome">
+    <div class="ds-section-title">App Chrome</div>
+    <h2 class="ds-section-h2">Top Bar, Progress Bar &amp; Dock</h2>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Top bar + progress bar</div>
+      <div style="border:1px solid var(--ce-line);border-radius:14px;overflow:hidden">
+        <div class="ce-top">
+          <button class="ce-top__btn"><svg class="ce-ico" aria-hidden="true" style="width:15px;height:15px"><use href="#ce-i-home"></use></svg><span>Dashboard</span></button>
+          <div class="ce-top__title">
+            <div class="ce-top__kicker">Communicative English · Unit 1</div>
+            <div class="ce-top__name">The Gift of the Magi</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex:none">
+            <span class="ce-top__pct">42%</span>
+            <button class="ce-top__btn"><span style="width:14px;height:1.8px;background:currentColor;position:relative;display:inline-block"></span><span>Contents</span></button>
+          </div>
+        </div>
+        <div class="ce-topbar"><i class="ce-topbar__fill" style="width:42%"></i></div>
+      </div>
+      <p style="font-size:.8rem;color:#6b7080;margin-top:8px">Progress bar fills to reflect <code>sectionPct()</code> — driven by JS completion tracking.</p>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Dock (bottom nav) <code class="ds-code">.ce-dock</code></div>
+      <div class="ce-dock-demo">
+        <div class="ce-dock__inner">
+          <button class="ce-dock__btn"><svg class="ce-ico" aria-hidden="true" style="width:15px;height:15px"><use href="#ce-i-arrow-left"></use></svg><span>Back</span></button>
+          <div class="ce-dock__mid">
+            <div class="ce-dock__step">Step 8 of 29</div>
+            <div class="ce-dock__label">Gist &amp; tone</div>
+          </div>
+          <button class="ce-dock__btn ce-dock__btn--next"><span>Next</span><svg class="ce-ico" aria-hidden="true" style="transform:scaleX(-1);width:15px;height:15px"><use href="#ce-i-arrow-left"></use></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-subsection">
+      <div class="ds-subsection-h3">Icon library <code class="ds-code">.ce-ico</code></div>
+      <p style="font-size:.85rem;color:#6b7080;margin:0 0 12px">Monotone SVG line icons. Use <code>stroke:currentColor</code> — inherits from parent color. <code>stroke-width:1.9</code>, rounded caps and joins.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-home"></use></svg><span class="ds-label">home</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-arrow-left"></use></svg><span class="ds-label">arrow-left</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-check"></use></svg><span class="ds-label">check</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-clock"></use></svg><span class="ds-label">clock</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-target"></use></svg><span class="ds-label">target</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-book-open"></use></svg><span class="ds-label">book-open</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-search"></use></svg><span class="ds-label">search</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-headphones"></use></svg><span class="ds-label">headphones</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-mic"></use></svg><span class="ds-label">mic</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-pencil"></use></svg><span class="ds-label">pencil</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-doc"></use></svg><span class="ds-label">doc</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-books"></use></svg><span class="ds-label">books</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-blocks"></use></svg><span class="ds-label">blocks</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-grid"></use></svg><span class="ds-label">grid</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-layers"></use></svg><span class="ds-label">layers</span></div>
+        <div style="text-align:center"><svg class="ce-ico" style="width:24px;height:24px;color:#5b4bff" aria-hidden="true"><use href="#ce-i-tag"></use></svg><span class="ds-label">tag</span></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════════════
+       QUICK REFERENCE
+  ══════════════════════════════════════════════ -->
+  <section class="ds-section" id="reference">
+    <div class="ds-section-title">Reference</div>
+    <h2 class="ds-section-h2">Data Attributes Quick Reference</h2>
+    <p style="font-size:.85rem;color:#6b7080;margin:0 0 16px">JS reads these <code>data-*</code> attributes to wire up interactivity — no extra configuration needed.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead>
+        <tr style="border-bottom:2px solid #e9eaf2;text-align:left">
+          <th style="padding:8px 12px;color:#6b7080;font-weight:700;width:35%">Attribute</th>
+          <th style="padding:8px 12px;color:#6b7080;font-weight:700">Element / Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-section]</code></td><td style="padding:8px 12px">Activity section — tracked by the course controller</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-id]</code></td><td style="padding:8px 12px">Unique section ID (e.g. "reading", "speaking")</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-name]</code></td><td style="padding:8px 12px">Human-readable section name for ToC &amp; dock</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-total]</code></td><td style="padding:8px 12px">Number of completable steps in a section</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-module]</code></td><td style="padding:8px 12px">Marks a section with internal page routing</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-sub]</code></td><td style="padding:8px 12px">Sub-step within a section (story part, module page)</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-page]</code></td><td style="padding:8px 12px">Named page within a module (e.g. "spk-1")</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-goto]</code></td><td style="padding:8px 12px">On a topic/level button — target page ID</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-flash]</code></td><td style="padding:8px 12px">Flash card container</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-flash-key]</code></td><td style="padding:8px 12px">Unique key for progress tracking a flash card</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-quiz="single"]</code></td><td style="padding:8px 12px">Standard MCQ with single correct answer</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-correct="true/false"]</code></td><td style="padding:8px 12px">On <code>.ce-opt</code> buttons — marks the correct answer</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-explain]</code></td><td style="padding:8px 12px">Explanation shown after answering an MCQ</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-timer]</code> / <code>[data-ce-seconds]</code></td><td style="padding:8px 12px">Countdown timer for the timed quiz</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-audio]</code> / <code>[data-src]</code></td><td style="padding:8px 12px">Audio player + URL to the mp3 file</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-winspeak]</code></td><td style="padding:8px 12px">WinSpeak task container</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-winspeak-id]</code></td><td style="padding:8px 12px">Unique WinSpeak task ID (e.g. "u1-introduce")</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-winspeak-mode]</code></td><td style="padding:8px 12px">conversation | presentation | roleplay</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-winspeak-rubric]</code></td><td style="padding:8px 12px">Comma-separated scoring criteria</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-scan]</code></td><td style="padding:8px 12px">Scan-for-facts game container</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-dnd]</code></td><td style="padding:8px 12px">Drag-and-drop sentence builder</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-pos]</code></td><td style="padding:8px 12px">Parts-of-speech tagger game</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-memory]</code></td><td style="padding:8px 12px">Memory match card game</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-spin]</code></td><td style="padding:8px 12px">Spin-and-define vocabulary game</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-sort]</code></td><td style="padding:8px 12px">Synonym / antonym sort game</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-qf]</code></td><td style="padding:8px 12px">Question factory game</td></tr>
+        <tr style="border-bottom:1px solid #e9eaf2"><td style="padding:8px 12px"><code>[data-ce-fix]</code></td><td style="padding:8px 12px">Fix-it editor game</td></tr>
+        <tr><td style="padding:8px 12px"><code>[data-ce-writeblock]</code></td><td style="padding:8px 12px">Writing prompt block with self-check</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>
