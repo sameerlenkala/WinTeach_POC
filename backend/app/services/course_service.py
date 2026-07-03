@@ -56,7 +56,7 @@ def create_course(db: Client, user: dict, payload: CourseCreate) -> dict:
 
 
 def list_courses(db: Client, user: dict) -> list[dict]:
-    q = db.table("courses").select("id, name, code, credits, semester, regulation, status, created_at, units(id, title, unit_number, hours, topics(id, title, order))")
+    q = db.table("courses").select("id, name, code, credits, semester, regulation, status, created_at, units(id, title, unit_number, hours, topics(id, title, order, bloom_level, subtopics(id, title, order)))")
     if user["role"] == "faculty":
         q = q.or_(f"faculty_id.eq.{user['id']},faculty_id.is.null")
     elif user["role"] == "admin":

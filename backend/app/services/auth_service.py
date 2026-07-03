@@ -74,7 +74,11 @@ def login(db: Client, email: str, password: str) -> LoginResponse:
             logger.warning("demo user seeding failed for %s (continuing to sign-in): %s", email, e)
 
     try:
-        auth_resp = db.auth.sign_in_with_password({"email": email, "password": password})
+        # Sign in on a DEDICATED client so the user's session is never propagated
+        # onto the shared service-role data client (which would make later DB
+        # writes run as this user and violate RLS).
+        from app.db.supabase import get_auth_client
+        auth_resp = get_auth_client().auth.sign_in_with_password({"email": email, "password": password})
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if auth_resp.user is None:

@@ -90,7 +90,8 @@ def commit_upload(db: Client, user: dict, upload_id: str, payload: UploadCommit)
             .execute()
             .data or []
         )
-        unit_map = {u["unit_number"]: u["id"] for u in units}
+        # unit_number is stored as text; normalize so an int unit_index matches.
+        unit_map = {str(u["unit_number"]): u["id"] for u in units}
 
         if payload.replace_topics and not payload.units:
             # units block already cleared topics above; only clear here if no units payload
@@ -98,7 +99,7 @@ def commit_upload(db: Client, user: dict, upload_id: str, payload: UploadCommit)
                 db.table("topics").delete().eq("unit_id", unit_id).execute()
 
         for topic in payload.topics:
-            unit_id = unit_map.get(topic.unit_index + 1)
+            unit_id = unit_map.get(str(topic.unit_index + 1))
             if not unit_id:
                 continue  # unit index out of range — skip silently
 
