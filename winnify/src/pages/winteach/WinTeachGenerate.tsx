@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Card, Btn, Badge, Breadcrumb, Modal } from './WinTeachUI';
+import { TopicPlanPanel } from './WinTeachPlanPanel';
 import { IBack, ISpark, INotes, IImage, IQuiz, IText, IAssess, IFile, IFlash, ICheck, ILessonPlan } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import {
@@ -256,6 +257,16 @@ function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, o
           {showEdit ? '▾ Hide plan' : '✎ Edit plan'}
         </button>
       </div>
+
+      {/* coverage checklist: the atomic concepts this subtopic's note must teach */}
+      {(merged.concepts_covered?.length ?? 0) > 1 && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 9 }}>
+          <span style={{ fontSize: 11, color: W.text3 }}>Covers:</span>
+          {merged.concepts_covered.map((c: string) => (
+            <span key={c} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: W.surfaceMuted, border: `1px solid ${W.border}`, color: W.text2 }}>{c}</span>
+          ))}
+        </div>
+      )}
 
       {showEdit && (
         <div style={{ marginTop: 12, padding: 14, background: W.surfaceMuted, borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -747,6 +758,9 @@ export default function WinTeachGenerate() {
                   </table>
                 </div>
               </div>
+
+              {/* topic plan — every section the plan prompt produces, read-only */}
+              <TopicPlanPanel plan={plan} />
 
               {/* concepts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>

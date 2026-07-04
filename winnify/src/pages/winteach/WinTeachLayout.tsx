@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, Zap, Library, BookMarked,
-  Building2, Settings, LogOut, GraduationCap,
+  Building2, Settings, LogOut, GraduationCap, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import PageTopbar from '@/components/layout/PageTopbar';
 import { WinTeachProvider, useWinTeach } from './WinTeachContext';
@@ -111,13 +111,32 @@ function PageTitleInjector() {
 
 function LayoutInner() {
   const { toastMsg } = useWinTeach();
+  const location = useLocation();
+
+  // Focus mode: the generation studio and readers get the full page — the nav
+  // auto-collapses on topic routes and can be toggled back at any time.
+  const isFocusRoute = /\/winteach\/courses\/[^/]+\/topic\//.test(location.pathname);
+  const [navHidden, setNavHidden] = useState(isFocusRoute);
+  useEffect(() => { setNavHidden(isFocusRoute); }, [isFocusRoute]);
 
   return (
     <div className="wt-pro flex h-screen overflow-hidden" style={{ background: 'var(--app-bg)', fontFamily: 'var(--font-sans)', color: 'var(--text)' }}>
-      <WinTeachSidebar />
+      {!navHidden && <WinTeachSidebar />}
+
+      <button className="max-md:hidden" onClick={() => setNavHidden(h => !h)}
+        title={navHidden ? 'Show navigation' : 'Hide navigation'}
+        style={{
+          position: 'fixed', bottom: 16, left: navHidden ? 12 : 264, zIndex: 45,
+          width: 30, height: 30, borderRadius: 8, border: '1px solid var(--border)',
+          background: 'var(--card)', color: 'var(--text-2)', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'var(--shadow-card)', transition: 'left .18s ease',
+        }}>
+        {navHidden ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+      </button>
 
       {/* Content column */}
-      <div className="flex flex-col flex-1 min-w-0 md:ml-[252px]" style={{ background: 'var(--app-bg)' }}>
+      <div className={`flex flex-col flex-1 min-w-0 ${navHidden ? '' : 'md:ml-[252px]'}`} style={{ background: 'var(--app-bg)' }}>
         <PageTitleInjector />
         <PageTopbar />
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
