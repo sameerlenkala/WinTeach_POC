@@ -32,8 +32,10 @@ VOICE
 HARD INVARIANTS
 1. SCOPE LOCK. Stay strictly within the scope you are given. Reference prerequisites
    ("> Recall: …") — do not re-teach them. Never mutate a CO's statement or Bloom level.
-2. BLOOM BAND. Floor L2, ceiling = highest CO Bloom for this topic. No Bloom's leakage:
-   assessment element ≤ its TLO ≤ its parent CO; concept ceiling = max served TLOs.
+2. BLOOM BAND. Ceiling = highest CO Bloom for this topic; foundational/introductory
+   concepts may carry L1/L2 TLOs (a definitional concept still gets a measurable outcome,
+   just at a lower level). No Bloom's leakage: assessment element ≤ its TLO ≤ its parent CO;
+   concept ceiling = max served TLOs.
 3. VERB RULES. Outcome statements use approved verb-bank verbs at their declared level;
    banned verbs (understand, know, learn, be familiar with, be aware of, appreciate,
    study, grasp, comprehend, realize, be exposed to) never appear as outcome verbs.
@@ -58,6 +60,24 @@ def _j(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+# ── Bloom proportion profile (companion docs: Topic Plan §profile, Notes §context) ─
+# Advisory distribution of depth across Bloom levels up to the topic's CO ceiling.
+# The plan uses it to set proficiency targets; Notes uses it to weight depth.
+
+_BLOOM_PROFILES: dict[str, dict[str, int]] = {
+    "L1": {"L1": 100},
+    "L2": {"L1": 30, "L2": 70},
+    "L3": {"L1": 15, "L2": 35, "L3": 50},
+    "L4": {"L1": 10, "L2": 25, "L3": 35, "L4": 30},
+    "L5": {"L1": 5, "L2": 20, "L3": 30, "L4": 25, "L5": 20},
+    "L6": {"L1": 5, "L2": 15, "L3": 25, "L4": 25, "L5": 15, "L6": 15},
+}
+
+
+def bloom_profile(co_bloom_level: str | None) -> dict[str, int]:
+    return _BLOOM_PROFILES.get((co_bloom_level or "L3").upper(), _BLOOM_PROFILES["L3"])
+
+
 # ── §7.1 Node A — Topic Plan ──────────────────────────────────────────────────
 
 _TOPIC_PLAN_SYSTEM = """You are an expert curriculum architect producing the SCOPE PLAN for ONE topic in a
@@ -66,25 +86,70 @@ and assessment; you do NOT write teaching content. You draw the box; Student Not
 academic_year sets scaffolding depth, never the Bloom level.
 
 Produce, in this order:
-- co_mapping: SELECT the subset of finalized course COs this topic serves. Topic Weight %
-  sums to 100. COs and Bloom levels are AUTHORITATIVE — never invent or change them.
-- tlo_set: decompose the selected COs into 4–8 measurable TLOs. Each TLO traces to EXACTLY
-  ONE parent CO; its Bloom level never exceeds the parent's. Approved verb-bank verbs only.
+- hero_block: administrative metadata — program_year_sem (e.g. "B.Tech, Year {academic_year}"),
+  course_code_title, unit_identifier, total_hours (the allocated topic hours), obe_framework
+  ("NBA / NAAC Compliance"), bloom_ceiling (the topic's CO Bloom ceiling).
+- co_mapping: one row for EVERY CO given (operative and supporting). Topic Weight % sums
+  to 100. COs and Bloom levels are AUTHORITATIVE — never invent or change them. For each:
+  contribution_level (High|Medium|Low — as the mapping genuinely implies, do NOT default
+  everything to High), operational_verb (the actual verb used in that CO's text), and
+  alignment_justification (one sentence on why this topic serves this CO at that level).
+  CRITICAL: every CO listed — primary or supporting — must end up with at least one TLO in
+  tlo_set whose parent_co is that CO. Supporting-CO TLOs may sit at a lower Bloom level.
+- tlo_set: decompose the selected COs into measurable TLOs — enough to cover every concept
+  (minimum one TLO per concept; 4–8 typical). Each TLO traces to EXACTLY ONE parent CO; its
+  Bloom level never exceeds the parent's. Approved verb-bank verbs only. Foundational or
+  definitional concepts still get a TLO — just at L1/L2 (e.g. "List the components of a
+  database schema"); a concept left with zero TLOs is a compliance failure.
 - concept_inventory: decompose the topic into concepts in canonical teaching order. For EACH:
   exactly one primary Content Type (P1–P5) + secondary blocks; the derived generation flags
   (requires_code, needs_execution_trace, needs_worked_example, needs_analysis,
   needs_comparison + comparison_target) — start from the canonical derivation for the Content
   Type and override an individual flag ONLY where the material demands it, listing every such
-  flag name in flag_overrides; complexity_tier (simple|moderate|complex); proficiency_target;
-  scope_in and scope_out; bloom_ceiling = max Bloom of served TLOs; time_minutes;
-  relative_weight_pct (sums to 100). Flag ambiguous Content Types ct_low_confidence:true.
+  flag name in flag_overrides; complexity_tier (simple|moderate|complex); proficiency_target
+  (Introductory|Working|Mastery — use the Bloom proportion profile: concepts serving lower
+  Bloom levels get Introductory/Working, concepts carrying the topic's primary Bloom level
+  get Mastery); scope_in and scope_out (scope_out lists what is DELIBERATELY excluded —
+  things that sound related but belong to a later topic — to prevent Notes scope creep);
+  bloom_ceiling = max Bloom of served TLOs; time_minutes (proportional to proficiency —
+  Mastery gets more); relative_weight_pct (sums to 100).
+  BE DECISIVE — judge each concept on how much real content it has to teach:
+  "simple" = a single fact, basic definition, or short command/syntax with little internal
+  mechanism; "moderate" = a concept with some mechanism or a few facets; "complex" = a
+  genuine algorithm, multi-step protocol, or concept with significant internals or
+  mathematical depth. Do NOT default everything to "moderate" — a topic with 4 concepts
+  should rarely have all 4 at the same tier. Likewise judge flags per concept, not per
+  course: requires_code true only where actual code/syntax genuinely teaches THIS concept
+  (a named algorithm still gets code even in a non-programming course);
+  needs_execution_trace true only for stepwise/algorithmic behavior, never as filler for
+  definitional or comparative concepts. Flag ambiguous Content Types ct_low_confidence:true.
   Every concept serves ≥1 TLO; every TLO is served by ≥1 concept. Cover every subtopic.
-- session_plan: sessions whose minutes sum to the topic duration (±5), every concept assigned
-  to ≥1 session, in order. There is NO topic-hour ceiling.
+- hour_allocation_blueprint: split the topic hours into lecture_hours, tutorial_hours,
+  self_study_hours, assessment_hours — these four MUST sum exactly to the topic hours.
+- session_plan: sessions of realistic classroom length (40–60 minutes) whose minutes sum to
+  the topic duration (±5), every concept assigned to ≥1 session, in order. For each also
+  give instruction_type (Lecture|Tutorial|Assessment), title, pre_class_prep (what the
+  student does before this session, or "None"), and in_class_activities (2–4 concrete
+  activities, e.g. "Architecture diagram walkthrough", "Live trace on whiteboard").
+  There is NO topic-hour ceiling.
+- resource_hub: prescribed_textbooks (from the reference books given, with inferred relevant
+  chapters if you can reasonably infer them, else "Chapters not specified"); reference_books
+  (any beyond those); official_documentation (1–2 real, well-known canonical references —
+  only if genuinely standard, else an empty list).
 - assessment_blueprint: Bloom × CO coverage matrix at the topic ceiling; quiz_bloom_range;
-  assignment_skew; co_weighting matching the Topic Weights; must_assess_concepts. Author NO questions.
-- prerequisite_boundary: 2–6 prerequisites, each pointing to the earlier topic that taught it;
-  prereq_gap:true where none exists.
+  assignment_skew; co_weighting matching the Topic Weights; must_assess_concepts;
+  quiz_blueprint (format description, target_tlos, attainment_benchmark); and
+  assignment_or_lab_blueprint (a one-paragraph practical/engineering task spec if this topic
+  has a lab or practical dimension, else null). Author NO questions.
+- prerequisite_boundary: SELECT only the genuinely required prerequisites (2–6) — do not
+  include unrelated earlier topics. Each has knowledge, taught_in_topic (the earlier topic
+  that taught it; prereq_gap:true where none exists), curricular_origin (which unit it came
+  from), and scope_boundary (the precise slice of that prior topic the student must already
+  have mastered — not the whole topic).
+- compliance_gate: self-check booleans (advisory — the orchestrator re-validates):
+  tlo_verbs_testable, hours_reconciled, session_minutes_reconciled, prerequisites_mapped,
+  tlo_subtopic_bidirectional, bloom_ceiling_respected; outcome "PASS" only if all are true,
+  else "FAIL" with blocking_items naming the failed checks.
 
 Use WORKING IDs so the cross-references validate: give each TLO a tlo_id "T1","T2",… in
 order and each concept a concept_id "C1","C2",… in order. Reference those exact ids in every
@@ -99,21 +164,40 @@ Output ONLY this JSON — no explanation, no markdown. Use these EXACT field nam
 {{
   "front_matter": {{"topic": "{topic_title}", "course": "{code} {name}", "subject_domain": "{domain}",
     "audience_level": "{level}", "topic_duration_hours": {topic_hours}}},
+  "hero_block": {{"program_year_sem": "text", "course_code_title": "{code} {name}",
+    "unit_identifier": "unit title", "total_hours": {topic_hours},
+    "obe_framework": "NBA / NAAC Compliance", "bloom_ceiling": "L1..L6"}},
   "co_mapping": [{{"co_id": "CO1", "co_statement": "verbatim CO text", "bloom_level": "L2..L6",
-    "source": "Faculty-finalized", "topic_weight_pct": 100}}],
+    "source": "Faculty-finalized", "topic_weight_pct": 100,
+    "contribution_level": "High|Medium|Low", "operational_verb": "verb",
+    "alignment_justification": "one sentence"}}],
   "tlo_set": [{{"tlo_id": "T1", "statement": "<approved verb-first, measurable>", "parent_co": "CO1",
-    "bloom_level": "L2..L6", "served_by_concepts": ["C1"]}}],
+    "bloom_level": "L1..L6", "served_by_concepts": ["C1"]}}],
   "concept_inventory": [{{"concept_id": "C1", "concept_name": "short concept name",
     "serves_tlos": ["T1"], "primary_content_type": "P1|P2|P3|P4|P5", "secondary_blocks": [],
     "flags": {{"requires_code": false, "needs_execution_trace": false, "needs_worked_example": true,
       "needs_analysis": false, "needs_comparison": false, "comparison_target": null}},
     "flag_overrides": [], "complexity_tier": "simple|moderate|complex",
-    "proficiency_target": "text", "scope_in": ["item", "item"], "scope_out": ["item"],
-    "bloom_ceiling": "L2..L6", "time_minutes": 30, "relative_weight_pct": 25, "ct_low_confidence": false}}],
-  "session_plan": [{{"session_no": 1, "minutes": 60, "concepts_covered": ["C1"], "tlos_advanced": ["T1"]}}],
+    "proficiency_target": "Introductory|Working|Mastery", "scope_in": ["item", "item"], "scope_out": ["item"],
+    "bloom_ceiling": "L1..L6", "time_minutes": 30, "relative_weight_pct": 25, "ct_low_confidence": false}}],
+  "hour_allocation_blueprint": {{"lecture_hours": 0.0, "tutorial_hours": 0.0,
+    "self_study_hours": 0.0, "assessment_hours": 0.0}},
+  "session_plan": [{{"session_no": 1, "minutes": 60, "instruction_type": "Lecture|Tutorial|Assessment",
+    "title": "session title", "pre_class_prep": "text or None",
+    "in_class_activities": ["activity 1", "activity 2"],
+    "concepts_covered": ["C1"], "tlos_advanced": ["T1"]}}],
+  "resource_hub": {{"prescribed_textbooks": ["Author — Title (Edition) — Chapters X-Y"],
+    "reference_books": ["Author — Title (Edition)"], "official_documentation": []}},
   "assessment_blueprint": {{"bloom_co_matrix": [], "quiz_bloom_range": "L2-L3", "assignment_skew": "text",
-    "co_weighting": [], "must_assess_concepts": ["C1"]}},
-  "prerequisite_boundary": [{{"knowledge": "text", "taught_in_topic": null, "prereq_gap": false}}]
+    "co_weighting": [], "must_assess_concepts": ["C1"],
+    "quiz_blueprint": {{"format": "text", "target_tlos": ["T1"], "attainment_benchmark": "text"}},
+    "assignment_or_lab_blueprint": "text or null"}},
+  "prerequisite_boundary": [{{"knowledge": "text", "taught_in_topic": null, "prereq_gap": false,
+    "curricular_origin": "Unit X — inferred", "scope_boundary": "precise slice of knowledge required"}}],
+  "compliance_gate": {{"tlo_verbs_testable": true, "hours_reconciled": true,
+    "session_minutes_reconciled": true, "prerequisites_mapped": true,
+    "tlo_subtopic_bidirectional": true, "bloom_ceiling_respected": true,
+    "outcome": "PASS", "blocking_items": []}}
 }}
 Rules: scope_in and scope_out are ARRAYS of strings. tlo_set statements lead with an approved
 verb-bank verb at the declared level (never understand/know/learn/appreciate/be aware of).
@@ -138,6 +222,7 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         "subtopics (raw, to decompose into concepts): {subtopics}\n"
         "finalized_COs (AUTHORITATIVE — select a subset, never edit): operative {op_co}, "
         "supporting {sup_cos}\n"
+        "bloom_proportion_profile (advisory — drives proficiency targets): {profile}\n"
         "prerequisites: {prereqs}\n"
         "reference_books: {refs}\n"
         + _TOPIC_PLAN_OUTPUT
@@ -152,6 +237,8 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         topic_hours=ctx.get("topic_hours_allocated", 0),
         subtopics=_j(ctx.get("subtopics", [])),
         op_co=_j(ctx.get("operative_co")), sup_cos=_j(ctx.get("supporting_cos", [])),
+        profile=_j(bloom_profile((ctx.get("operative_co") or {}).get("bloom_level")
+                                 if isinstance(ctx.get("operative_co"), dict) else None)),
         prereqs=_j(ctx.get("prerequisites", [])), refs=_j(ctx.get("reference_books", [])),
         topic_total_minutes=int(round(float(ctx.get("topic_hours_allocated", 0) or 0) * 60)),
     )
@@ -194,6 +281,9 @@ THIS subtopic: {subtopic_title} (id: {subtopic_id} — pre-assigned; echo it ver
 Proficiency target: {proficiency_target}
 Complexity tier: {complexity_tier}
 Estimated reading time: {reading_time_minutes} minutes | Time allocated: {time_minutes} minutes
+
+Hero block (admin metadata for the parent topic — use selectively):
+{hero_block}
 
 TLOs served by THIS subtopic ONLY (use only these for the outcomes checklist):
 {relevant_tlos}
@@ -275,6 +365,7 @@ def build_opening_prompt(unit: dict, ctx: dict, plan: dict, *, prev_title: str |
         complexity_tier=unit.get("complexity_tier", "moderate"),
         reading_time_minutes=budgets.get("reading_time_minutes", 5),
         time_minutes=unit.get("time_minutes", 0),
+        hero_block=_j(plan.get("hero_block") or {}),
         total_hours=round(int(unit.get("time_minutes", 0) or 0) / 60, 2),
         relevant_tlos=_j(_relevant_tlos(plan, unit)), scope_in=_j(unit.get("scope_in", [])),
         prerequisites=_j(ctx.get("prerequisites", [])),
@@ -344,6 +435,12 @@ CONTEXT
 Course: {course_name} | Unit: {unit_title} | Parent Topic: {parent_topic}
 Subject Type: {subject_label}
 
+HERO BLOCK (parent-topic admin metadata — use selectively, never repeat it as content):
+{hero_block}
+
+BLOOM PROPORTION PROFILE for this topic (advisory — how depth distributes across levels):
+{bloom_profile}
+
 THIS SUBTOPIC — SCOPE LOCK
 subtopic_id: {subtopic_id} (pre-assigned; echo verbatim, never change or renumber)
 subtopic_title: {subtopic_title}
@@ -401,15 +498,22 @@ PRACTICAL UNDERSTANDING:
 {analysis_block}
 {comparison_block}
 
-DIAGRAM RULES: every visuals entry must be RENDERABLE from its own data — do NOT draw
-ASCII art and do NOT emit placeholders. Types: table, flowchart, hierarchy_diagram,
-memory_diagram, syntax_diagram, execution_trace_table. For ALL types, columns[] and
-rows[][] MUST contain real data expressed as a table: table/execution_trace_table use
-their natural columns; flowchart uses columns ["Step", "Action", "Next"]; hierarchy/
-memory diagrams use ["Element", "Contains / points to", "Notes"]; syntax_diagram uses
-["Command", "Syntax", "Notes"] with one row per command or clause (put the actual
-syntax in the Syntax cell). "description" is a one-sentence caption; placeholders like
-"Diagram showing X" are INVALID — if you cannot fill real rows, omit the visual.
+DIAGRAM RULES: every visuals entry is a structured cue for a downstream renderer — do NOT
+draw ASCII art and do NOT emit placeholders. Types: table, flowchart, hierarchy_diagram,
+memory_diagram, syntax_diagram, execution_trace_table, mermaid_flowchart, mermaid_sequence.
+- "mermaid_flowchart" / "mermaid_sequence": write complete, VALID Mermaid syntax in the
+  "mermaid_code" field. Use mermaid_flowchart for process flows, decision trees, algorithm
+  steps, state transitions, and data flow; mermaid_sequence for protocol exchanges and
+  function-call chains. PREFER Mermaid for anything with nodes, arrows, or ordered steps.
+  "description" is a one-sentence caption of what the diagram shows; columns[]/rows[][]
+  stay empty for Mermaid types.
+- "table" / "execution_trace_table": columns[] and rows[][] MUST contain real data — never
+  empty; mermaid_code is null.
+- "flowchart", "hierarchy_diagram", "memory_diagram", "syntax_diagram" (non-Mermaid
+  fallbacks): fill columns/rows as a real table where possible (syntax_diagram: one row per
+  command or clause with the actual syntax in the cell). A placeholder one-liner like
+  "Diagram showing X" is INVALID — if you cannot fill real content, emit a Mermaid version
+  instead or omit the visual entirely.
 
 TRACEABILITY TAG: output null — it is generated automatically after this call.
 
@@ -428,7 +532,7 @@ Output ONLY this JSON — no explanation, no markdown:
   "deep_dive": {{
     "architecture_and_mechanism": {{
       "explanation": "text",
-      "visuals": [{{"visual_id": "V1", "type": "table|flowchart|hierarchy_diagram|memory_diagram|syntax_diagram|execution_trace_table", "title": "title", "description": "precise description", "columns": ["col1"], "rows": [["val1"]], "placement": "before_explanation|after_explanation|after_worked_example"}}]
+      "visuals": [{{"visual_id": "V1", "type": "table|flowchart|hierarchy_diagram|memory_diagram|syntax_diagram|execution_trace_table|mermaid_flowchart|mermaid_sequence", "title": "title", "description": "one-sentence caption", "mermaid_code": "valid Mermaid syntax, or null for non-Mermaid types", "columns": ["col1"], "rows": [["val1"]], "placement": "before_explanation|after_explanation|after_worked_example"}}]
     }},
     "code_or_formalization": {{
       "applicable": true, "type": "code|pseudocode|formal_math|na_conceptual",
@@ -439,7 +543,7 @@ Output ONLY this JSON — no explanation, no markdown:
     "execution_trace": {{
       "applicable": true, "dry_run_trace": "text or null",
       "edge_case_matrix": [{{"edge_input": "e.g. empty input", "expected_behavior": "text"}}],
-      "visuals": [{{"visual_id": "V2", "type": "execution_trace_table", "title": "title", "description": "description", "columns": ["Step"], "rows": [["1"]], "placement": "after_worked_example"}}]
+      "visuals": [{{"visual_id": "V2", "type": "execution_trace_table|mermaid_flowchart", "title": "title", "description": "description", "mermaid_code": "Mermaid syntax or null", "columns": ["Step"], "rows": [["1"]], "placement": "after_worked_example"}}]
     }}
   }},
   "practical_understanding": {{
@@ -479,6 +583,8 @@ def build_core_prompt(unit: dict, ctx: dict, plan: dict, *, prior_terms: list[st
     user = _CORE_TEMPLATE.format(
         subject_label=subject_label, course_name=ctx.get("course_name", ""),
         unit_title=ctx.get("unit_title", ""), parent_topic=ctx.get("topic_title", ""),
+        hero_block=_j(plan.get("hero_block") or {}),
+        bloom_profile=_j(bloom_profile(unit.get("bloom_ceiling"))),
         subtopic_id=unit.get("concept_id", ""), subtopic_title=unit.get("concept_name", ""),
         proficiency_target=unit.get("proficiency_target", ""), complexity_tier=tier,
         time_minutes=unit.get("time_minutes", 0), relevant_tlos=_j(_relevant_tlos(plan, unit)),
@@ -756,3 +862,202 @@ def build_flashcards_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, st
     user = _topic_source(ctx, notes) + '\n\nReturn ONLY JSON: {"cards":[{"front":"","back":"",' \
         '"concept_ref":"","bloom_level":"L1|L2","source_ref":""}]}.'
     return system, user
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Plan preparation + repair prompts
+# (companions: Subtopic Decomposition doc, TLO Alignment doc — adapted to the
+# working-ID plan schema: "subtopic" in the doc maps to a concept_inventory row)
+# ══════════════════════════════════════════════════════════════════════════════
+
+_SUBTOPIC_SPLIT_TEMPLATE = """You are preparing a syllabus subtopic list for the topic "{topic_title}"
+so that each concept can be taught as its own individually deep mini-lesson.
+Many Indian university syllabi write MULTIPLE distinct concepts as a single
+bullet point, using commas or parenthetical lists. For example:
+  "Simple Database schema, data types, table definitions (create, alter)"
+    -> really 4 distinct things: schema design, data types, CREATE TABLE, ALTER TABLE
+  "Different DML operations (insert, delete, update)"
+    -> really 3 distinct things: INSERT, DELETE, UPDATE
+  "Process scheduling algorithms (FCFS, SJF, Round Robin, Priority)"
+    -> really 4 distinct things, one per named algorithm
+  "Error detection and correction (parity check, CRC, checksum)"
+    -> really 3 distinct things, one per named technique
+
+This pattern shows up across every CS/engineering subject — it is not specific
+to any one course. Your job applies the same logic regardless of subject.
+
+━━━ SUBTOPICS AS WRITTEN IN THE SYLLABUS ━━━
+{subtopics_str}
+
+━━━ TASK ━━━
+For each subtopic above, decide whether it is ALREADY a single, atomic,
+individually-teachable concept, or whether it BUNDLES multiple distinct
+concepts together (via commas, "and", or a parenthetical list of named
+items/variants/operations).
+
+If it bundles multiple concepts, split it into separate atomic subtopic
+titles — one per concept, each specific and nameable on its own (e.g.
+"CREATE TABLE statement", not just "create"; "FCFS Scheduling", not just
+"FCFS"). Preserve the original terminology from the syllabus wherever
+possible rather than inventing new names.
+
+If a subtopic is already atomic, keep it EXACTLY as given, unchanged.
+
+Do NOT over-split: a single coherent concept whose description happens to
+contain a comma (not an enumeration of separate teachable things) must stay
+as one item. Only split genuine enumerations/bundles of otherwise-separate
+concepts. When in doubt about whether something is a genuine bundle, prefer
+NOT splitting it.
+
+Output ONLY this JSON — no explanation, no markdown:
+{{
+  "atomic_subtopics": ["subtopic 1", "subtopic 2", "..."]
+}}"""
+
+
+def build_subtopic_split_prompt(topic_title: str, subtopics: list[str]) -> str:
+    return _SUBTOPIC_SPLIT_TEMPLATE.format(
+        topic_title=topic_title,
+        subtopics_str="\n".join(f"- {s}" for s in subtopics),
+    )
+
+
+_TLO_REALIGN_TEMPLATE = """You are checking a curriculum Topic Plan for a specific, previously-observed
+mapping error: TLOs (Topic Learning Outcomes) sometimes get tagged to the WRONG
+subtopic — for example, a TLO whose text explicitly says "apply deadlock
+prevention" being tagged to a "Deadlock Detection" subtopic instead of the
+"Deadlock Prevention" subtopic. Your job is to catch and correct this.
+
+━━━ TLOs (their exact wording is the ground truth) ━━━
+{tlo_list_str}
+
+━━━ SUBTOPICS (with their CURRENT, possibly WRONG, tagged TLOs) ━━━
+{subtopic_list_str}
+
+━━━ TASK ━━━
+For each subtopic, ignore the "currently tagged" list if it looks wrong. Decide,
+based purely on matching each TLO's actual wording (its verb and subject
+matter) against the subtopic's title and scope_in, which TLO(s) this subtopic
+GENUINELY serves. A subtopic may serve more than one TLO if genuinely
+relevant, or just one.
+
+Every TLO whose subject matter is clearly covered by one of the subtopics
+above must end up assigned to that subtopic — do not leave a clearly-matching
+TLO unassigned just because the original tagging missed it.
+
+If a TLO's subject matter is not genuinely covered by ANY subtopic's scope_in
+— a real gap in the plan, not just a missing tag — list its id in
+"uncovered_tlos" instead of forcing a bad match onto an unrelated subtopic.
+
+Output ONLY this JSON — no explanation, no markdown:
+{{
+  "corrected_assignments": [
+    {{"subtopic_id": "C1", "served_tlos": ["T2"]}}
+  ],
+  "uncovered_tlos": []
+}}"""
+
+
+def build_tlo_realign_prompt(tlos: list[dict], concepts: list[dict]) -> str:
+    tlo_lines = [
+        f"- {t.get('tlo_id')}: [{t.get('bloom_level', '?')}] {t.get('statement', '')}"
+        for t in tlos
+    ]
+    sub_lines = [
+        f"- {c.get('concept_id')}: \"{c.get('concept_name', '')}\" | "
+        f"scope_in: {_j(c.get('scope_in') or [])} | "
+        f"currently tagged: {_j(c.get('serves_tlos') or [])}"
+        for c in concepts
+    ]
+    return _TLO_REALIGN_TEMPLATE.format(
+        tlo_list_str="\n".join(tlo_lines),
+        subtopic_list_str="\n".join(sub_lines),
+    )
+
+
+_MISSING_CO_TLO_TEMPLATE = """You are fixing a gap in a curriculum Topic Plan: this Course Outcome is
+marked as primary for this topic but currently has no Topic Learning Outcome
+(TLO) tracing to it. Write ONE new TLO that authentically serves this CO, and
+attach it to whichever EXISTING subtopic below is the best genuine fit.
+
+━━━ THE UNCOVERED COURSE OUTCOME ━━━
+CO id: {co_id}
+CO text: {co_text}
+CO Bloom level: {co_bloom}
+
+━━━ EXISTING SUBTOPICS (do not invent a new one — pick the best fit from this list) ━━━
+{subtopics_str}
+
+━━━ TASK ━━━
+1. Pick the single existing subtopic whose scope most naturally supports this
+   CO. If genuinely none of them fit — the CO is about something this topic's
+   subtopics don't cover at all — set best_subtopic_id to null and explain why
+   in justification, rather than forcing a bad match.
+2. Write outcome_statement: ONE measurable sentence starting with an approved
+   action verb appropriate to the bloom_level you choose. NEVER use: understand,
+   learn, know, appreciate, be aware of, be familiar with, study, grasp,
+   comprehend, realize, be exposed to, gain knowledge of, become acquainted with.
+   L1: list, recall, identify, name, define, state
+   L2: explain, describe, classify, summarize, distinguish, illustrate
+   L3: apply, compute, solve, implement, demonstrate, construct, trace
+   L4: analyse, compare, differentiate, debug, diagnose, examine
+   L5: evaluate, justify, critique, assess, benchmark
+   L6: design, formulate, devise, architect, synthesize
+3. bloom_level must NOT exceed the CO's Bloom level given above.
+4. If the chosen subtopic's scope_in doesn't already cover what this TLO
+   needs, suggest ONE short phrase to add to its scope_in so the TLO becomes
+   genuinely achievable from that subtopic's content. If scope_in already
+   covers it, set this to null.
+
+Output ONLY this JSON — no explanation, no markdown:
+{{
+  "best_subtopic_id": "concept id or null",
+  "bloom_level": "L1..L6, not exceeding the CO's bloom level",
+  "outcome_statement": "measurable sentence with an approved verb",
+  "scope_in_addition": "short phrase to add, or null if not needed",
+  "justification": "one sentence on why this subtopic fits, or why none do"
+}}"""
+
+
+def build_missing_co_tlo_prompt(co: dict, concepts: list[dict]) -> str:
+    sub_lines = [
+        f"- {c.get('concept_id')}: \"{c.get('concept_name', '')}\" | "
+        f"scope_in: {_j(c.get('scope_in') or [])}"
+        for c in concepts
+    ]
+    return _MISSING_CO_TLO_TEMPLATE.format(
+        co_id=co.get("co_id", ""),
+        co_text=co.get("co_statement") or co.get("text", ""),
+        co_bloom=co.get("bloom_level", "L2"),
+        subtopics_str="\n".join(sub_lines),
+    )
+
+
+_SUBTOPIC_TLO_TEMPLATE = """Write ONE Topic Learning Outcome (TLO) for this subtopic.
+
+Subtopic: "{subtopic_title}"
+Scope covered: {scope_in}
+Required Bloom level: {bloom_target}
+Approved verbs for {bloom_target}: {verbs}
+
+Rules:
+- ONE sentence only, starting with one of the approved verbs above
+- Measurable and specific to the scope_in items listed
+- Never use: understand, learn, know, appreciate, be aware of, be familiar with
+- Must be achievable from a {proficiency}-level treatment of this subtopic
+
+Output ONLY this JSON:
+{{
+  "outcome_statement": "By the end of this subtopic, you will be able to [verb] [specific content].",
+  "bloom_level": "{bloom_target}"
+}}"""
+
+
+def build_subtopic_tlo_prompt(concept: dict, bloom_target: str, verbs: list[str]) -> str:
+    return _SUBTOPIC_TLO_TEMPLATE.format(
+        subtopic_title=concept.get("concept_name", ""),
+        scope_in=_j(concept.get("scope_in") or []),
+        bloom_target=bloom_target,
+        verbs=", ".join(verbs),
+        proficiency=concept.get("proficiency_target") or "Working",
+    )

@@ -21,6 +21,7 @@ import hashlib
 import json
 import logging
 import math
+import re
 import threading
 import uuid
 from typing import Any
@@ -519,10 +520,39 @@ def _chat_json(client: Any, system: str, user: str, temperature: float = 0.4) ->
     return json.loads(resp.choices[0].message.content or "{}")
 
 
+def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list[str]:
+    """Subtopic Decomposition (companion doc): split bundled syllabus bullets
+    ("insert, delete, update") into atomic, individually-teachable subtopics
+    before the Topic Plan sees them. Best-effort — any failure keeps the
+    originals."""
+    from app.services.generation_prompts import build_subtopic_split_prompt  # lazy
+    if not subtopics:
+        return subtopics
+    try:
+        r = _chat_json(
+            client,
+            "You are an expert curriculum architect. Output ONLY valid JSON.",
+            build_subtopic_split_prompt(topic_title, subtopics),
+            temperature=0.1,
+        )
+        atomic = [s.strip() for s in (r.get("atomic_subtopics") or [])
+                  if isinstance(s, str) and s.strip()]
+        # Sanity: a valid split never shrinks the list.
+        if atomic and len(atomic) >= len(subtopics):
+            return atomic
+    except Exception:
+        logger.warning("subtopic decomposition failed — using raw subtopics", exc_info=True)
+    return subtopics
+
+
 def gen_topic_plan(client: Any, ctx: dict) -> dict:
     """Node A: generate the Topic Plan JSON (strict schema). Model-emitted stamps
-    and ids are stripped on ingest by the orchestrator, not here."""
+    and ids are stripped on ingest by the orchestrator, not here. Bundled
+    subtopics are decomposed into atomic ones first (companion doc)."""
     from app.services.generation_prompts import build_topic_plan_prompt  # lazy
+    atomic = split_subtopics(client, ctx.get("topic_title", ""), ctx.get("subtopics") or [])
+    if atomic is not ctx.get("subtopics"):
+        ctx = {**ctx, "subtopics": atomic}
     return _chat_json(client, *build_topic_plan_prompt(ctx), temperature=0.2)
 
 
@@ -603,6 +633,124 @@ def stamp_topic_plan(plan: dict, version: str = "1.0.0") -> dict:
     fm = plan.setdefault("front_matter", {})
     fm["scope_hash"] = canonical_hash(scope_body(plan))
     fm["topic_plan_version"] = version
+    return plan
+
+
+# ── Plan repair passes (companion: TLO Alignment doc) ─────────────────────────
+# Three LLM-driven repairs between ingest and validation. "Subtopic" in the doc
+# maps to a concept_inventory row. All passes are best-effort: any failure
+# leaves the plan unchanged for the code validators to judge.
+
+def _next_tlo_id(tlos: list[dict]) -> str:
+    mx = 0
+    for t in tlos:
+        m = re.match(r"^T(\d+)$", str(t.get("tlo_id") or ""))
+        if m:
+            mx = max(mx, int(m.group(1)))
+    return f"T{mx + 1}"
+
+
+def _sync_plan_links(plan: dict) -> None:
+    """Rebuild each TLO's served_by_concepts from the concepts' serves_tlos and
+    re-derive every concept's bloom_ceiling as the max Bloom of its served TLOs
+    (the invariant bloom:concept_ceiling validates)."""
+    tlos = plan.get("tlo_set") or []
+    concepts = plan.get("concept_inventory") or []
+    tlo_by_id = {t.get("tlo_id"): t for t in tlos}
+    for t in tlos:
+        t["served_by_concepts"] = []
+    for c in concepts:
+        for tid in c.get("serves_tlos") or []:
+            t = tlo_by_id.get(tid)
+            if t is not None and c.get("concept_id") not in t["served_by_concepts"]:
+                t["served_by_concepts"].append(c.get("concept_id"))
+        ranks = [ct.bloom_rank(tlo_by_id[tid].get("bloom_level", "L2"))
+                 for tid in (c.get("serves_tlos") or []) if tid in tlo_by_id]
+        if ranks:
+            c["bloom_ceiling"] = ct.BLOOM_ORDER[max(ranks) - 1]
+
+
+def repair_plan_alignment(client: Any, plan: dict) -> dict:
+    """TLO Alignment repairs: (1) re-tag TLO↔concept assignments whose wording
+    doesn't match; (2) author a TLO for any mapped CO with none tracing to it;
+    (3) author a TLO for any concept serving none."""
+    from app.services import generation_prompts as gp  # lazy
+
+    tlos = plan.get("tlo_set") or []
+    concepts = plan.get("concept_inventory") or []
+    if not tlos or not concepts:
+        return plan
+    sys_msg = "You are an expert in curriculum alignment. Output ONLY valid JSON."
+
+    # Pass 1 — verify/correct TLO-concept tagging against the TLOs' wording.
+    try:
+        r = _chat_json(client, sys_msg, gp.build_tlo_realign_prompt(tlos, concepts),
+                       temperature=0.1)
+        tlo_ids = {t.get("tlo_id") for t in tlos}
+        corrected = {a.get("subtopic_id"): [t for t in (a.get("served_tlos") or []) if t in tlo_ids]
+                     for a in (r.get("corrected_assignments") or [])
+                     if isinstance(a, dict) and a.get("subtopic_id")}
+        if corrected:
+            for c in concepts:
+                new = corrected.get(c.get("concept_id"))
+                if new:  # never strip a concept down to zero TLOs here
+                    c["serves_tlos"] = new
+    except Exception:
+        logger.warning("TLO realign pass failed — keeping original tagging", exc_info=True)
+
+    # Pass 2 — every mapped CO (primary or supporting) needs ≥1 TLO tracing to it.
+    for co in plan.get("co_mapping") or []:
+        try:
+            covered = {t.get("parent_co") for t in plan.get("tlo_set") or []}
+            if not co.get("co_id") or co.get("co_id") in covered:
+                continue
+            r = _chat_json(client, sys_msg, gp.build_missing_co_tlo_prompt(co, concepts),
+                           temperature=0.2)
+            best = r.get("best_subtopic_id")
+            stmt = (r.get("outcome_statement") or "").strip()
+            target = next((c for c in concepts if c.get("concept_id") == best), None)
+            if not stmt or target is None:
+                continue
+            co_rank = ct.bloom_rank(co.get("bloom_level", "L2"))
+            new_rank = min(ct.bloom_rank(r.get("bloom_level", "L2")), co_rank)
+            new_id = _next_tlo_id(plan["tlo_set"])
+            plan["tlo_set"].append({
+                "tlo_id": new_id, "statement": stmt, "parent_co": co.get("co_id"),
+                "bloom_level": ct.BLOOM_ORDER[new_rank - 1], "served_by_concepts": [best],
+            })
+            target.setdefault("serves_tlos", []).append(new_id)
+            addition = r.get("scope_in_addition")
+            if addition and isinstance(addition, str):
+                target.setdefault("scope_in", []).append(addition)
+        except Exception:
+            logger.warning("uncovered-CO TLO pass failed for %s", co.get("co_id"), exc_info=True)
+
+    # Pass 3 — every concept must serve ≥1 TLO (L1/L2 fine for foundational ones).
+    for c in concepts:
+        try:
+            if c.get("serves_tlos"):
+                continue
+            bloom_target = ct.normalize_bloom(c.get("bloom_ceiling") or "L2")
+            verbs = sorted(ct.APPROVED_VERBS.get(bloom_target, ct.APPROVED_VERBS["L2"]))[:8]
+            r = _chat_json(client, sys_msg,
+                           gp.build_subtopic_tlo_prompt(c, bloom_target, verbs),
+                           temperature=0.2)
+            stmt = (r.get("outcome_statement") or "").strip()
+            if not stmt:
+                continue
+            parent = next((m.get("co_id") for m in plan.get("co_mapping") or [] if m.get("co_id")), None)
+            if parent is None:
+                continue
+            new_id = _next_tlo_id(plan["tlo_set"])
+            plan["tlo_set"].append({
+                "tlo_id": new_id, "statement": stmt, "parent_co": parent,
+                "bloom_level": bloom_target, "served_by_concepts": [c.get("concept_id")],
+            })
+            c["serves_tlos"] = [new_id]
+        except Exception:
+            logger.warning("concept-TLO pass failed for %s", c.get("concept_id"), exc_info=True)
+
+    _sync_plan_links(plan)
     return plan
 
 
@@ -935,6 +1083,7 @@ def run_topic_job(db, job_id: str, course_id: str, topic_id: str) -> None:
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             plan = ingest_topic_plan(gen_topic_plan(client, ctx))
+            plan = repair_plan_alignment(client, plan)
         except Exception as e:
             logger.warning("topic plan attempt %d parse/gen failed: %s", attempt, e)
             continue

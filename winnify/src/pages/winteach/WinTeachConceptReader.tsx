@@ -91,20 +91,55 @@ function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
   );
 }
 
-// Generated visuals carry columns/rows as renderable table data (headers
-// optional). Visuals with no rows and only a one-line placeholder description
-// ("Diagram showing X…") have nothing to draw, so they're skipped entirely.
+// Mermaid diagram renderer — the library is imported on demand so it stays out
+// of the main bundle. Falls back to showing the Mermaid source if render fails.
+let mermaidSeq = 0;
+function MermaidBlock({ code }: { code: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setSvg(null); setFailed(false);
+    import('mermaid')
+      .then(async m => {
+        const mermaid = m.default;
+        mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
+        try {
+          const { svg } = await mermaid.render(`wt-mmd-${++mermaidSeq}`, code);
+          if (alive) setSvg(svg);
+        } catch {
+          if (alive) setFailed(true);
+        }
+      })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [code]);
+  if (failed) {
+    return <pre style={{ background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px', overflow: 'auto', fontSize: 12, lineHeight: 1.6, margin: 0, fontFamily: MONO, color: W.text2 }}>{code}</pre>;
+  }
+  if (!svg) {
+    return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: W.text3, fontSize: 12.5, padding: '10px 0' }}><span className="wt-spin" style={{ width: 12, height: 12, border: `2px solid ${W.border}`, borderTopColor: W.brand, borderRadius: '50%', display: 'inline-block' }} /> Rendering diagram…</div>;
+  }
+  return <div style={{ overflowX: 'auto', border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px', background: W.card }} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+// Generated visuals: mermaid_code renders as a Mermaid diagram; columns/rows
+// render as a table (headers optional). Visuals with neither and only a
+// one-line placeholder description ("Diagram showing X…") are skipped.
 function VisualBlock({ v }: { v: any }) {
+  const mermaidCode = typeof v?.mermaid_code === 'string' && v.mermaid_code.trim() ? v.mermaid_code.trim() : null;
   const hasTable = (v?.rows?.length ?? 0) > 0;
   const desc = typeof v?.description === 'string' ? v.description : '';
   const substantiveDesc = desc.includes('\n') || desc.length >= 100;
-  if (!hasTable && !substantiveDesc) return null;
+  if (!mermaidCode && !hasTable && !substantiveDesc) return null;
   return (
     <figure style={{ margin: '14px 0 0' }}>
       {v.title && <figcaption style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.text, marginBottom: 6 }}>{v.title}</figcaption>}
-      {hasTable
-        ? <DataTable columns={v.columns ?? []} rows={v.rows} />
-        : <div style={{ border: `1px dashed ${W.borderStrong}`, borderRadius: 8, padding: '12px 16px', fontSize: 13, color: W.text2, lineHeight: 1.6, background: W.surfaceMuted, whiteSpace: 'pre-wrap' }}>{desc}</div>}
+      {mermaidCode
+        ? <MermaidBlock code={mermaidCode} />
+        : hasTable
+          ? <DataTable columns={v.columns ?? []} rows={v.rows} />
+          : <div style={{ border: `1px dashed ${W.borderStrong}`, borderRadius: 8, padding: '12px 16px', fontSize: 13, color: W.text2, lineHeight: 1.6, background: W.surfaceMuted, whiteSpace: 'pre-wrap' }}>{desc}</div>}
     </figure>
   );
 }
