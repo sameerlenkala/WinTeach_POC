@@ -66,13 +66,15 @@ function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
   return (
     <div style={{ overflowX: 'auto', border: `1px solid ${W.border}`, borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr>
-            {columns.map((c, i) => (
-              <th key={i} style={{ textAlign: 'left', padding: '8px 12px', background: W.surfaceMuted, borderBottom: `1px solid ${W.border}`, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em', color: W.text3, whiteSpace: 'nowrap' }}>{c}</th>
-            ))}
-          </tr>
-        </thead>
+        {columns.length > 0 && (
+          <thead>
+            <tr>
+              {columns.map((c, i) => (
+                <th key={i} style={{ textAlign: 'left', padding: '8px 12px', background: W.surfaceMuted, borderBottom: `1px solid ${W.border}`, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em', color: W.text3, whiteSpace: 'nowrap' }}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+        )}
         <tbody>
           {rows.map((r, ri) => (
             <tr key={ri}>
@@ -89,17 +91,20 @@ function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
   );
 }
 
-// Generated visuals carry columns/rows for table-like types; diagram types
-// (flowchart, hierarchy, memory) fall back to their precise text description.
+// Generated visuals carry columns/rows as renderable table data (headers
+// optional). Visuals with no rows and only a one-line placeholder description
+// ("Diagram showing X…") have nothing to draw, so they're skipped entirely.
 function VisualBlock({ v }: { v: any }) {
-  const hasTable = (v?.columns?.length ?? 0) > 0 && (v?.rows?.length ?? 0) > 0;
-  if (!hasTable && !v?.description) return null;
+  const hasTable = (v?.rows?.length ?? 0) > 0;
+  const desc = typeof v?.description === 'string' ? v.description : '';
+  const substantiveDesc = desc.includes('\n') || desc.length >= 100;
+  if (!hasTable && !substantiveDesc) return null;
   return (
     <figure style={{ margin: '14px 0 0' }}>
       {v.title && <figcaption style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.text, marginBottom: 6 }}>{v.title}</figcaption>}
       {hasTable
-        ? <DataTable columns={v.columns} rows={v.rows} />
-        : <div style={{ border: `1px dashed ${W.borderStrong}`, borderRadius: 8, padding: '12px 16px', fontSize: 13, color: W.text2, lineHeight: 1.6, background: W.surfaceMuted }}>{v.description}</div>}
+        ? <DataTable columns={v.columns ?? []} rows={v.rows} />
+        : <div style={{ border: `1px dashed ${W.borderStrong}`, borderRadius: 8, padding: '12px 16px', fontSize: 13, color: W.text2, lineHeight: 1.6, background: W.surfaceMuted, whiteSpace: 'pre-wrap' }}>{desc}</div>}
     </figure>
   );
 }

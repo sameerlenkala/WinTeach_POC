@@ -401,11 +401,15 @@ PRACTICAL UNDERSTANDING:
 {analysis_block}
 {comparison_block}
 
-DIAGRAM RULES: every visuals entry is a structured cue for a downstream renderer — do NOT
-draw ASCII art. Types: table, flowchart, hierarchy_diagram, memory_diagram, syntax_diagram,
-execution_trace_table. For table/execution_trace_table, columns[] and rows[][] MUST contain
-real data. For flowchart/hierarchy/memory/syntax diagrams, columns/rows may be empty but
-"description" is MANDATORY and must describe every node and connection.
+DIAGRAM RULES: every visuals entry must be RENDERABLE from its own data — do NOT draw
+ASCII art and do NOT emit placeholders. Types: table, flowchart, hierarchy_diagram,
+memory_diagram, syntax_diagram, execution_trace_table. For ALL types, columns[] and
+rows[][] MUST contain real data expressed as a table: table/execution_trace_table use
+their natural columns; flowchart uses columns ["Step", "Action", "Next"]; hierarchy/
+memory diagrams use ["Element", "Contains / points to", "Notes"]; syntax_diagram uses
+["Command", "Syntax", "Notes"] with one row per command or clause (put the actual
+syntax in the Syntax cell). "description" is a one-sentence caption; placeholders like
+"Diagram showing X" are INVALID — if you cannot fill real rows, omit the visual.
 
 TRACEABILITY TAG: output null — it is generated automatically after this call.
 
