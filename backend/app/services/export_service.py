@@ -213,12 +213,21 @@ def _slides_pptx(content: dict, name: str) -> bytes:
     for s in (content or {}).get("slides") or []:
         sl = prs.slides.add_slide(body_layout)
         sl.shapes.title.text = str(s.get("title") or "")
-        blocks = s.get("body_blocks") or []
-        if blocks:
+        lines: list[str] = [str(b) for b in (s.get("body_blocks") or [])]
+        if s.get("myth"):
+            lines.insert(0, f"Myth: {s['myth']}")
+        if s.get("reality"):
+            lines.insert(1 if s.get("myth") else 0, f"Reality: {s['reality']}")
+        code = (s.get("code") or {}).get("content")
+        if code:
+            lines.extend(str(code).splitlines())
+        if s.get("takeaway"):
+            lines.append(f"★ {s['takeaway']}")
+        if lines:
             tf = sl.placeholders[1].text_frame
-            tf.text = str(blocks[0])
-            for b in blocks[1:]:
-                tf.add_paragraph().text = str(b)
+            tf.text = lines[0]
+            for b in lines[1:]:
+                tf.add_paragraph().text = b
         if s.get("speaker_notes"):
             sl.notes_slide.notes_text_frame.text = str(s["speaker_notes"])
 

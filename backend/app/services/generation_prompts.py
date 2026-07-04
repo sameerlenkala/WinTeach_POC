@@ -101,7 +101,12 @@ Produce, in this order:
   Bloom level never exceeds the parent's. Approved verb-bank verbs only. Foundational or
   definitional concepts still get a TLO — just at L1/L2 (e.g. "List the components of a
   database schema"); a concept left with zero TLOs is a compliance failure.
-- concept_inventory: decompose the topic into concepts in canonical teaching order. For EACH:
+- concept_inventory: ONE row per subtopic, EXACTLY as the subtopics are written — never
+  split a bundled subtopic into multiple rows and never merge two subtopics into one.
+  concept_name = the subtopic title verbatim. Each row carries concepts_covered — the
+  atomic concepts bundled inside that subtopic (provided below) — and its scope_in MUST
+  include every one of them: the Notes stage must teach each listed concept within this
+  single row's note. For EACH row:
   exactly one primary Content Type (P1–P5) + secondary blocks; the derived generation flags
   (requires_code, needs_execution_trace, needs_worked_example, needs_analysis,
   needs_comparison + comparison_target) — start from the canonical derivation for the Content
@@ -173,7 +178,8 @@ Output ONLY this JSON — no explanation, no markdown. Use these EXACT field nam
     "alignment_justification": "one sentence"}}],
   "tlo_set": [{{"tlo_id": "T1", "statement": "<approved verb-first, measurable>", "parent_co": "CO1",
     "bloom_level": "L1..L6", "served_by_concepts": ["C1"]}}],
-  "concept_inventory": [{{"concept_id": "C1", "concept_name": "short concept name",
+  "concept_inventory": [{{"concept_id": "C1", "concept_name": "subtopic title verbatim",
+    "concepts_covered": ["atomic concept 1", "atomic concept 2"],
     "serves_tlos": ["T1"], "primary_content_type": "P1|P2|P3|P4|P5", "secondary_blocks": [],
     "flags": {{"requires_code": false, "needs_execution_trace": false, "needs_worked_example": true,
       "needs_analysis": false, "needs_comparison": false, "comparison_target": null}},
@@ -219,7 +225,8 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         "level {level} | year {year}\n"
         "unit: {unit_no} — {unit_title} (unit total {unit_hours} hrs)\n"
         "topic: {topic_no} — {topic_title} | allocated {topic_hours} hrs\n"
-        "subtopics (raw, to decompose into concepts): {subtopics}\n"
+        "subtopics (ONE concept_inventory row per entry; concepts = the coverage checklist "
+        "for that row): {subtopics}\n"
         "finalized_COs (AUTHORITATIVE — select a subset, never edit): operative {op_co}, "
         "supporting {sup_cos}\n"
         "bloom_proportion_profile (advisory — drives proficiency targets): {profile}\n"
@@ -235,7 +242,7 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         unit_hours=ctx.get("unit_total_hours", 0),
         topic_no=ctx.get("topic_number", ""), topic_title=ctx.get("topic_title", ""),
         topic_hours=ctx.get("topic_hours_allocated", 0),
-        subtopics=_j(ctx.get("subtopics", [])),
+        subtopics=_j(ctx.get("subtopic_concepts") or ctx.get("subtopics", [])),
         op_co=_j(ctx.get("operative_co")), sup_cos=_j(ctx.get("supporting_cos", [])),
         profile=_j(bloom_profile((ctx.get("operative_co") or {}).get("bloom_level")
                                  if isinstance(ctx.get("operative_co"), dict) else None)),
@@ -313,6 +320,11 @@ narrative_intro (100–200 words) starting from what the student knows, showing 
 this subtopic fills, naming each scope_in item once as a forward reference, ending by
 pointing to the next subtopic. Never use banned verbs: understand, learn, know,
 appreciate, be aware of.
+
+VOICE: second person, present tense, warm and direct. Short paragraphs separated by a
+blank line. **Bold** key terms, `inline code` for identifiers, $...$ for math. The
+problem-statement scenario must feel real — a named situation with stakes, not
+"imagine a company".
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -458,8 +470,42 @@ scope_out — you MUST NOT explain any of these, even briefly (mention existence
 in a later topic" only):
 {scope_out}
 
+CONCEPT COVERAGE — this subtopic bundles these concepts, and this ONE note must teach
+EVERY one of them:
+{concepts_covered}
+Structure the deep dive so each listed concept gets its own genuine treatment — its
+definition-level explanation, its mechanism, and at least one example demonstrating it
+(the example coverage rule below applies to every listed concept, not just scope_in).
+Teach them in their natural order, connected by transitions — one flowing note, not
+disjoint mini-articles. Skipping or hand-waving any listed concept is a failed output.
+
 Terms already defined in earlier subtopics (reference by name, do not re-teach):
 {prior_terms}
+
+STYLE & VOICE — this must read like world-class self-study material, the best chapter
+the student has ever read, written directly to them:
+- Second person ("you"), present tense, confident and warm. SHORT PARAGRAPHS — 2 to 4
+  sentences each, separated by a blank line (\\n\\n). Never emit a wall of text.
+- Inline formatting is supported and expected: **bold** every key term at first use,
+  `inline code` for identifiers/keywords/commands, $...$ for math.
+- CONCRETE FIRST: before any general claim, show a tiny concrete instance (a 5-element
+  array, a 3-row table, actual numbers). Generalize only after the reader has seen it
+  work once.
+- WHY BEFORE WHAT: open each explanation with the problem this mechanism solves or the
+  question it answers — never with its definition.
+- MYTH → REALITY: where students commonly hold a wrong mental model, name it explicitly
+  ("You might expect X... but actually Y, because Z") inside the relevant explanation.
+- Analogies must map structurally — name which part corresponds to which ("each tab in
+  the phone book = an index key; flipping to a tab = one comparison").
+- Signpost transitions ("Now that X is in place, the next problem is Y").
+- CALLOUTS: start a standalone paragraph with "> Tip:", "> Warning:", "> Key idea:",
+  "> Recall:" or "> Exam tip:" for a one-sentence aside worth highlighting (a pitfall,
+  an exam angle, a prerequisite reminder). Use 1–3 per subtopic where genuinely
+  warranted; never stack two in a row.
+
+PAUSE AND THINK: after teaching the mechanism, write 1–2 self-check questions a careful
+reader should NOW be able to answer (not trivia), each with a 30–60 word answer that
+teaches the reader who got it wrong. Put them in deep_dive.pause_and_think.
 
 NO-REPETITION RULE: each part must add genuinely NEW information — never restate the
 definition inside the mechanism, never restate the mechanism inside the worked example.
@@ -553,7 +599,8 @@ Output ONLY this JSON — no explanation, no markdown:
       "applicable": true, "dry_run_trace": "text or null",
       "edge_case_matrix": [{{"edge_input": "e.g. empty input", "expected_behavior": "text"}}],
       "visuals": [{{"visual_id": "V2", "type": "execution_trace_table|mermaid_flowchart", "title": "title", "description": "description", "mermaid_code": "Mermaid syntax or null", "columns": ["Step"], "rows": [["1"]], "placement": "after_worked_example"}}]
-    }}
+    }},
+    "pause_and_think": [{{"question": "self-check a careful reader can now answer", "answer": "30-60 word teaching answer"}}]
   }},
   "practical_understanding": {{
     "worked_example": "text or null", "advantages": [], "disadvantages": [], "applications": [],
@@ -598,6 +645,7 @@ def build_core_prompt(unit: dict, ctx: dict, plan: dict, *, prior_terms: list[st
         proficiency_target=unit.get("proficiency_target", ""), complexity_tier=tier,
         time_minutes=unit.get("time_minutes", 0), relevant_tlos=_j(_relevant_tlos(plan, unit)),
         scope_in=_j(unit.get("scope_in", [])), scope_out=_j(unit.get("scope_out", [])),
+        concepts_covered=_j(unit.get("concepts_covered") or [unit.get("concept_name", "")]),
         prior_terms=_j(prior_terms), formal_min=mins["formal_definition"],
         arch_min=mins["architecture_and_mechanism"], code_block=code_block,
         exec_trace_block=exec_block, worked_block=worked_block,
@@ -619,6 +667,7 @@ Proficiency target: {proficiency_target} | Bloom ceiling: {bloom_ceiling}
 Concepts covered: {scope_in}
 Left for later: {scope_out}
 Previous lesson: {prev_subtopic} | Next lesson: {next_subtopic}
+Industry skills this lesson connects to: {industry_skills}
 
 Summary of what was taught (for consistency):
 {condensed_core}
@@ -642,6 +691,8 @@ RELATED TOPICS: previous_connection, next_connection, builds_toward (1–2), ind
 
 MATH NOTATION: wrap all mathematical notation (formulas, Big-O, expressions) in LaTeX
 delimiters — $...$ inline, $$...$$ display — including every important_formulas entry.
+VOICE: second person, direct, exam-aware. **Bold** key terms, `inline code` for
+identifiers. Short paragraphs separated by a blank line where a field is prose.
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -680,6 +731,8 @@ def build_closing_prompt(unit: dict, ctx: dict, *, prev_title: str | None, next_
         scope_out=_j(unit.get("scope_out", [])),
         prev_subtopic=prev_title or "None — this is the first subtopic",
         next_subtopic=next_title or "None — this is the last subtopic",
+        industry_skills=_j(ctx.get("industry_skills")) if ctx.get("industry_skills")
+        else f"general {ctx.get('subject_type_label') or 'discipline'} skills",
         condensed_core=_j(condensed_core or {}),
     )
     return system, user
@@ -773,21 +826,69 @@ def build_slides_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
 # absent from the notes (§7.4 SSOT).
 # ══════════════════════════════════════════════════════════════════════════════
 
-_CONCEPT_SLIDES_SYSTEM = """You convert ONE subtopic's approved Student Notes into a short classroom slide
-sequence for {subject_domain} at {audience_level}. REFORMAT for delivery — introduce NO
-definition, example, code, or claim absent from the notes. Build the sequence per the concept's
-Content Type ({content_type}): definition → 1–3 core builds → ≥1 misconception (Myth→Reality) →
-profile slides (P2 code+trace+complexity; P3 proof one step per build; P4 diagram+trade-off;
-P5 environment→procedure→output). Face ≤6 lines, ≤~10 words/line; depth goes to speaker_notes."""
+_CONCEPT_SLIDES_SYSTEM = """You are a world-class technical educator converting ONE subtopic's approved
+Student Notes into a classroom slide deck for {subject_domain} at {audience_level}.
+REFORMAT for delivery — introduce NO definition, example, code, or claim absent from the
+notes. Slides are the artifact of SUBTRACTION: the face carries the minimum a student
+must SEE; everything you would SAY goes in speaker_notes.
+
+DECK ARC (adapt to Content Type {content_type}; 6–10 slides total):
+1. hook — one big-statement slide: the problem this concept kills, ≤14 words.
+2. definition — the formal claim stated as a takeaway sentence, not a dictionary entry.
+3. 1–3 core build slides — ONE idea each, staged via build_steps.
+4. ≥1 misconception slide — Myth vs Reality (fill the myth/reality fields).
+5. Profile slides by Content Type: P2 code → trace → complexity; P3 proof one step per
+   build; P4 diagram → trade-off; P5 environment → procedure → expected output.
+6. recall — closing slide: the 3 bullets the student must retain.
+
+SLIDE RULES
+- title is a CLAIM, never a noun label ("Binary search halves the space each step",
+  not "Binary Search").
+- Face limit: ≤6 bullets, ≤10 words each. NEVER paragraphs on the face. **Bold** the
+  one term that matters per bullet; $...$ LaTeX for math; `code` for identifiers.
+- layout selects the renderer:
+  "statement"    — one big line (the title), optional kicker + takeaway. For hooks.
+  "bullets"      — title + body_blocks.
+  "code"         — title + code.language + code.content (≤12 lines) + ≤2 bullets.
+  "visual"       — title + one visual (prefer Mermaid) + ≤2 bullets.
+  "myth_reality" — title + myth (one-line wrong belief) + reality (one-line correction)
+                   + up to 2 support bullets each side (first half of body_blocks =
+                   myth side, second half = reality side).
+  "recall"       — title + exactly 3 bullets.
+- visual: prefer Mermaid — {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class",
+  "title": "t", "mermaid_code": "complete valid Mermaid"}} — or a data table
+  {{"type": "table", "title": "t", "columns": [...], "rows": [[...]]}}. ONE visual max
+  per slide; null on slides without one.
+- kicker: a 3–5 word eyebrow label ("The core trade-off"), or null.
+- takeaway: one sentence the student writes down if they remember nothing else; null if
+  the title already is that sentence.
+- speaker_notes: the teaching script for the slide — 60–150 words of what you would
+  actually say, conversational, referencing the face content. NEVER empty, never a
+  restatement of the bullets.
+- build_steps: the reveal order, one short label each."""
 
 _CONCEPT_SLIDES_USER = """concept: {concept_name}  (Content Type {content_type})
 approved notes for this concept (the ONLY content source):
 {notes}
 
-Return ONLY JSON: {{"concept_id": "{concept_id}", "inherited_content_type": "{content_type}",
-"slides": [{{"slide_no": 1, "role": "definition|core|misconception|code|trace|proof|diagram|complexity|closing",
-"title": "a claim, not a generic noun", "body_blocks": ["≤6 lines"], "build_steps": ["one reveal each"],
-"speaker_notes": "teaching script", "source_ref": "notes section"}}]}}. ≥1 misconception slide."""
+Return ONLY JSON:
+{{"concept_id": "{concept_id}", "inherited_content_type": "{content_type}",
+"slides": [{{
+  "slide_no": 1,
+  "role": "hook|definition|core|misconception|code|trace|proof|diagram|complexity|recall",
+  "layout": "statement|bullets|code|visual|myth_reality|recall",
+  "title": "a claim, not a generic noun",
+  "kicker": "3-5 word eyebrow or null",
+  "body_blocks": ["<=6 bullets, <=10 words each"],
+  "code": {{"language": "e.g. sql", "content": "<=12 lines, or null"}},
+  "visual": {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class|table", "title": "t", "mermaid_code": "Mermaid or null", "columns": [], "rows": []}},
+  "myth": "one-line wrong belief or null",
+  "reality": "one-line correction or null",
+  "takeaway": "one memorable sentence or null",
+  "build_steps": ["one reveal each"],
+  "speaker_notes": "60-150 word teaching script",
+  "source_ref": "notes section"
+}}]}}. 6–10 slides; hook first, recall last; ≥1 myth_reality slide; code/visual/myth/reality/takeaway are null when unused."""
 
 
 def build_concept_slides_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, str]:
@@ -909,23 +1010,27 @@ individually-teachable concept, or whether it BUNDLES multiple distinct
 concepts together (via commas, "and", or a parenthetical list of named
 items/variants/operations).
 
-If it bundles multiple concepts, split it into separate atomic subtopic
-titles — one per concept, each specific and nameable on its own (e.g.
-"CREATE TABLE statement", not just "create"; "FCFS Scheduling", not just
-"FCFS"). Preserve the original terminology from the syllabus wherever
-possible rather than inventing new names.
+The subtopic itself stays ONE unit — do NOT split it into separate subtopics.
+Instead, list the atomic concepts INSIDE it: one per concept, each specific
+and nameable on its own (e.g. "CREATE TABLE statement", not just "create";
+"FCFS Scheduling", not just "FCFS"). Preserve the original terminology from
+the syllabus wherever possible rather than inventing new names. These become
+the coverage checklist the teaching content must fully address.
 
-If a subtopic is already atomic, keep it EXACTLY as given, unchanged.
+If a subtopic is already atomic, its concepts list is exactly one item — the
+subtopic itself, unchanged.
 
 Do NOT over-split: a single coherent concept whose description happens to
-contain a comma (not an enumeration of separate teachable things) must stay
-as one item. Only split genuine enumerations/bundles of otherwise-separate
-concepts. When in doubt about whether something is a genuine bundle, prefer
-NOT splitting it.
+contain a comma (not an enumeration of separate teachable things) is ONE
+concept. Only enumerate genuine bundles of otherwise-separate concepts. When
+in doubt, prefer NOT splitting.
 
-Output ONLY this JSON — no explanation, no markdown:
+Output ONLY this JSON — no explanation, no markdown. One entry per subtopic,
+in the given order, title EXACTLY as given:
 {{
-  "atomic_subtopics": ["subtopic 1", "subtopic 2", "..."]
+  "subtopics": [
+    {{"title": "subtopic exactly as written", "concepts": ["atomic concept 1", "atomic concept 2"]}}
+  ]
 }}"""
 
 
@@ -1098,3 +1203,26 @@ Output ONLY this JSON:
 def build_tlo_verb_fix_prompt(statement: str, bloom_level: str, verbs: list[str]) -> str:
     return _TLO_VERB_FIX_TEMPLATE.format(
         statement=statement, bloom_level=bloom_level, verbs=", ".join(verbs))
+
+
+_CONCEPT_COVERAGE_TEMPLATE = """You previously wrote the deep-dive explanation below for the subtopic
+"{subtopic_title}". It fails to cover these concepts that this subtopic is
+required to teach: {missing}.
+
+CURRENT architecture_and_mechanism.explanation:
+\"\"\"{current_text}\"\"\"
+
+Rewrite and EXTEND it so every missing concept above gets a genuine treatment —
+its own explanation of what it is and how it works, plus a concrete example —
+woven into the existing flow with transitions (one coherent note, not appended
+mini-sections). Keep everything already covered; do not remove content. Keep
+the same voice and formatting rules (**bold** first-use terms, `inline code`,
+$...$ math, short paragraphs separated by blank lines).
+
+Output ONLY this JSON:
+{{"expanded_text": "the full rewritten explanation covering every listed concept"}}"""
+
+
+def build_concept_coverage_prompt(subtopic_title: str, missing: list[str], current_text: str) -> str:
+    return _CONCEPT_COVERAGE_TEMPLATE.format(
+        subtopic_title=subtopic_title, missing=", ".join(missing), current_text=current_text or "")

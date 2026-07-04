@@ -520,14 +520,16 @@ def _chat_json(client: Any, system: str, user: str, temperature: float = 0.4) ->
     return json.loads(resp.choices[0].message.content or "{}")
 
 
-def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list[str]:
-    """Subtopic Decomposition (companion doc): split bundled syllabus bullets
-    ("insert, delete, update") into atomic, individually-teachable subtopics
-    before the Topic Plan sees them. Best-effort — any failure keeps the
-    originals."""
+def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list[dict]:
+    """Subtopic Decomposition (companion doc): for each syllabus subtopic, list
+    the atomic concepts bundled inside it ("insert, delete, update" → three
+    concepts). The SUBTOPIC stays the generation unit — the concepts become its
+    coverage checklist. Best-effort: failures fall back to one concept per
+    subtopic (itself). Output order and titles mirror the input exactly."""
     from app.services.generation_prompts import build_subtopic_split_prompt  # lazy
+    fallback = [{"title": s, "concepts": [s]} for s in subtopics]
     if not subtopics:
-        return subtopics
+        return []
     try:
         r = _chat_json(
             client,
@@ -535,24 +537,29 @@ def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list
             build_subtopic_split_prompt(topic_title, subtopics),
             temperature=0.1,
         )
-        atomic = [s.strip() for s in (r.get("atomic_subtopics") or [])
-                  if isinstance(s, str) and s.strip()]
-        # Sanity: a valid split never shrinks the list.
-        if atomic and len(atomic) >= len(subtopics):
-            return atomic
+        by_title = {(e.get("title") or "").strip().casefold(): e
+                    for e in (r.get("subtopics") or []) if isinstance(e, dict)}
+        out = []
+        for s in subtopics:
+            e = by_title.get(s.strip().casefold()) or {}
+            concepts = [c.strip() for c in (e.get("concepts") or [])
+                        if isinstance(c, str) and c.strip()]
+            out.append({"title": s, "concepts": concepts or [s]})
+        return out
     except Exception:
-        logger.warning("subtopic decomposition failed — using raw subtopics", exc_info=True)
-    return subtopics
+        logger.warning("subtopic decomposition failed — one concept per subtopic", exc_info=True)
+    return fallback
 
 
 def gen_topic_plan(client: Any, ctx: dict) -> dict:
     """Node A: generate the Topic Plan JSON (strict schema). Model-emitted stamps
-    and ids are stripped on ingest by the orchestrator, not here. Bundled
-    subtopics are decomposed into atomic ones first (companion doc)."""
+    and ids are stripped on ingest by the orchestrator, not here. Each subtopic
+    is annotated with its bundled concepts first (companion doc) so the plan
+    emits one row per subtopic with a concepts_covered checklist."""
     from app.services.generation_prompts import build_topic_plan_prompt  # lazy
-    atomic = split_subtopics(client, ctx.get("topic_title", ""), ctx.get("subtopics") or [])
-    if atomic is not ctx.get("subtopics"):
-        ctx = {**ctx, "subtopics": atomic}
+    mapping = split_subtopics(client, ctx.get("topic_title", ""), ctx.get("subtopics") or [])
+    if mapping:
+        ctx = {**ctx, "subtopic_concepts": mapping}
     return _chat_json(client, *build_topic_plan_prompt(ctx), temperature=0.2)
 
 
@@ -589,6 +596,11 @@ def _normalize_plan_keys(plan: dict) -> dict:
         c["scope_in"] = as_list(c.get("scope_in"))
         c["scope_out"] = as_list(c.get("scope_out"))
         c["flag_overrides"] = as_list(c.get("flag_overrides"))
+        # Subtopic-level generation: each row's coverage checklist defaults to
+        # the subtopic itself when the model omits it.
+        c["concepts_covered"] = as_list(c.get("concepts_covered"))
+        if not c["concepts_covered"] and c.get("concept_name"):
+            c["concepts_covered"] = [c["concept_name"]]
     for t in plan.get("tlo_set", []) or []:
         if not t.get("statement"):
             t["statement"] = t.get("text") or t.get("tlo_statement") or ""
@@ -989,6 +1001,48 @@ def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: di
             _set_path(core, path, expanded)
         attempts += 1
         result = validate_notes_unit(unit_output, unit, ctx)
+
+    # Concept-coverage guarantee (subtopic-level generation): every concept the
+    # plan bundled into this subtopic must actually be taught. Loose token match
+    # (all significant words of the concept name appear somewhere in the core
+    # JSON); one LLM repair extends the mechanism for anything missing.
+    concepts = [c for c in (unit.get("concepts_covered") or [])
+                if isinstance(c, str) and c.strip()]
+    if len(concepts) > 1 and client is not None:
+        # Generic curriculum filler carries no signal — only distinctive tokens
+        # decide coverage ("INSERT statement" is covered when "insert" appears).
+        _STOP = {"and", "the", "for", "with", "into", "from", "statement", "statements",
+                 "operation", "operations", "concept", "concepts", "basic", "basics",
+                 "introduction", "overview", "types", "different", "using"}
+
+        def _uncovered(core_obj) -> list[str]:
+            text = json.dumps(core_obj, ensure_ascii=False).casefold()
+            out = []
+            for cname in concepts:
+                words = [w for w in re.findall(r"[a-z0-9+#]+", cname.casefold())
+                         if len(w) >= 3 and w not in _STOP]
+                if words and not all(w in text for w in words):
+                    out.append(cname)
+            return out
+
+        core = unit_output.get("core", {})
+        missing = _uncovered(core)
+        if missing:
+            try:
+                from app.services.generation_prompts import build_concept_coverage_prompt
+                current = str(_get_path(core, _NOTES_FIELD_PATHS["architecture_and_mechanism"]) or "")
+                r = _chat_json(client, "You are an expert educator. Output ONLY valid JSON.",
+                               build_concept_coverage_prompt(unit.get("concept_name", ""), missing, current),
+                               temperature=0.4)
+                fixed = (r.get("expanded_text") or "").strip()
+                if fixed:
+                    _set_path(core, _NOTES_FIELD_PATHS["architecture_and_mechanism"], fixed)
+                still = _uncovered(core)
+                if still:
+                    logger.warning("concept coverage still incomplete after repair: %s", still)
+            except Exception:
+                logger.warning("concept coverage repair failed", exc_info=True)
+            result = validate_notes_unit(unit_output, unit, ctx)
     return result
 
 
@@ -1417,7 +1471,25 @@ def _load_topic_context(db, course_id: str, topic_id: str) -> dict:
     unit_hours = unit.get("contact_hours") or unit.get("hours") or 0
     topic_hours = float(topic.get("contact_hours") or 0) or max(round(unit_hours / 3, 1), 2)
 
+    # Industry skills from the committed upload's pipeline run (P3) — the notes
+    # closing prompt uses them to ground industry_relevance in the course's own
+    # skill mapping instead of generic guesses.
+    industry_skills: list[str] = []
+    try:
+        ups = (db.table("uploads").select("extraction_result")
+               .eq("committed_to_course", course_id).limit(1).execute().data or [])
+        if ups:
+            er = ups[0].get("extraction_result") or {}
+            if isinstance(er, str):
+                er = json.loads(er)
+            p3 = (er.get("pipeline_result") or {}).get("p3_industry_skills") or {}
+            industry_skills = [s.get("skill_name") for s in (p3.get("industry_skills") or [])
+                               if s.get("skill_name")]
+    except Exception:
+        logger.warning("industry skills lookup failed for course %s", course_id, exc_info=True)
+
     return {
+        "industry_skills": industry_skills,
         "course_code": course.get("code", ""),
         "course_name": course.get("name", ""),
         "regulation": course.get("regulation", ""),
