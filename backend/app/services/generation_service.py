@@ -593,9 +593,19 @@ def _normalize_plan_keys(plan: dict) -> dict:
         if not t.get("statement"):
             t["statement"] = t.get("text") or t.get("tlo_statement") or ""
         t["served_by_concepts"] = as_list(t.get("served_by_concepts"))
+        # Canonicalize the Bloom representation — the model sometimes emits the
+        # name ("Apply") instead of the code ("L3"); store the code so the verb
+        # gate, coherence checks, and reader display all agree.
+        if t.get("bloom_level"):
+            t["bloom_level"] = ct.normalize_bloom(t["bloom_level"])
     for m in plan.get("co_mapping", []) or []:
         if not m.get("co_statement"):
             m["co_statement"] = m.get("text") or m.get("statement") or ""
+        if m.get("bloom_level"):
+            m["bloom_level"] = ct.normalize_bloom(m["bloom_level"])
+    for c in plan.get("concept_inventory", []) or []:
+        if c.get("bloom_ceiling"):
+            c["bloom_ceiling"] = ct.normalize_bloom(c["bloom_ceiling"])
     return plan
 
 
@@ -749,6 +759,26 @@ def repair_plan_alignment(client: Any, plan: dict) -> dict:
             c["serves_tlos"] = [new_id]
         except Exception:
             logger.warning("concept-TLO pass failed for %s", c.get("concept_id"), exc_info=True)
+
+    # Pass 4 — verb-bank repair: rewrite any TLO whose leading verb isn't
+    # approved at its declared level, so a single stray verb ("perform",
+    # "create" outside its level) rewrites one statement instead of failing the
+    # whole plan after the retry cap. Best-effort; unfixable TLOs fall through
+    # to the code validator.
+    for t in plan.get("tlo_set") or []:
+        try:
+            stmt, lvl = t.get("statement", ""), ct.normalize_bloom(t.get("bloom_level", "L2"))
+            if not stmt or ct.verb_allowed_at(stmt, lvl):
+                continue
+            verbs = sorted(ct.APPROVED_VERBS.get(lvl, ct.APPROVED_VERBS["L2"]))
+            r = _chat_json(client, sys_msg,
+                           gp.build_tlo_verb_fix_prompt(stmt, lvl, verbs[:12]),
+                           temperature=0.1)
+            fixed = (r.get("outcome_statement") or "").strip()
+            if fixed and ct.verb_allowed_at(fixed, lvl):
+                t["statement"] = fixed
+        except Exception:
+            logger.warning("verb-fix pass failed for %s", t.get("tlo_id"), exc_info=True)
 
     _sync_plan_links(plan)
     return plan

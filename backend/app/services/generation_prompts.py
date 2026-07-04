@@ -1075,3 +1075,26 @@ def build_subtopic_tlo_prompt(concept: dict, bloom_target: str, verbs: list[str]
         verbs=", ".join(verbs),
         proficiency=concept.get("proficiency_target") or "Working",
     )
+
+
+_TLO_VERB_FIX_TEMPLATE = """The following Topic Learning Outcome does not begin with an approved
+outcome verb for its Bloom level. Rewrite it so it leads with one of the
+approved verbs, keeping the exact same meaning, scope, and Bloom level.
+
+TLO: "{statement}"
+Bloom level: {bloom_level}
+Approved verbs for {bloom_level} (start the sentence with one of these): {verbs}
+
+Rules:
+- ONE measurable sentence, starting with one of the approved verbs above.
+- Preserve the original subject matter exactly — only change the leading verb
+  (and minimal surrounding words for grammar). Do not add or drop scope.
+- Never use: understand, learn, know, appreciate, be aware of, be familiar with.
+
+Output ONLY this JSON:
+{{"outcome_statement": "rewritten TLO starting with an approved verb"}}"""
+
+
+def build_tlo_verb_fix_prompt(statement: str, bloom_level: str, verbs: list[str]) -> str:
+    return _TLO_VERB_FIX_TEMPLATE.format(
+        statement=statement, bloom_level=bloom_level, verbs=", ".join(verbs))

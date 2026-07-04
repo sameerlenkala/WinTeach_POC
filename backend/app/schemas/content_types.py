@@ -271,9 +271,16 @@ APPROVED_VERBS: dict[str, set[str]] = {
            "paraphrase", "illustrate", "distinguish", "discuss", "restate",
            "outline", "represent", "define", "identify", "list", "compare",
            "differentiate", "recognize", "characterize", "categorize", "relate"},
+    # L3 (Apply) — includes technical action verbs common in engineering TLOs.
+    # "create"/"write"/"perform" are legitimate Apply verbs in a technical
+    # context ("create a table", "write a query"); "create" is also at L6, and
+    # over-claiming (TLO Bloom > parent CO) is caught separately by bloom_rank,
+    # so dual-listing does not open a leakage hole in the dangerous direction.
     "L3": {"apply", "implement", "solve", "compute", "demonstrate", "construct",
            "use", "execute", "calculate", "model", "modify", "operate",
-           "produce", "predict", "illustrate", "organize"},
+           "produce", "predict", "illustrate", "organize", "perform", "create",
+           "write", "program", "query", "draw", "configure", "translate",
+           "manipulate", "simulate"},
     "L4": {"analyze", "compare", "examine", "investigate", "differentiate",
            "contrast", "categorize", "deconstruct", "diagnose", "correlate",
            "trace", "test"},
