@@ -60,48 +60,209 @@ function Section({ n, title, children }: { n?: number; title: string; children: 
   );
 }
 
+const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
+
+function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
+  return (
+    <div style={{ overflowX: 'auto', border: `1px solid ${W.border}`, borderRadius: 8 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr>
+            {columns.map((c, i) => (
+              <th key={i} style={{ textAlign: 'left', padding: '8px 12px', background: W.surfaceMuted, borderBottom: `1px solid ${W.border}`, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em', color: W.text3, whiteSpace: 'nowrap' }}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={ri}>
+              {(Array.isArray(r) ? r : [r]).map((cell: any, ci: number) => (
+                <td key={ci} style={{ padding: '8px 12px', borderBottom: ri < rows.length - 1 ? `1px solid ${W.border}` : 'none', color: W.text2, lineHeight: 1.5, verticalAlign: 'top' }}>
+                  {cell == null ? '—' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Generated visuals carry columns/rows for table-like types; diagram types
+// (flowchart, hierarchy, memory) fall back to their precise text description.
+function VisualBlock({ v }: { v: any }) {
+  const hasTable = (v?.columns?.length ?? 0) > 0 && (v?.rows?.length ?? 0) > 0;
+  if (!hasTable && !v?.description) return null;
+  return (
+    <figure style={{ margin: '14px 0 0' }}>
+      {v.title && <figcaption style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.text, marginBottom: 6 }}>{v.title}</figcaption>}
+      {hasTable
+        ? <DataTable columns={v.columns} rows={v.rows} />
+        : <div style={{ border: `1px dashed ${W.borderStrong}`, borderRadius: 8, padding: '12px 16px', fontSize: 13, color: W.text2, lineHeight: 1.6, background: W.surfaceMuted }}>{v.description}</div>}
+    </figure>
+  );
+}
+
 function NotesArticle({ content }: { content: any }) {
   const core = content?.core ?? {};
   const opening = content?.opening ?? {};
   const closing = content?.closing ?? {};
+  // opening
+  const openSections = opening?.sections ?? {};
+  const metaInfo = openSections?.topic_overview?.subtopic_metadata;
+  const outcomes = openSections?.topic_overview?.outcomes_checklist ?? [];
+  const scenario = openSections?.problem_statement?.scenario;
+  const gap = openSections?.problem_statement?.gap_statement;
+  const intro = openSections?.introduction?.narrative_intro;
+  // core
   const def = core?.core_concept?.formal_definition;
   const intuition = core?.core_concept?.mental_model_analogy ?? core?.core_concept?.intuition ?? opening?.hook;
   const mech = core?.deep_dive?.architecture_and_mechanism?.explanation;
+  const archVisuals = core?.deep_dive?.architecture_and_mechanism?.visuals ?? [];
   const code = core?.deep_dive?.code_or_formalization;
+  const grid = code?.complexity_grid;
+  const hasGrid = grid && [grid.best_case_time, grid.average_case_time, grid.worst_case_time, grid.space_complexity].some((v: any) => v && v !== 'N/A');
+  const trace = core?.deep_dive?.execution_trace;
+  const hasTrace = trace?.applicable && (trace?.dry_run_trace || (trace?.edge_case_matrix?.length ?? 0) > 0 || (trace?.visuals?.length ?? 0) > 0);
   const worked = core?.practical_understanding?.worked_example;
+  const advantages: any[] = core?.practical_understanding?.advantages ?? [];
+  const disadvantages: any[] = core?.practical_understanding?.disadvantages ?? [];
   const applications = core?.practical_understanding?.applications ?? core?.practical_understanding?.real_world_applications;
   const hasApplications = Array.isArray(applications) ? applications.length > 0 : Boolean(applications);
+  const analysis = core?.analysis;
+  const hasAnalysis = analysis?.applicable && (analysis?.discussion || (analysis?.complexity_note && analysis.complexity_note !== 'N/A'));
+  const comparison = core?.comparison;
+  const compRows: any[] = comparison?.comparison_table?.rows ?? [];
+  const hasComparison = comparison?.applicable !== false && compRows.length > 0;
+  // closing
   const mistakes = closing?.sections?.common_mistakes ?? [];
   const revision = closing?.sections?.revision_section;
+  const formulas: any[] = revision?.important_formulas ?? [];
   const hasRevision = (revision?.key_takeaways?.length ?? 0) > 0
+    || formulas.length > 0
     || (revision?.important_definitions?.length ?? 0) > 0
     || (revision?.active_recall_prompts?.length ?? 0) > 0;
+  const glossaryTerms: any[] = closing?.sections?.glossary_section?.terms ?? [];
+  const related = closing?.sections?.related_topics;
+  const hasRelated = related && (related.previous_connection || related.next_connection || (related.builds_toward?.length ?? 0) > 0 || related.industry_relevance);
   let n = 0;
 
   return (
     <>
+      {(metaInfo?.difficulty || metaInfo?.reading_time_minutes) && (
+        <div style={{ display: 'flex', gap: 16, fontSize: 12, color: W.text3, marginBottom: 22 }}>
+          {metaInfo.difficulty && <span>Difficulty {metaInfo.difficulty}</span>}
+          {metaInfo.reading_time_minutes != null && <span>~{metaInfo.reading_time_minutes} min read</span>}
+        </div>
+      )}
+      {(scenario || intro) && (
+        <Section n={++n} title="Why this matters">
+          {scenario && <p style={{ margin: 0 }}>{scenario}</p>}
+          {gap && <p style={{ margin: scenario ? '10px 0 0' : 0, fontWeight: 600, color: W.text }}>{gap}</p>}
+          {intro && <p style={{ margin: scenario || gap ? '10px 0 0' : 0 }}>{intro}</p>}
+        </Section>
+      )}
+      {outcomes.length > 0 && (
+        <Section n={++n} title="Learning outcomes">
+          <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>
+            {outcomes.map((o: any, i: number) => (
+              <li key={i} style={{ marginBottom: 6 }}>
+                {o.statement}
+                {o.bloom_level && <span style={{ marginLeft: 8, fontSize: 11, color: W.text3 }}>{o.bloom_level}</span>}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {def && (
         <Section n={++n} title="Definition">
           <p style={{ margin: 0, fontSize: 15, color: W.text, lineHeight: 1.75 }}>{def}</p>
           {intuition && <p style={{ margin: '12px 0 0' }}>{intuition}</p>}
         </Section>
       )}
-      {mech && <Section n={++n} title="Architecture & mechanism"><p style={{ margin: 0 }}>{mech}</p></Section>}
+      {(mech || archVisuals.length > 0) && (
+        <Section n={++n} title="Architecture & mechanism">
+          {mech && <p style={{ margin: 0 }}>{mech}</p>}
+          {archVisuals.map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
+        </Section>
+      )}
       {code?.applicable && code?.content && (
         <Section n={++n} title={`Code${code.language_or_system ? ` — ${code.language_or_system}` : ''}`}>
           <pre style={{
             background: '#0f1117', color: '#e2e6f0', borderRadius: 8, padding: '16px 18px',
             overflow: 'auto', fontSize: 12.5, lineHeight: 1.6, margin: 0,
-            fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+            fontFamily: MONO,
           }}>{code.content}</pre>
+          {code.explanation && <p style={{ margin: '12px 0 0' }}>{code.explanation}</p>}
+          {hasGrid && (
+            <div style={{ marginTop: 12 }}>
+              <DataTable columns={['Best case', 'Average case', 'Worst case', 'Space']}
+                rows={[[grid.best_case_time, grid.average_case_time, grid.worst_case_time, grid.space_complexity]]} />
+              {grid.justification && grid.justification !== 'N/A' && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: W.text3 }}>{grid.justification}</p>}
+            </div>
+          )}
+        </Section>
+      )}
+      {hasTrace && (
+        <Section n={++n} title="Execution trace & edge cases">
+          {trace.dry_run_trace && (
+            <pre style={{
+              background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px',
+              overflow: 'auto', fontSize: 12.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', fontFamily: MONO, color: W.text,
+            }}>{trace.dry_run_trace}</pre>
+          )}
+          {(trace.edge_case_matrix?.length ?? 0) > 0 && (
+            <div style={{ marginTop: trace.dry_run_trace ? 12 : 0 }}>
+              <DataTable columns={['Edge input', 'Expected behavior']}
+                rows={trace.edge_case_matrix.map((e: any) => [e.edge_input, e.expected_behavior])} />
+            </div>
+          )}
+          {(trace.visuals ?? []).map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
         </Section>
       )}
       {worked && <Section n={++n} title="Worked example"><p style={{ margin: 0 }}>{worked}</p></Section>}
+      {(advantages.length > 0 || disadvantages.length > 0) && (
+        <Section n={++n} title="Advantages & trade-offs">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {advantages.length > 0 && (
+              <div style={{ border: `1px solid ${W.border}`, borderLeft: '3px solid var(--status-green)', borderRadius: 8, padding: '12px 16px', background: W.card }}>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.greenFg, marginBottom: 6 }}>Advantages</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+                  {advantages.map((a: any, i: number) => <li key={i} style={{ marginBottom: 4 }}>{typeof a === 'string' ? a : JSON.stringify(a)}</li>)}
+                </ul>
+              </div>
+            )}
+            {disadvantages.length > 0 && (
+              <div style={{ border: `1px solid ${W.border}`, borderLeft: `3px solid ${W.orangeFg}`, borderRadius: 8, padding: '12px 16px', background: W.card }}>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.orangeFg, marginBottom: 6 }}>Trade-offs</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+                  {disadvantages.map((d: any, i: number) => <li key={i} style={{ marginBottom: 4 }}>{typeof d === 'string' ? d : JSON.stringify(d)}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
       {hasApplications && (
         <Section n={++n} title="Real-world applications">
           {Array.isArray(applications)
             ? <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>{applications.map((a: any, i: number) => <li key={i} style={{ marginBottom: 6 }}>{typeof a === 'string' ? a : a?.text ?? JSON.stringify(a)}</li>)}</ul>
             : <p style={{ margin: 0 }}>{applications}</p>}
+        </Section>
+      )}
+      {hasAnalysis && (
+        <Section n={++n} title="Analysis">
+          {analysis.discussion && <p style={{ margin: 0 }}>{analysis.discussion}</p>}
+          {analysis.complexity_note && analysis.complexity_note !== 'N/A' && (
+            <p style={{ margin: analysis.discussion ? '10px 0 0' : 0, fontSize: 13, color: W.text3 }}>{analysis.complexity_note}</p>
+          )}
+        </Section>
+      )}
+      {hasComparison && (
+        <Section n={++n} title={`Comparison${comparison.compared_against ? ` — vs ${comparison.compared_against}` : ''}`}>
+          <DataTable columns={['Parameter', 'This concept', comparison.compared_against ?? 'Alternative']}
+            rows={compRows.map((r: any) => [r.parameter, r.option_a, r.option_b])} />
         </Section>
       )}
       {mistakes.length > 0 && (
@@ -123,6 +284,15 @@ function NotesArticle({ content }: { content: any }) {
               {revision.key_takeaways.map((t: string, i: number) => <li key={i} style={{ marginBottom: 6 }}>{t}</li>)}
             </ul>
           )}
+          {formulas.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
+              {formulas.map((f: any, i: number) => (
+                <code key={i} style={{ fontFamily: MONO, fontSize: 13, background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 6, padding: '6px 10px', display: 'block', color: W.text }}>
+                  {typeof f === 'string' ? f : JSON.stringify(f)}
+                </code>
+              ))}
+            </div>
+          )}
           {(revision.important_definitions?.length ?? 0) > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
               {revision.important_definitions.map((d: any, i: number) => (
@@ -142,6 +312,29 @@ function NotesArticle({ content }: { content: any }) {
               ))}
             </div>
           )}
+        </Section>
+      )}
+      {glossaryTerms.length > 0 && (
+        <Section n={++n} title="Glossary">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {glossaryTerms.map((t: any, i: number) => (
+              <div key={i} style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+                <span style={{ fontWeight: 600, color: W.text }}>{t.term}</span>
+                {t.formal_definition && <> — {t.formal_definition}</>}
+                {t.simple_explanation && <div style={{ fontSize: 12.5, color: W.text3, marginTop: 2 }}>In plain terms: {t.simple_explanation}</div>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+      {hasRelated && (
+        <Section n={++n} title="Related topics">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, lineHeight: 1.65 }}>
+            {related.previous_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Builds on:</span> {related.previous_subtopic ? `${related.previous_subtopic} — ` : ''}{related.previous_connection}</div>}
+            {related.next_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Leads to:</span> {related.next_subtopic ? `${related.next_subtopic} — ` : ''}{related.next_connection}</div>}
+            {(related.builds_toward?.length ?? 0) > 0 && <div><span style={{ fontWeight: 600, color: W.text }}>Builds toward:</span> {related.builds_toward.join(', ')}</div>}
+            {related.industry_relevance && <div><span style={{ fontWeight: 600, color: W.text }}>In industry:</span> {related.industry_relevance}</div>}
+          </div>
         </Section>
       )}
     </>
@@ -256,6 +449,8 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
   const [content, setContent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
+  const [regenning, setRegenning] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const courseCode = (course as any)?.code ?? courseId ?? '';
   const topicTitle = (topic as any)?.title ?? 'Topic';
@@ -304,14 +499,38 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [navigate, courseId, topicId, type]);
 
-  const approve = async () => {
+  const approve = async (advance: boolean) => {
     if (!job || !conceptId) return;
     setApproving(true);
     try {
       await generationApi.approveConcept(job.id, conceptId, type);
       setJob(await generationApi.getTopicJob(topicId!));
+      if (advance && next) goto(next.concept_id);
     } catch { /* */ }
     finally { setApproving(false); }
+  };
+
+  const download = async () => {
+    if (!job || !conceptId) return;
+    setExporting(true);
+    try {
+      const ext = type === 'slides' ? 'pptx' : 'docx';
+      const base = (concept?.concept_name ?? conceptId).replace(/\s+/g, '_');
+      await generationApi.exportConcept(job.id, conceptId, type, `${base}_${meta.segment}.${ext}`);
+    } catch { /* */ }
+    finally { setExporting(false); }
+  };
+
+  // Re-kick generation without a round trip through the studio; the status
+  // flips to 'generating', which restarts the poll and clears the article.
+  const regenerate = async () => {
+    if (!job || !conceptId) return;
+    setRegenning(true);
+    try {
+      await generationApi.genConcept(job.id, conceptId, type);
+      setJob(await generationApi.getTopicJob(topicId!));
+    } catch { /* */ }
+    finally { setRegenning(false); }
   };
 
   const prev = idx > 0 ? concepts[idx - 1] : null;
@@ -389,12 +608,25 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
                 <h1 style={{ flex: '1 1 300px', minWidth: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', color: W.text, margin: 0, lineHeight: 1.25 }}>
                   {concept?.concept_name ?? meta.tab}
                 </h1>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  {nState?.status === 'ready' && !approved && (
-                    <Btn variant="primary" sm onClick={approve} disabled={approving}>
-                      <span style={{ width: 13, height: 13, display: 'inline-flex' }}><ICheck /></span>
-                      {approving ? 'Approving…' : 'Approve'}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+                  {content && (
+                    <Btn sm variant="ghost" onClick={download} disabled={exporting}>
+                      {exporting ? 'Exporting…' : type === 'slides' ? 'Download .pptx' : 'Download .docx'}
                     </Btn>
+                  )}
+                  {(nState?.status === 'ready' || nState?.status === 'error') && (
+                    <Btn sm variant="ghost" onClick={regenerate} disabled={regenning || approving}>
+                      {regenning ? 'Restarting…' : 'Regenerate'}
+                    </Btn>
+                  )}
+                  {nState?.status === 'ready' && !approved && (
+                    <>
+                      {next && <Btn sm onClick={() => approve(false)} disabled={approving || regenning}>Approve</Btn>}
+                      <Btn variant="primary" sm onClick={() => approve(!!next)} disabled={approving || regenning}>
+                        <span style={{ width: 13, height: 13, display: 'inline-flex' }}><ICheck /></span>
+                        {approving ? 'Approving…' : next ? 'Approve & next' : 'Approve'}
+                      </Btn>
+                    </>
                   )}
                   {approved && <Badge variant="green" dot>Approved</Badge>}
                 </div>
@@ -427,6 +659,19 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
                   );
                 })}
               </div>
+              {/* concept switcher for small screens — the contents rail is lg-only */}
+              {concepts.length > 0 && (
+                <div className="lg:hidden" style={{ marginTop: 12 }}>
+                  <select value={conceptId ?? ''} onChange={e => goto(e.target.value)} style={{
+                    width: '100%', padding: '8px 12px', borderRadius: 7, border: `1px solid ${W.borderStrong}`,
+                    background: W.card, color: W.text, fontFamily: W.fontSans, fontSize: 13.5,
+                  }}>
+                    {concepts.map((c, i) => (
+                      <option key={c.concept_id} value={c.concept_id}>{i + 1}. {c.concept_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </header>
 
             {/* article body */}

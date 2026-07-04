@@ -66,4 +66,25 @@ export const api = {
     const url = `${BASE}/api/v1${path}${token ? `?token=${token}` : ''}`;
     return new EventSource(url);
   },
+
+  // Authenticated file download: fetches as a blob and triggers a browser
+  // save, using the server's Content-Disposition filename when exposed.
+  download: async (path: string, fallbackName: string): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${BASE}/api/v1${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, body.detail ?? 'Download failed');
+    }
+    const blob = await res.blob();
+    const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ?? fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

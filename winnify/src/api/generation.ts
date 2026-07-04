@@ -135,6 +135,10 @@ export const generationApi = {
     api.get<{ content: any; status: ArtStatus; approval_status: string; cost_usd?: number; error?: string }>(
       `/generate/jobs/${jobId}/concepts/${conceptId}/${type}`),
 
+  // Notes/quiz download as .docx, slides as .pptx (with speaker notes).
+  exportConcept: (jobId: string, conceptId: string, type: ConceptArtType, fallbackName: string) =>
+    api.download(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/export`, fallbackName),
+
   genTopicArtifact: (jobId: string, type: TopicArtType) =>
     api.post<any>(`/generate/jobs/${jobId}/topic/${type}/generate`),
 

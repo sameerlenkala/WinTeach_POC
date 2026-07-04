@@ -12,7 +12,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from supabase import Client
 
 from app.core.dependencies import get_db, get_current_user, require_role
@@ -26,6 +26,7 @@ from app.schemas.generation import (
     PlanEditRequest,
     ScopePatchRequest,
 )
+from app.services import export_service
 from app.services import generation_service as gen
 
 router = APIRouter(prefix="/generate", tags=["Generation"])
@@ -221,6 +222,18 @@ def approve_concept(job_id: str, concept_id: str, artifact_type: str,
                     user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
     topic_id = _topic_of(db, job_id)
     return gen.approve_concept_artifact(db, user, topic_id, concept_id, artifact_type)
+
+
+@router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/export")
+def export_concept(job_id: str, concept_id: str, artifact_type: str,
+                   user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    """Download the artifact as an Office file: notes/quiz → .docx, slides → .pptx."""
+    if artifact_type not in _CONCEPT_TYPES:
+        raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
+    topic_id = _topic_of(db, job_id)
+    data, filename, media = export_service.export_concept(db, job_id, topic_id, concept_id, artifact_type)
+    return Response(content=data, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}")

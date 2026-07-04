@@ -357,8 +357,9 @@ export default function WinTeachGenerate() {
   const [savingPlan, setSavingPlan] = useState(false);
   const [error, setError] = useState('');
 
-  // ── Notes generation queue (sequential, visible, editable) ──
+  // ── Concept generation queue (sequential, visible, editable; one artifact type at a time) ──
   const [queue, setQueue] = useState<string[]>([]);            // waiting concept ids, in order
+  const [queueType, setQueueType] = useState<ConceptArtType>('student_notes'); // artifact type this queue generates
   const [queueRun, setQueueRun] = useState<string | null>(null); // currently generating via queue
   const [queueDone, setQueueDone] = useState<Record<string, 'done' | 'failed'>>({});
   const [queuePaused, setQueuePaused] = useState(false);
@@ -436,10 +437,18 @@ export default function WinTeachGenerate() {
   const topicArtsDone = TOPIC_ART_TYPES.filter(t => topicArt(t)?.review_status === 'ready').length;
   const planDone = !!plan;
 
-  const pendingNotes = concepts.filter((c: any) => {
-    const s = stateFor(c.concept_id, 'student_notes');
-    return !s || s.status === 'not_generated' || s.status === 'error';
+  // Concepts still needing artifact `t`. Slides/quiz derive from notes, so
+  // they're only pending once the concept's notes are ready or approved.
+  const pendingFor = (t: ConceptArtType) => concepts.filter((c: any) => {
+    const s = stateFor(c.concept_id, t);
+    const missing = !s || s.status === 'not_generated' || s.status === 'error';
+    if (t === 'student_notes') return missing;
+    const ns = stateFor(c.concept_id, 'student_notes');
+    return missing && (ns?.status === 'ready' || ns?.approval_status === 'approved');
   });
+  const pendingNotes = pendingFor('student_notes');
+  const pendingSlides = pendingFor('slides');
+  const pendingQuiz = pendingFor('quiz');
 
   const conceptName = (cid: string) => concepts.find((c: any) => c.concept_id === cid)?.concept_name ?? cid;
 
@@ -452,7 +461,7 @@ export default function WinTeachGenerate() {
     if (!job) return;
     if (queueRun) {
       if (queueWaiting.current) return;
-      const st = stateFor(queueRun, 'student_notes')?.status;
+      const st = stateFor(queueRun, queueType)?.status;
       if (st === 'ready') { setQueueDone(d => ({ ...d, [queueRun]: 'done' })); setQueueRun(null); }
       else if (st === 'error') { setQueueDone(d => ({ ...d, [queueRun]: 'failed' })); setQueueRun(null); }
       return;
@@ -462,15 +471,18 @@ export default function WinTeachGenerate() {
     setQueue(q => q.slice(1));
     queueWaiting.current = true;
     setQueueRun(nextId);
-    generationApi.genConcept(job.id, nextId, 'student_notes')
+    generationApi.genConcept(job.id, nextId, queueType)
       .then(refetch)
       .then(() => { queueWaiting.current = false; })
       .catch(() => { queueWaiting.current = false; setQueueDone(d => ({ ...d, [nextId]: 'failed' })); setQueueRun(null); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job, queue, queueRun, queuePaused]);
+  }, [job, queue, queueRun, queuePaused, queueType]);
 
-  const enqueueAllNotes = () => {
-    const ids = pendingNotes.map((c: any) => c.concept_id).filter((id: string) => id !== queueRun && !queue.includes(id));
+  const queueBusy = queueRun !== null || queue.length > 0;
+  const enqueueAll = (t: ConceptArtType) => {
+    if (queueBusy && queueType !== t) return; // one artifact type per queue run
+    setQueueType(t);
+    const ids = pendingFor(t).map((c: any) => c.concept_id).filter((id: string) => id !== queueRun && !queue.includes(id));
     setQueueDone({});
     setQueuePaused(false);
     setQueue(q => [...q, ...ids]);
@@ -495,6 +507,7 @@ export default function WinTeachGenerate() {
       const saved = JSON.parse(sessionStorage.getItem(queueKey) ?? 'null');
       if (saved) {
         setQueue(saved.queue ?? []);
+        setQueueType(saved.queueType ?? 'student_notes');
         setQueueRun(saved.queueRun ?? null);
         setQueueDone(saved.queueDone ?? {});
         setQueuePaused(saved.queuePaused ?? false);
@@ -505,10 +518,10 @@ export default function WinTeachGenerate() {
   }, [topicId]);
   useEffect(() => {
     if (!topicId || !queueRestored) return;
-    if (queueVisible) sessionStorage.setItem(queueKey, JSON.stringify({ queue, queueRun, queueDone, queuePaused }));
+    if (queueVisible) sessionStorage.setItem(queueKey, JSON.stringify({ queue, queueType, queueRun, queueDone, queuePaused }));
     else sessionStorage.removeItem(queueKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId, queueRestored, queue, queueRun, queueDone, queuePaused, queueVisible]);
+  }, [topicId, queueRestored, queue, queueType, queueRun, queueDone, queuePaused, queueVisible]);
 
   // topic context (this page is the topic's home — no separate topic page)
   const tp = topic as any;
@@ -740,12 +753,24 @@ export default function WinTeachGenerate() {
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Subtopics ({concepts.length})</div>
                 {planStatus.ok ? <Badge variant="green" dot>Plan validated</Badge> : <Badge variant="orange">Plan needs revision</Badge>}
                 {plan.front_matter?.topic_plan_version && <Badge variant="muted">v{plan.front_matter.topic_plan_version}</Badge>}
-                {pendingNotes.length > 0 && (
-                  <div style={{ marginLeft: 'auto' }}>
-                    <Btn sm variant="primary" onClick={enqueueAllNotes}>
-                      <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>
-                      Generate all Notes ({pendingNotes.length})
-                    </Btn>
+                {(pendingNotes.length > 0 || pendingSlides.length > 0 || pendingQuiz.length > 0) && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {pendingNotes.length > 0 && (
+                      <Btn sm variant="primary" onClick={() => enqueueAll('student_notes')} disabled={queueBusy && queueType !== 'student_notes'}>
+                        <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>
+                        Generate all Notes ({pendingNotes.length})
+                      </Btn>
+                    )}
+                    {pendingSlides.length > 0 && (
+                      <Btn sm onClick={() => enqueueAll('slides')} disabled={queueBusy && queueType !== 'slides'}>
+                        Generate all Slides ({pendingSlides.length})
+                      </Btn>
+                    )}
+                    {pendingQuiz.length > 0 && (
+                      <Btn sm onClick={() => enqueueAll('quiz')} disabled={queueBusy && queueType !== 'quiz'}>
+                        Generate all Quizzes ({pendingQuiz.length})
+                      </Btn>
+                    )}
                   </div>
                 )}
               </div>
@@ -757,7 +782,7 @@ export default function WinTeachGenerate() {
                   boxShadow: W.shadowCard, marginBottom: 14, overflow: 'hidden',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${W.border}`, background: W.surfaceMuted }}>
-                    <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text }}>Notes queue</span>
+                    <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text }}>{CONCEPT_LABEL[queueType]} queue</span>
                     <Badge variant={queueRun ? 'info' : queue.length ? 'orange' : 'green'}>
                       {queueRun ? 'Running' : queue.length ? (queuePaused ? 'Paused' : 'Waiting') : 'Finished'}
                     </Badge>
