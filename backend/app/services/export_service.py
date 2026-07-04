@@ -132,6 +132,28 @@ def _notes_docx(content: dict, name: str) -> bytes:
         for d in rev["important_definitions"]:
             doc.add_paragraph(f"{d.get('term')}: {d.get('definition')}", style="List Bullet")
 
+    glossary = (csec.get("glossary_section") or {}).get("terms") or []
+    if glossary:
+        h("Glossary")
+        for t in glossary:
+            doc.add_paragraph(
+                f"{t.get('term')}: {t.get('formal_definition') or t.get('simple_explanation') or ''}",
+                style="List Bullet")
+
+    pq = csec.get("practice_questions") or {}
+    groups = [("Easy", pq.get("easy") or []), ("Medium", pq.get("medium") or []),
+              ("Hard", pq.get("hard") or [])]
+    if any(qs for _, qs in groups):
+        h("Practice questions")
+        for label, qs in groups:
+            for i, q in enumerate(qs, 1):
+                doc.add_paragraph(f"[{label} {i}] {q.get('question', '')}")
+        doc.add_heading("Answers", level=2)
+        for label, qs in groups:
+            for i, q in enumerate(qs, 1):
+                if q.get("answer_explanation"):
+                    doc.add_paragraph(f"[{label} {i}] {q['answer_explanation']}")
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()

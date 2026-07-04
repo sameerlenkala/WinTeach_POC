@@ -500,11 +500,15 @@ PRACTICAL UNDERSTANDING:
 
 DIAGRAM RULES: every visuals entry is a structured cue for a downstream renderer — do NOT
 draw ASCII art and do NOT emit placeholders. Types: table, flowchart, hierarchy_diagram,
-memory_diagram, syntax_diagram, execution_trace_table, mermaid_flowchart, mermaid_sequence.
-- "mermaid_flowchart" / "mermaid_sequence": write complete, VALID Mermaid syntax in the
-  "mermaid_code" field. Use mermaid_flowchart for process flows, decision trees, algorithm
-  steps, state transitions, and data flow; mermaid_sequence for protocol exchanges and
-  function-call chains. PREFER Mermaid for anything with nodes, arrows, or ordered steps.
+memory_diagram, syntax_diagram, execution_trace_table, mermaid_flowchart, mermaid_sequence,
+mermaid_state, mermaid_er, mermaid_class.
+- Mermaid types: write complete, VALID Mermaid syntax in the "mermaid_code" field.
+  mermaid_flowchart — process flows, decision trees, algorithm steps, data flow;
+  mermaid_sequence — protocol exchanges and function-call chains;
+  mermaid_state (stateDiagram-v2) — state machines, automata, lifecycle transitions;
+  mermaid_er (erDiagram) — database schemas, entity relationships, cardinality;
+  mermaid_class (classDiagram) — OOP class structure, inheritance, interfaces.
+  PREFER Mermaid for anything with nodes, arrows, states, entities, or ordered steps.
   "description" is a one-sentence caption of what the diagram shows; columns[]/rows[][]
   stay empty for Mermaid types.
 - "table" / "execution_trace_table": columns[] and rows[][] MUST contain real data — never
@@ -514,6 +518,11 @@ memory_diagram, syntax_diagram, execution_trace_table, mermaid_flowchart, mermai
   command or clause with the actual syntax in the cell). A placeholder one-liner like
   "Diagram showing X" is INVALID — if you cannot fill real content, emit a Mermaid version
   instead or omit the visual entirely.
+
+MATH NOTATION: wrap ALL mathematical notation in LaTeX delimiters — $...$ inline,
+$$...$$ for display equations. E.g. $O(n \\log n)$, $T(n) = 2T(n/2) + n$. Never use
+Unicode superscripts, ASCII-math (n^2, sqrt(x)), or plain-text fractions. Prose stays
+outside the delimiters; only the notation itself goes inside.
 
 TRACEABILITY TAG: output null — it is generated automatically after this call.
 
@@ -532,7 +541,7 @@ Output ONLY this JSON — no explanation, no markdown:
   "deep_dive": {{
     "architecture_and_mechanism": {{
       "explanation": "text",
-      "visuals": [{{"visual_id": "V1", "type": "table|flowchart|hierarchy_diagram|memory_diagram|syntax_diagram|execution_trace_table|mermaid_flowchart|mermaid_sequence", "title": "title", "description": "one-sentence caption", "mermaid_code": "valid Mermaid syntax, or null for non-Mermaid types", "columns": ["col1"], "rows": [["val1"]], "placement": "before_explanation|after_explanation|after_worked_example"}}]
+      "visuals": [{{"visual_id": "V1", "type": "table|flowchart|hierarchy_diagram|memory_diagram|syntax_diagram|execution_trace_table|mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class", "title": "title", "description": "one-sentence caption", "mermaid_code": "valid Mermaid syntax, or null for non-Mermaid types", "columns": ["col1"], "rows": [["val1"]], "placement": "before_explanation|after_explanation|after_worked_example"}}]
     }},
     "code_or_formalization": {{
       "applicable": true, "type": "code|pseudocode|formal_math|na_conceptual",
@@ -630,6 +639,9 @@ applied + 100+ word explanations; hard 1–2 + 150+ word explanations.
 
 RELATED TOPICS: previous_connection, next_connection, builds_toward (1–2), industry_relevance
 (one paragraph specific to "{subtopic_title}" naming concrete systems/roles).
+
+MATH NOTATION: wrap all mathematical notation (formulas, Big-O, expressions) in LaTeX
+delimiters — $...$ inline, $$...$$ display — including every important_formulas entry.
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -809,7 +821,9 @@ def build_concept_quiz_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, 
     ct_ = unit.get("primary_content_type", "P1")
     ceiling = (unit.get("bloom_ceiling") or "L3").replace("L", "")
     system = preamble(ctx) + "\n\n" + _CONCEPT_QUIZ_SYSTEM.format(
-        content_type=ct_, bloom_ceiling=unit.get("bloom_ceiling", "L3"))
+        content_type=ct_, bloom_ceiling=unit.get("bloom_ceiling", "L3")) + \
+        "\nMATH NOTATION: wrap all mathematical notation in LaTeX delimiters — " \
+        "$...$ inline, $$...$$ display — in questions, options, and explanations."
     user = _CONCEPT_QUIZ_USER.format(concept_id=unit.get("concept_id", ""),
         concept_name=unit.get("concept_name", ""), content_type=ct_,
         bloom_ceiling=unit.get("bloom_ceiling", "L3"), ceil=ceiling, notes=_j(notes))

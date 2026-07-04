@@ -123,6 +123,97 @@ function MermaidBlock({ code }: { code: string }) {
   return <div style={{ overflowX: 'auto', border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px', background: W.card }} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+// ── math / code / reveal helpers ─────────────────────────────────────────────
+
+let katexPromise: Promise<any> | null = null;
+const loadKatex = () =>
+  (katexPromise ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')])
+    .then(([k]) => (k as any).default ?? k));
+
+type MathSeg = { kind: 'text' | 'math'; value: string; display: boolean };
+function splitMath(text: string): MathSeg[] {
+  const segs: MathSeg[] = [];
+  const re = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) segs.push({ kind: 'text', value: text.slice(last, m.index), display: false });
+    segs.push({ kind: 'math', value: (m[1] ?? m[2]) as string, display: m[1] != null });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segs.push({ kind: 'text', value: text.slice(last), display: false });
+  return segs;
+}
+
+// Typesets LaTeX wrapped in $…$ / $$…$$ via lazily-loaded KaTeX; anything else
+// (including content generated before the LaTeX prompt rule) passes through as
+// plain text, and invalid LaTeX falls back to the raw delimited source.
+function MathText({ text }: { text: any }) {
+  const str = typeof text === 'string' ? text : text == null ? '' : String(text);
+  const hasMath = /\$[^$]/.test(str);
+  const [nodes, setNodes] = useState<React.ReactNode[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!hasMath) { setNodes(null); return; }
+    loadKatex().then(katex => {
+      if (!alive) return;
+      setNodes(splitMath(str).map((s, i) => {
+        if (s.kind === 'text') return <span key={i}>{s.value}</span>;
+        try {
+          return <span key={i} dangerouslySetInnerHTML={{ __html: katex.renderToString(s.value, { displayMode: s.display, throwOnError: true }) }} />;
+        } catch {
+          return <span key={i}>{s.display ? `$$${s.value}$$` : `$${s.value}$`}</span>;
+        }
+      }));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [str, hasMath]);
+  if (!hasMath || nodes == null) return <>{str}</>;
+  return <>{nodes}</>;
+}
+
+let hljsPromise: Promise<any> | null = null;
+const loadHljs = () =>
+  (hljsPromise ??= Promise.all([import('highlight.js/lib/common'), import('highlight.js/styles/github-dark.css')])
+    .then(([m]) => (m as any).default ?? m));
+
+function CodeBlock({ code, language }: { code: string; language?: string | null }) {
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setHtml(null);
+    loadHljs().then(hljs => {
+      if (!alive) return;
+      try {
+        const lang = (language ?? '').toLowerCase().match(/^[a-z+#]+/)?.[0] ?? '';
+        const r = lang && hljs.getLanguage(lang) ? hljs.highlight(code, { language: lang }) : hljs.highlightAuto(code);
+        setHtml(r.value);
+      } catch { /* plain fallback */ }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [code, language]);
+  return (
+    <pre style={{
+      background: '#0f1117', color: '#e2e6f0', borderRadius: 8, padding: '16px 18px',
+      overflow: 'auto', fontSize: 12.5, lineHeight: 1.6, margin: 0, fontFamily: MONO,
+    }}>
+      {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}
+    </pre>
+  );
+}
+
+function Reveal({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  if (open) return <div style={{ marginTop: 8 }}>{children}</div>;
+  return (
+    <button onClick={() => setOpen(true)} style={{
+      marginTop: 8, padding: '4px 12px', borderRadius: 6, border: `1px solid ${W.borderStrong}`,
+      background: 'transparent', color: 'var(--tint-brand-fg)', fontFamily: W.fontDisplay,
+      fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'block',
+    }}>{label}</button>
+  );
+}
+
 // Generated visuals: mermaid_code renders as a Mermaid diagram; columns/rows
 // render as a table (headers optional). Visuals with neither and only a
 // one-line placeholder description ("Diagram showing X…") are skipped.
@@ -155,11 +246,20 @@ function NotesArticle({ content }: { content: any }) {
   const scenario = openSections?.problem_statement?.scenario;
   const gap = openSections?.problem_statement?.gap_statement;
   const intro = openSections?.introduction?.narrative_intro;
+  const connectivity = openSections?.introduction?.connectivity_matrix;
+  const hasConnectivity = ((connectivity?.foundation?.length ?? 0)
+    + (connectivity?.this_subtopic?.length ?? 0)
+    + (connectivity?.builds_toward?.length ?? 0)) > 0;
   // core
   const def = core?.core_concept?.formal_definition;
   const intuition = core?.core_concept?.mental_model_analogy ?? core?.core_concept?.intuition ?? opening?.hook;
   const mech = core?.deep_dive?.architecture_and_mechanism?.explanation;
-  const archVisuals = core?.deep_dive?.architecture_and_mechanism?.visuals ?? [];
+  const archVisuals: any[] = core?.deep_dive?.architecture_and_mechanism?.visuals ?? [];
+  // Honor the generator's placement hints; after_worked_example visuals fall
+  // back to the mechanism section when there is no worked example.
+  const vBefore = archVisuals.filter((v: any) => v?.placement === 'before_explanation');
+  const vAfterWorkedRaw = archVisuals.filter((v: any) => v?.placement === 'after_worked_example');
+  const vAfterMech = archVisuals.filter((v: any) => v?.placement !== 'before_explanation' && v?.placement !== 'after_worked_example');
   const code = core?.deep_dive?.code_or_formalization;
   const grid = code?.complexity_grid;
   const hasGrid = grid && [grid.best_case_time, grid.average_case_time, grid.worst_case_time, grid.space_complexity].some((v: any) => v && v !== 'N/A');
@@ -184,23 +284,46 @@ function NotesArticle({ content }: { content: any }) {
     || (revision?.important_definitions?.length ?? 0) > 0
     || (revision?.active_recall_prompts?.length ?? 0) > 0;
   const glossaryTerms: any[] = closing?.sections?.glossary_section?.terms ?? [];
+  const practice = closing?.sections?.practice_questions;
+  const practiceGroups: Array<[string, 'green' | 'orange' | 'red', any[]]> = [
+    ['Easy', 'green', practice?.easy ?? []],
+    ['Medium', 'orange', practice?.medium ?? []],
+    ['Hard', 'red', practice?.hard ?? []],
+  ];
+  const hasPractice = practiceGroups.some(([, , qs]) => qs.length > 0);
   const related = closing?.sections?.related_topics;
   const hasRelated = related && (related.previous_connection || related.next_connection || (related.builds_toward?.length ?? 0) > 0 || related.industry_relevance);
   let n = 0;
 
   return (
     <>
-      {(metaInfo?.difficulty || metaInfo?.reading_time_minutes) && (
-        <div style={{ display: 'flex', gap: 16, fontSize: 12, color: W.text3, marginBottom: 22 }}>
-          {metaInfo.difficulty && <span>Difficulty {metaInfo.difficulty}</span>}
-          {metaInfo.reading_time_minutes != null && <span>~{metaInfo.reading_time_minutes} min read</span>}
+      {(metaInfo?.difficulty || metaInfo?.reading_time_minutes || metaInfo?.placement_relevance || metaInfo?.university_importance) && (
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: W.text3 }}>
+            {metaInfo.difficulty && <span>Difficulty {metaInfo.difficulty}</span>}
+            {metaInfo.reading_time_minutes != null && <span>~{metaInfo.reading_time_minutes} min read</span>}
+            {metaInfo.placement_relevance && <span>Placement relevance: {metaInfo.placement_relevance}</span>}
+            {metaInfo.university_importance && <span>Exam importance: {metaInfo.university_importance}</span>}
+          </div>
+          {(metaInfo.placement_justification || metaInfo.university_justification) && (
+            <div style={{ fontSize: 12, color: W.text3, marginTop: 4, lineHeight: 1.5 }}>
+              {[metaInfo.placement_justification, metaInfo.university_justification].filter(Boolean).join(' ')}
+            </div>
+          )}
         </div>
       )}
-      {(scenario || intro) && (
+      {(scenario || intro || hasConnectivity) && (
         <Section n={++n} title="Why this matters">
           {scenario && <p style={{ margin: 0 }}>{scenario}</p>}
           {gap && <p style={{ margin: scenario ? '10px 0 0' : 0, fontWeight: 600, color: W.text }}>{gap}</p>}
           {intro && <p style={{ margin: scenario || gap ? '10px 0 0' : 0 }}>{intro}</p>}
+          {hasConnectivity && (
+            <div style={{ marginTop: scenario || gap || intro ? 14 : 0, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, borderLeft: `3px solid ${W.border}`, paddingLeft: 14 }}>
+              {(connectivity.foundation?.length ?? 0) > 0 && <div><span style={{ fontWeight: 600, color: W.text }}>You already know:</span> {connectivity.foundation.join(', ')}</div>}
+              {(connectivity.this_subtopic?.length ?? 0) > 0 && <div><span style={{ fontWeight: 600, color: W.text }}>This lesson covers:</span> {connectivity.this_subtopic.join(', ')}</div>}
+              {(connectivity.builds_toward?.length ?? 0) > 0 && <div><span style={{ fontWeight: 600, color: W.text }}>Builds toward:</span> {connectivity.builds_toward.join(', ')}</div>}
+            </div>
+          )}
         </Section>
       )}
       {outcomes.length > 0 && (
@@ -217,24 +340,22 @@ function NotesArticle({ content }: { content: any }) {
       )}
       {def && (
         <Section n={++n} title="Definition">
-          <p style={{ margin: 0, fontSize: 15, color: W.text, lineHeight: 1.75 }}>{def}</p>
-          {intuition && <p style={{ margin: '12px 0 0' }}>{intuition}</p>}
+          <p style={{ margin: 0, fontSize: 15, color: W.text, lineHeight: 1.75 }}><MathText text={def} /></p>
+          {intuition && <p style={{ margin: '12px 0 0' }}><MathText text={intuition} /></p>}
         </Section>
       )}
       {(mech || archVisuals.length > 0) && (
         <Section n={++n} title="Architecture & mechanism">
-          {mech && <p style={{ margin: 0 }}>{mech}</p>}
-          {archVisuals.map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
+          {vBefore.map((v: any, i: number) => <VisualBlock key={`b${i}`} v={v} />)}
+          {mech && <p style={{ margin: vBefore.length ? '14px 0 0' : 0 }}><MathText text={mech} /></p>}
+          {vAfterMech.map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
+          {!worked && vAfterWorkedRaw.map((v: any, i: number) => <VisualBlock key={`w${i}`} v={v} />)}
         </Section>
       )}
       {code?.applicable && code?.content && (
         <Section n={++n} title={`Code${code.language_or_system ? ` — ${code.language_or_system}` : ''}`}>
-          <pre style={{
-            background: '#0f1117', color: '#e2e6f0', borderRadius: 8, padding: '16px 18px',
-            overflow: 'auto', fontSize: 12.5, lineHeight: 1.6, margin: 0,
-            fontFamily: MONO,
-          }}>{code.content}</pre>
-          {code.explanation && <p style={{ margin: '12px 0 0' }}>{code.explanation}</p>}
+          <CodeBlock code={code.content} language={code.language_or_system} />
+          {code.explanation && <p style={{ margin: '12px 0 0' }}><MathText text={code.explanation} /></p>}
           {hasGrid && (
             <div style={{ marginTop: 12 }}>
               <DataTable columns={['Best case', 'Average case', 'Worst case', 'Space']}
@@ -261,7 +382,12 @@ function NotesArticle({ content }: { content: any }) {
           {(trace.visuals ?? []).map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
         </Section>
       )}
-      {worked && <Section n={++n} title="Worked example"><p style={{ margin: 0 }}>{worked}</p></Section>}
+      {worked && (
+        <Section n={++n} title="Worked example">
+          <p style={{ margin: 0 }}><MathText text={worked} /></p>
+          {vAfterWorkedRaw.map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
+        </Section>
+      )}
       {(advantages.length > 0 || disadvantages.length > 0) && (
         <Section n={++n} title="Advantages & trade-offs">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
@@ -293,9 +419,9 @@ function NotesArticle({ content }: { content: any }) {
       )}
       {hasAnalysis && (
         <Section n={++n} title="Analysis">
-          {analysis.discussion && <p style={{ margin: 0 }}>{analysis.discussion}</p>}
+          {analysis.discussion && <p style={{ margin: 0 }}><MathText text={analysis.discussion} /></p>}
           {analysis.complexity_note && analysis.complexity_note !== 'N/A' && (
-            <p style={{ margin: analysis.discussion ? '10px 0 0' : 0, fontSize: 13, color: W.text3 }}>{analysis.complexity_note}</p>
+            <p style={{ margin: analysis.discussion ? '10px 0 0' : 0, fontSize: 13, color: W.text3 }}><MathText text={analysis.complexity_note} /></p>
           )}
         </Section>
       )}
@@ -326,11 +452,12 @@ function NotesArticle({ content }: { content: any }) {
           )}
           {formulas.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
-              {formulas.map((f: any, i: number) => (
-                <code key={i} style={{ fontFamily: MONO, fontSize: 13, background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 6, padding: '6px 10px', display: 'block', color: W.text }}>
-                  {typeof f === 'string' ? f : JSON.stringify(f)}
-                </code>
-              ))}
+              {formulas.map((f: any, i: number) => {
+                const s = typeof f === 'string' ? f : JSON.stringify(f);
+                return /\$/.test(s)
+                  ? <div key={i} style={{ fontSize: 14, background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 6, padding: '8px 12px', color: W.text }}><MathText text={s} /></div>
+                  : <code key={i} style={{ fontFamily: MONO, fontSize: 13, background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 6, padding: '6px 10px', display: 'block', color: W.text }}>{s}</code>;
+              })}
             </div>
           )}
           {(revision.important_definitions?.length ?? 0) > 0 && (
@@ -346,8 +473,12 @@ function NotesArticle({ content }: { content: any }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
               {revision.active_recall_prompts.map((p: any, i: number) => (
                 <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px', background: W.card }}>
-                  <div style={{ fontWeight: 600, fontSize: 13.5, color: W.text, marginBottom: 3 }}>{p.prompt}</div>
-                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>{p.answer_explanation}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, color: W.text }}><MathText text={p.prompt} /></div>
+                  {p.answer_explanation && (
+                    <Reveal label="Show answer">
+                      <div style={{ fontSize: 13, lineHeight: 1.6 }}><MathText text={p.answer_explanation} /></div>
+                    </Reveal>
+                  )}
                 </div>
               ))}
             </div>
@@ -360,10 +491,31 @@ function NotesArticle({ content }: { content: any }) {
             {glossaryTerms.map((t: any, i: number) => (
               <div key={i} style={{ fontSize: 13.5, lineHeight: 1.6 }}>
                 <span style={{ fontWeight: 600, color: W.text }}>{t.term}</span>
-                {t.formal_definition && <> — {t.formal_definition}</>}
+                {t.formal_definition && <> — <MathText text={t.formal_definition} /></>}
                 {t.simple_explanation && <div style={{ fontSize: 12.5, color: W.text3, marginTop: 2 }}>In plain terms: {t.simple_explanation}</div>}
+                {(t.related_terms?.length ?? 0) > 0 && <div style={{ fontSize: 12, color: W.text3, marginTop: 2 }}>Related: {t.related_terms.join(', ')}</div>}
               </div>
             ))}
+          </div>
+        </Section>
+      )}
+      {hasPractice && (
+        <Section n={++n} title="Practice questions">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {practiceGroups.map(([label, variant, qs]) => qs.map((q: any, i: number) => (
+              <div key={`${label}${i}`} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                  <Badge variant={variant}>{label}</Badge>
+                  {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5 }}><MathText text={q.question} /></div>
+                {q.answer_explanation && (
+                  <Reveal label="Show answer">
+                    <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text2 }}><MathText text={q.answer_explanation} /></div>
+                  </Reveal>
+                )}
+              </div>
+            )))}
           </div>
         </Section>
       )}
@@ -427,7 +579,7 @@ function QuizArticle({ content }: { content: any }) {
               <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>Q{i + 1}</span>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, flex: 1 }}>{q.question}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, flex: 1 }}><MathText text={q.question} /></div>
                   {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 28 }}>
@@ -440,13 +592,13 @@ function QuizArticle({ content }: { content: any }) {
                         color: correct ? W.greenFg : W.text2, fontWeight: correct ? 600 : 400,
                       }}>
                         <span style={{ fontWeight: 600, flexShrink: 0 }}>{LETTERS[oi] ?? oi + 1}.</span>
-                        <span>{o}</span>
+                        <span><MathText text={o} /></span>
                         {correct && <span style={{ fontSize: 11, marginLeft: 'auto', flexShrink: 0 }}>✓ correct</span>}
                       </div>
                     );
                   })}
                 </div>
-                {q.explanation && <div style={{ marginLeft: 28, marginTop: 8, fontSize: 12.5, lineHeight: 1.6, color: W.text3 }}>{q.explanation}</div>}
+                {q.explanation && <div style={{ marginLeft: 28, marginTop: 8, fontSize: 12.5, lineHeight: 1.6, color: W.text3 }}><MathText text={q.explanation} /></div>}
               </div>
             ))}
           </div>
@@ -457,11 +609,11 @@ function QuizArticle({ content }: { content: any }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {sa.map((q: any, i: number) => (
               <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, marginBottom: 6 }}>{q.question}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, marginBottom: 6 }}><MathText text={q.question} /></div>
                 {q.model_answer && (
                   <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text2 }}>
                     <span style={{ fontWeight: 600, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', color: W.text3, display: 'block', marginBottom: 4 }}>Model answer</span>
-                    {q.model_answer}
+                    <MathText text={q.model_answer} />
                   </div>
                 )}
               </div>
