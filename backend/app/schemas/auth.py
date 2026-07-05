@@ -19,7 +19,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    invite_token: str
+    # Two paths: an invite token (any role, from admin/superadmin), or open
+    # self-signup gated by the org code — faculty/student only.
+    invite_token: str | None = None
+    role: UserRole | None = None
+    org_code: str | None = None
 
 
 class InviteRequest(BaseModel):

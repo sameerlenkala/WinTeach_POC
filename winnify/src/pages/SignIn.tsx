@@ -40,12 +40,18 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export default function SignIn() {
   const navigate = useNavigate();
-  const { signIn, signInWithGoogle, isLoading } = useAuth();
+  const { signIn, signUp, signInWithGoogle, isLoading } = useAuth();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState('');
+
+  // Create-account state (open signup: faculty/student, org-code gated)
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [fullName, setFullName] = useState('');
+  const [suRole, setSuRole] = useState<'faculty' | 'student' | null>(null);
+  const [orgCode, setOrgCode] = useState('');
 
   // Forgot password state
   const [forgotStep, setForgotStep] = useState<ForgotStep | null>(null);
@@ -124,6 +130,22 @@ export default function SignIn() {
       setError('Invalid credentials. Please try again.');
     }
   };
+
+  const handleSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!fullName || !email || !password) { setError('Please fill in all fields.'); return; }
+    if (!suRole) { setError('Choose whether you are joining as Faculty or Student.'); return; }
+    if (!orgCode.trim()) { setError('Enter your organization code.'); return; }
+    try {
+      const role = await signUp(fullName, email, password, { role: suRole, orgCode: orgCode.trim() });
+      navigate(ROLE_REDIRECT[role] ?? '/home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the account. Please try again.');
+    }
+  };
+
+  const switchMode = (m: 'signin' | 'signup') => { setMode(m); setError(''); };
 
   const modalHeader = (Icon: React.ElementType, title: string, sub: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -304,13 +326,93 @@ export default function SignIn() {
                 VJIT College
               </span>
             </div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h1)', color: 'var(--text)', margin: '0 0 4px', lineHeight: 'var(--lh-h1)' }}>Welcome back</h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)', margin: 0 }}>Sign in to continue your placement prep.</p>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h1)', color: 'var(--text)', margin: '0 0 4px', lineHeight: 'var(--lh-h1)' }}>
+              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)', margin: 0 }}>
+              {mode === 'signin' ? 'Sign in to continue your placement prep.' : 'Join with your organization code as faculty or student.'}
+            </p>
           </div>
 
           {error && <ErrorAlert>{error}</ErrorAlert>}
 
+          {mode === 'signup' && (
+            <form onSubmit={handleSignUp} className="ds-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16, ...rise(1) }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <FieldLabel>I am joining as</FieldLabel>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {([
+                    { value: 'faculty' as const, label: 'Faculty', Icon: GraduationCap, tone: 'orange' },
+                    { value: 'student' as const, label: 'Student', Icon: Rocket, tone: 'teal' },
+                  ]).map(({ value, label, Icon, tone }) => (
+                    <button key={value} type="button" onClick={() => setSuRole(value)} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+                      borderRadius: 'var(--w-r4)', cursor: 'pointer',
+                      background: suRole === value ? `var(--tint-${tone}-bg)` : 'var(--card)',
+                      border: suRole === value ? `1.5px solid var(--tint-${tone}-fg)` : '1.5px solid var(--border)',
+                    }}>
+                      <Icon size={16} color={`var(--tint-${tone}-fg)`} />
+                      <span style={{ fontSize: 'var(--fs-small)', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>Admin accounts are created by invitation only.</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <FieldLabel>Full name</FieldLabel>
+                <div className="w-field">
+                  <GraduationCap size={15} />
+                  <input type="text" placeholder="Your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" required />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <FieldLabel>Email</FieldLabel>
+                <div className="w-field">
+                  <Mail size={15} />
+                  <input type="email" placeholder="you@institution.edu" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <FieldLabel>Password</FieldLabel>
+                <div className="w-field">
+                  <Lock size={15} />
+                  <input type={showPw ? 'text' : 'password'} placeholder="At least 6 characters" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" required />
+                  <button type="button" onClick={() => setShowPw(p => !p)} aria-label={showPw ? 'Hide password' : 'Show password'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <FieldLabel>Organization code</FieldLabel>
+                <div className="w-field">
+                  <KeyRound size={15} />
+                  <input type="text" placeholder="e.g. MAVIGUN" value={orgCode} onChange={e => setOrgCode(e.target.value.toUpperCase())} required
+                    style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                </div>
+                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>Provided by your institution.</span>
+              </div>
+
+              <button type="submit" disabled={isLoading} className="w-btn-primary" style={{ marginTop: 4 }}>
+                {isLoading && <Loader2 size={16} className="animate-spin" />}
+                Create account
+              </button>
+
+              <div style={{ textAlign: 'center', fontSize: 'var(--fs-small)', color: 'var(--text-2)' }}>
+                Already have an account?{' '}
+                <button type="button" onClick={() => switchMode('signin')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-brand-fg)', fontWeight: 600, padding: 0, fontSize: 'var(--fs-small)', fontFamily: 'var(--font-sans)' }}>
+                  Sign in
+                </button>
+              </div>
+            </form>
+          )}
+
           {/* form */}
+          {mode === 'signin' && (
           <form onSubmit={handleSubmit} className="ds-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16, ...rise(1) }}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -361,9 +463,18 @@ export default function SignIn() {
               {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <GoogleIcon className="h-[18px] w-[18px]" />}
               Continue with Google
             </button>
+
+            <div style={{ textAlign: 'center', fontSize: 'var(--fs-small)', color: 'var(--text-2)' }}>
+              New here?{' '}
+              <button type="button" onClick={() => switchMode('signup')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-brand-fg)', fontWeight: 600, padding: 0, fontSize: 'var(--fs-small)', fontFamily: 'var(--font-sans)' }}>
+                Create an account
+              </button>
+            </div>
           </form>
+          )}
 
           {/* portal access */}
+          {mode === 'signin' && (
           <div className="ds-rise" style={{ marginTop: 24, ...rise(2) }}>
             <p style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-caption)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
               Staff portal access
@@ -383,6 +494,7 @@ export default function SignIn() {
               ))}
             </div>
           </div>
+          )}
 
           {/* footer */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32 }}>

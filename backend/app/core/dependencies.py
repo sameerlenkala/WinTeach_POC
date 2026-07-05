@@ -21,11 +21,25 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    result = db.table("profiles").select("*").eq("id", user_id).single().execute()
-    if not result.data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User profile not found")
+    try:
+        result = db.table("profiles").select("*").eq("id", user_id).single().execute()
+        if result.data:
+            return result.data
+    except Exception:
+        pass  # .single() raises on zero rows — fall through to the claims check
 
-    return result.data
+    # Demo personas (e.g. superadmin) may have no profiles row because
+    # profiles.id FKs to real auth.users. Their JWTs are signed by this backend
+    # and carry an app role claim, so the claims are trustworthy. Supabase
+    # tokens carry role="authenticated", which never matches an app role.
+    role = payload.get("role")
+    if role in ("superadmin", "admin", "faculty", "student"):
+        email = payload.get("email", "")
+        return {"id": user_id, "email": email,
+                "full_name": email.split("@")[0] if email else "User",
+                "role": role, "institute_id": None}
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User profile not found")
 
 
 def require_role(*roles: str):

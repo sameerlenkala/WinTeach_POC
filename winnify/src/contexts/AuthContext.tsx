@@ -31,7 +31,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<UserRole>;
-  signUp: (name: string, email: string, password: string, inviteToken?: string) => Promise<UserRole>;
+  signUp: (name: string, email: string, password: string,
+           opts?: { role?: 'faculty' | 'student'; orgCode?: string; inviteToken?: string }) => Promise<UserRole>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -101,14 +102,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (
-    name: string, email: string, password: string, inviteToken?: string
+    name: string, email: string, password: string,
+    opts?: { role?: 'faculty' | 'student'; orgCode?: string; inviteToken?: string },
   ): Promise<UserRole> => {
     setLoading(true);
     try {
       const data = await callBackend('/api/v1/auth/register', {
-        full_name: name, email, password, invite_token: inviteToken,
+        full_name: name, email, password,
+        invite_token: opts?.inviteToken, role: opts?.role, org_code: opts?.orgCode,
       });
-      return data.role as UserRole;
+      // Register signs the user in server-side — persist session like signIn.
+      persistUser({
+        id: data.user.id,
+        name: data.user.full_name,
+        email: data.user.email,
+        role: data.user.role,
+        institute_id: data.user.institute_id,
+        avatar: data.user.avatar_url,
+      });
+      localStorage.setItem('winnify_token', data.access_token);
+      return (data.user.role ?? data.role) as UserRole;
     } finally {
       setLoading(false);
     }

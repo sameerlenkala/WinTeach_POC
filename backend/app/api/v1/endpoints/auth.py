@@ -94,7 +94,13 @@ def login(payload: LoginRequest, db: Client = Depends(get_db)):
 
 @router.post("/register", response_model=LoginResponse)
 def register(payload: RegisterRequest, db: Client = Depends(get_db)):
-    return auth_service.register_with_invite(db, payload.email, payload.password, payload.full_name, payload.invite_token)
+    """Invite-token path keeps working for any role; without a token this is
+    open self-signup — org-code gated, faculty/student only."""
+    if payload.invite_token:
+        return auth_service.register_with_invite(db, payload.email, payload.password,
+                                                 payload.full_name, payload.invite_token)
+    return auth_service.register_open(db, payload.email, payload.password,
+                                      payload.full_name, payload.role, payload.org_code)
 
 
 @router.get("/me", response_model=MeResponse)

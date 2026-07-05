@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
@@ -62,7 +63,42 @@ def _ensure_demo_user(db: Client, email: str, name: str, role: str) -> None:
     }, on_conflict="id").execute()
 
 
+_SUPERADMIN_DEMO = {"email": "superadmin@winnify.ai", "name": "Sai Teja",
+                    "role": "superadmin", "password": "demo@123"}
+
+
+def _demo_jwt_login(db: Client, email: str, name: str, role: str) -> LoginResponse:
+    """Issue a backend-signed JWT for a demo persona that has no Supabase auth
+    user (superadmin is never auto-seeded). Mirrors the /auth/demo route so the
+    plain login form works for every persona."""
+    import jwt as pyjwt
+    demo_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"demo:{email}"))
+    try:
+        db.table("profiles").upsert({
+            "id": demo_id, "email": email, "full_name": name, "role": role,
+        }, on_conflict="id").execute()
+    except Exception:
+        pass
+    now = datetime.now(timezone.utc)
+    token = pyjwt.encode({
+        "sub": demo_id, "email": email, "role": role,
+        "iat": int(now.timestamp()), "exp": int((now + timedelta(hours=24)).timestamp()),
+    }, settings.supabase_anon_key, algorithm=settings.jwt_algorithm)
+    return LoginResponse(
+        access_token=token, role=role, redirect=ROLE_REDIRECT.get(role, "/"),
+        user={"id": demo_id, "email": email, "full_name": name, "role": role,
+              "institute_id": None, "institute_name": None},
+    )
+
+
 def login(db: Client, email: str, password: str) -> LoginResponse:
+    # Superadmin demo persona has no Supabase auth user by design — issue the
+    # backend-signed demo JWT directly so the normal login form works for it.
+    if (email.lower().strip() == _SUPERADMIN_DEMO["email"]
+            and password == _SUPERADMIN_DEMO["password"]):
+        return _demo_jwt_login(db, _SUPERADMIN_DEMO["email"],
+                               _SUPERADMIN_DEMO["name"], _SUPERADMIN_DEMO["role"])
+
     # For known demo accounts (non-superadmin), seed the user in Supabase on first
     # login. Seeding is best-effort: if the admin API is throttled/unavailable and
     # the user already exists, we still let them sign in below.
@@ -253,4 +289,63 @@ def register_with_invite(db: Client, email: str, password: str, full_name: str, 
     db.table("invites").update({"status": "accepted", "accepted_by": user_id}).eq("token", invite_token).execute()
 
     # Sign in to get a session token
+    return login(db, email, password)
+
+
+# ── Open self-signup (org-code gated; faculty/student only) ───────────────────
+
+_ORG_SIGNUP_CODE = os.getenv("WINTEACH_ORG_CODE", "MAVIGUN")
+_OPEN_SIGNUP_ROLES = ("faculty", "student")
+
+
+def register_open(db: Client, email: str, password: str, full_name: str,
+                  role: str | None, org_code: str | None) -> LoginResponse:
+    """Self-serve account creation. Gated by the static org code and limited to
+    faculty/student — admin and superadmin accounts remain invite/created-only."""
+    if not role or role not in _OPEN_SIGNUP_ROLES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Choose a role: faculty or student. Admin accounts are created by invitation.")
+    if not org_code or org_code.strip().upper() != _ORG_SIGNUP_CODE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Invalid organization code.")
+    if len(password) < 6:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Password must be at least 6 characters.")
+
+    email = email.lower().strip()
+
+    # Duplicate guard with a friendly message (create_user would 400 cryptically).
+    try:
+        page = db.auth.admin.list_users()
+        if any((u.email or "").lower() == email for u in page):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="An account with this email already exists. Try signing in.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # listing unavailable — fall through; create_user will surface duplicates
+
+    try:
+        resp = db.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {"full_name": full_name, "role": role},
+        })
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Could not create account: {e}")
+    if not resp.user:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Account creation failed.")
+
+    user_id = str(resp.user.id)
+    db.table("profiles").upsert({
+        "id": user_id,
+        "email": email,
+        "full_name": full_name,
+        "role": role,
+    }, on_conflict="id").execute()
+
+    # Sign in immediately so the user lands in their portal.
     return login(db, email, password)
