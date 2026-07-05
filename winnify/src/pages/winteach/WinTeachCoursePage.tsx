@@ -111,9 +111,11 @@ export default function WinTeachCoursePage() {
   const { data: genProgress = [] } = useCourseProgress(id);
   const progById: Record<string, TopicProgress> = {};
   genProgress.forEach(p => { progById[p.topic_id] = p; });
-  const overallPct = genProgress.length
-    ? Math.round(genProgress.reduce((s, p) => s + topicGenState(p).pct, 0) / genProgress.length)
-    : 0;
+  // Artifact-level generation %: generated artifacts ÷ concepts × 3
+  // (notes/slides/quiz), matching the courses list — not a topic average.
+  const artReady = genProgress.reduce((s, p) => s + (p.artifact_ready || 0), 0);
+  const artTotal = genProgress.reduce((s, p) => s + (p.artifact_total || 0), 0);
+  const overallPct = artTotal ? Math.round((artReady / artTotal) * 100) : 0;
   const totalGenCost = genProgress.reduce((s, p) => s + (p.cost_usd || 0), 0);
   const { mutate: setStatus } = useSetCourseStatus();
   const { mutate: saveMap } = useSaveCOMap(id);
@@ -505,9 +507,10 @@ export default function WinTeachCoursePage() {
               const unitNum = u.unit_number ?? u.n ?? ui + 1;
               const topics: any[] = u.topics ?? [];
               const unitDone = topics.filter(t => topicGenState(progById[t.id]).label === 'Complete').length;
-              const unitPct = topics.length
-                ? Math.round(topics.reduce((s, t) => s + topicGenState(progById[t.id]).pct, 0) / topics.length)
-                : 0;
+              // Artifact-level per-unit %, consistent with the course dial.
+              const unitArtReady = topics.reduce((s, t) => s + (progById[t.id]?.artifact_ready || 0), 0);
+              const unitArtTotal = topics.reduce((s, t) => s + (progById[t.id]?.artifact_total || 0), 0);
+              const unitPct = unitArtTotal ? Math.round((unitArtReady / unitArtTotal) * 100) : 0;
               const unitHours = topics.reduce((s, t) => s + (t.contact_hours ?? t.hours ?? 0), 0);
               return (
               <div key={unitNum} className="ds-rise" style={{

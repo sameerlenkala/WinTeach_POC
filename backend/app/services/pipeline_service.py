@@ -603,15 +603,16 @@ addresses it, else supporting. If truly NO topic covers a CO, list its id in
 "unmappable_cos" instead of forcing a bad mapping.
 {orphaned_cos}
 
-Output ONLY this JSON — no explanation, no markdown:
+Output ONLY this JSON — no explanation, no markdown. Use the exact unit_id, topic_title,
+and CO ids from the lists above:
 {{
   "topic_fixes": [
-    {{"unit_id": "UNIT-V", "topic_title": "exact topic title", "primary_co": "CO1",
-      "reason": "one sentence"}}
+    {{"unit_id": "unit id from the list", "topic_title": "exact topic title",
+      "primary_co": "an evaluated CO id", "reason": "one sentence"}}
   ],
   "co_fixes": [
-    {{"co_id": "CO5", "assignments": [
-      {{"unit_id": "UNIT-VI", "topic_title": "exact topic title", "contribution": "primary|supporting"}}
+    {{"co_id": "an unmapped CO id", "assignments": [
+      {{"unit_id": "unit id", "topic_title": "exact topic title", "contribution": "primary|supporting"}}
     ]}}
   ],
   "unmappable_cos": []

@@ -1,12 +1,39 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWinTeach } from './WinTeachContext';
-import { allTopics, topicState, coursePct } from './winteachData';
+import { allTopics } from './winteachData';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { StatusBadge, XpBar, Card, Btn, IconBtn, CoIcon, Modal } from './WinTeachUI';
 import { IBell, IPlus, IEdit, IEmpty, ITrash } from './WinTeachIcons';
 import { coursesApi } from '@/api/courses';
+import { useCourseProgress } from '@/api/hooks';
+
+// Real generation progress for one course row. The percentage is artifact-level
+// (generated concept artifacts notes/slides/quiz + the 4 topic-level artifacts,
+// ÷ total expected); the count is topics whose artifacts are ALL generated.
+function GenerationCell({ courseId, topicCount }: { courseId: string; topicCount: number }) {
+  const { data: progress } = useCourseProgress(courseId);
+  const rows = progress ?? [];
+  const artReady = rows.reduce((s, p) => s + (p.artifact_ready || 0), 0);
+  const artTotal = rows.reduce((s, p) => s + (p.artifact_total || 0), 0);
+  const pct = artTotal ? Math.round((artReady / artTotal) * 100) : 0;
+  const topicsComplete = rows.filter(p =>
+    (p.artifact_total || 0) > 0 && (p.artifact_ready || 0) >= p.artifact_total).length;
+  const topicsStarted = rows.filter(p => (p.artifact_ready || 0) > 0).length;
+  const totalTopics = rows.length || topicCount;
+  return (
+    <>
+      <div style={{ marginBottom: 6 }}><XpBar value={pct} /></div>
+      <span
+        title={`${artReady}/${artTotal} artifacts generated · ${topicsStarted} topic${topicsStarted === 1 ? '' : 's'} in progress`}
+        style={{ fontSize: '.8rem', color: 'var(--text-2)' }}
+      >
+        {topicsComplete}/{totalTopics} topics · {pct}%
+      </span>
+    </>
+  );
+}
 
 export default function WinTeachCourses() {
   const navigate = useNavigate();
@@ -92,7 +119,6 @@ export default function WinTeachCourses() {
                 <tbody>
                   {courses.map((c, i) => {
                     const ts = allTopics(c);
-                    const readyCount = ts.filter(x => topicState(x.topic) === 'ready').length;
                     const isLast = i === courses.length - 1;
                     return (
                       <tr key={c.id} className="wt-row"
@@ -117,8 +143,7 @@ export default function WinTeachCourses() {
                           </span>
                         </td>
                         <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle', minWidth: 160 }}>
-                          <div style={{ marginBottom: 6 }}><XpBar value={coursePct(c)} /></div>
-                          <span style={{ fontSize: '.8rem', color: 'var(--text-2)' }}>{readyCount}/{ts.length} topics · {coursePct(c)}%</span>
+                          <GenerationCell courseId={c.id} topicCount={ts.length} />
                         </td>
                         <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle' }}>
                           <StatusBadge status={c.status} />
