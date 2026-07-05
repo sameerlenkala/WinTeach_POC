@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Card, Btn, Badge, Breadcrumb, Modal } from './WinTeachUI';
+import { Card, Btn, Badge, Breadcrumb, Modal, Skeleton } from './WinTeachUI';
 import { TopicPlanPanel } from './WinTeachPlanPanel';
 import { IBack, ISpark, INotes, IImage, IQuiz, IText, IAssess, IFile, IFlash, ICheck, ILessonPlan } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
@@ -11,6 +11,9 @@ import {
   type GenJob, type ArtifactType, type ConceptArtType, type TopicArtType,
   type ConceptArtifactState, type ArtStatus,
 } from '@/api/generation';
+import { ReferenceMaterials } from './WinTeachMaterials';
+import { materialsApi } from '@/api/materials';
+import { useWinTeach } from './WinTeachContext';
 
 /* ── constants ───────────────────────────────────────────────────────────── */
 
@@ -112,11 +115,15 @@ function Field({ title, children }: { title: string; children: React.ReactNode }
 
 function TopicArtifactBody({ type, content }: { type: TopicArtType; content: any }) {
   if (!content) return null;
+  if (content.placeholder) return (
+    <div style={{ fontSize: 13, color: W.text2, padding: '10px 0' }}>{content.note ?? 'Not generated yet.'}</div>
+  );
   if (type === 'flashcards') return (
     <Field title={`${(content.cards ?? []).length} cards`}>
-      {(content.cards ?? []).slice(0, 8).map((c: any, i: number) => (
+      {(content.cards ?? []).map((c: any, i: number) => (
         <div key={i} style={{ padding: '8px 12px', background: W.surfaceMuted, borderRadius: 8, marginBottom: 6 }}>
           <b>{c.front}</b> <span style={{ color: W.text3 }}>→</span> {c.back}
+          {c.concept_ref && <span style={{ fontSize: 10.5, color: W.text3, marginLeft: 8 }}>({c.concept_ref})</span>}
         </div>
       ))}
     </Field>
@@ -124,17 +131,78 @@ function TopicArtifactBody({ type, content }: { type: TopicArtType; content: any
   if (type === 'summary') return (
     <>
       <Field title="Key concepts">{(content.key_concepts ?? []).map((k: any, i: number) => <div key={i} style={{ marginBottom: 4 }}><b>{k.concept}</b>: {k.one_liner}</div>)}</Field>
-      {(content.exam_pointers ?? []).length > 0 && <Field title="Exam pointers">{content.exam_pointers.join(' · ')}</Field>}
+      {(content.formulas_or_syntax ?? []).length > 0 && (
+        <Field title="Formulas / syntax">{content.formulas_or_syntax.map((f: string, i: number) => (
+          <div key={i} style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12.5, padding: '4px 10px', background: W.surfaceMuted, borderRadius: 6, marginBottom: 4 }}>{f}</div>
+        ))}</Field>
+      )}
+      {(content.common_mistakes ?? []).length > 0 && (
+        <Field title="Common mistakes">{content.common_mistakes.map((m: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {m}</div>)}</Field>
+      )}
+      {(content.exam_pointers ?? []).length > 0 && (
+        <Field title="Exam pointers">{content.exam_pointers.map((p: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {p}</div>)}</Field>
+      )}
     </>
   );
   if (type === 'assignment') return (
     <>
-      <Field title="Tasks">{(content.tasks ?? []).map((t: any, i: number) => <div key={i} style={{ marginBottom: 4 }}><b>[{t.marks}m]</b> {t.prompt}</div>)}</Field>
-      <Field title="Rubric">{(content.rubric ?? []).map((r: any, i: number) => <div key={i}>{r.criterion} ({r.points})</div>)}</Field>
+      <Field title="Tasks">{(content.tasks ?? []).map((t: any, i: number) => (
+        <div key={i} style={{ marginBottom: 8 }}>
+          <b>[{t.marks}m{t.bloom_level ? ` · ${t.bloom_level}` : ''}]</b> {t.prompt}
+        </div>
+      ))}</Field>
+      <Field title="Rubric">{(content.rubric ?? []).map((r: any, i: number) => (
+        <div key={i} style={{ marginBottom: 4 }}><b>{r.criterion}</b> ({r.points} pts){r.descriptor ? ` — ${r.descriptor}` : ''}</div>
+      ))}</Field>
+      {content.model_solution && (
+        <details style={{ marginBottom: 14 }}>
+          <summary style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: W.brandTintFg, cursor: 'pointer' }}>Model solution (instructor copy)</summary>
+          <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text, marginTop: 6 }}>{content.model_solution}</div>
+        </details>
+      )}
+      {content.integrity_policy && <Field title="Integrity policy">{content.integrity_policy}</Field>}
     </>
   );
-  return <Field title="Dimensions">{(content.dimensions ?? []).map((d: any, i: number) => <div key={i}><b>{d.name}</b>: {(d.items ?? []).length} items</div>)}</Field>;
+  // faculty_diagnostic
+  return (
+    <>
+      {(content.dimensions ?? []).map((d: any, i: number) => (
+        <Field key={i} title={String(d.name ?? '').replace(/_/g, ' ')}>
+          {(d.items ?? []).map((it: any, j: number) => (
+            <div key={j} style={{ padding: '8px 12px', background: W.surfaceMuted, borderRadius: 8, marginBottom: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 3 }}>{it.prompt}</div>
+              {it.what_good_looks_like && <div style={{ fontSize: 12.5, color: W.text2, marginBottom: 3 }}><b>Good looks like:</b> {it.what_good_looks_like}</div>}
+              {it.remediation && <div style={{ fontSize: 12.5, color: W.text2 }}><b>If unsure:</b> {it.remediation}</div>}
+            </div>
+          ))}
+        </Field>
+      ))}
+      {(content.gap_map ?? []).length > 0 && (
+        <Field title="Gap map">{content.gap_map.map((g: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {g}</div>)}</Field>
+      )}
+    </>
+  );
 }
+
+/* ── plain-language names for code-validator checks ──────────────────────── */
+
+const CHECK_FRIENDLY: Record<string, string> = {
+  'coverage:tlo_parent_co': 'Some learning outcomes aren’t linked to a valid course outcome',
+  'coverage:co_has_tlo': 'A mapped course outcome has no learning outcome tracing to it',
+  'coverage:concept_serves_tlo': 'Some subtopics don’t serve any learning outcome',
+  'coverage:tlo_served_by_concept': 'Some learning outcomes aren’t covered by any subtopic',
+  'coverage:concept_in_session': 'Some subtopics aren’t scheduled into any session',
+  'bloom:tlo_le_co': 'A learning outcome exceeds its course outcome’s Bloom level',
+  'bloom:concept_ceiling': 'A subtopic’s Bloom ceiling doesn’t match the outcomes it serves',
+  'content_type:exactly_one_primary': 'A subtopic is missing a valid primary content type',
+  'content_type:flag_conformance': 'Generation flags deviate from the content type without a recorded override',
+  'weight:co_sum_100': 'Course-outcome weights don’t add up to 100%',
+  'weight:concept_sum_100': 'Subtopic weights don’t add up to 100%',
+  'time:session_sum_duration': 'Session minutes don’t add up to the topic’s duration',
+  'verb:tlo_bank': 'Some outcomes use verbs outside the approved Bloom verb bank',
+};
+
+const friendlyCheck = (name: string) => CHECK_FRIENDLY[name] ?? name;
 
 /* ── pipeline tracker ────────────────────────────────────────────────────── */
 
@@ -183,14 +251,56 @@ function ViewerModal({ title, subtitle, loading, error, onRetry, children, onClo
 
 /* ── concept artifact tile ───────────────────────────────────────────────── */
 
+function GroundingModal({ chunkIds, onClose }: { chunkIds: string[]; onClose: () => void }) {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof materialsApi.chunks>> | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    materialsApi.chunks(chunkIds).then(setRows).catch(() => setFailed(true));
+  }, [chunkIds]);
+  return (
+    <Modal onClose={onClose} title="Grounding excerpts" subtitle="Reference-material passages injected into this artifact's prompt" maxWidth={560}>
+      {failed ? <div style={{ color: W.redFg, fontSize: 13, padding: '12px 0' }}>Could not load excerpt details.</div>
+        : !rows ? <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: W.text2, fontSize: 13, padding: '12px 0' }}><Spin /> Loading…</div>
+          : rows.length === 0 ? <div style={{ color: W.text2, fontSize: 13, padding: '12px 0' }}>The excerpts are no longer available (the material was deleted or re-uploaded).</div>
+            : rows.map(r => {
+              // Open the source PDF at the excerpt's page (viewer honours #page=N).
+              const openSource = () => r.material_id && r.filename &&
+                materialsApi.view(r.material_id, r.filename, r.page_start ?? undefined).catch(() => {});
+              return (
+                <button key={r.id} onClick={openSource} title="Open the source at this page"
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: `1px solid ${W.border}`, cursor: 'pointer', padding: '9px 12px', background: W.surfaceMuted, borderRadius: 8, marginBottom: 6, fontSize: 12.5, color: W.text }}>
+                  <b style={{ color: 'var(--brand)' }}>{r.filename ?? 'material'}</b>
+                  {r.page_start ? ` · p.${r.page_start}${r.page_end && r.page_end !== r.page_start ? `–${r.page_end}` : ''}` : ''}
+                  {r.heading ? <span style={{ color: W.text2 }}> — {r.heading}</span> : ''}
+                </button>
+              );
+            })}
+    </Modal>
+  );
+}
+
 function ConceptTile({ jobId, conceptId, type, state, locked, onChanged, onView }: {
   jobId: string; conceptId: string; type: ConceptArtType;
   state?: ConceptArtifactState; locked: boolean; onChanged: () => void; onView: () => void;
 }) {
   const status = state?.status ?? 'not_generated';
-  const approved = state?.approval_status === 'approved';
+  // Optimistic approve: flip the tile immediately, roll back if the call fails.
+  const [optimisticApproved, setOptimisticApproved] = useState(false);
+  const approved = state?.approval_status === 'approved' || optimisticApproved;
+  const [showGrounding, setShowGrounding] = useState(false);
+
+  // Clear the optimistic flag once the server state actually changes — so a
+  // later regenerate (which resets approval to pending) doesn't stay "approved".
+  useEffect(() => {
+    if (state?.approval_status && state.approval_status !== 'approved') setOptimisticApproved(false);
+  }, [state?.approval_status, state?.status]);
 
   const gen = async () => { await generationApi.genConcept(jobId, conceptId, type); onChanged(); };
+  const approve = async () => {
+    setOptimisticApproved(true);
+    try { await generationApi.approveConcept(jobId, conceptId, type); onChanged(); }
+    catch { setOptimisticApproved(false); }
+  };
 
   return (
     <div style={{
@@ -217,32 +327,125 @@ function ConceptTile({ jobId, conceptId, type, state, locked, onChanged, onView 
         {status === 'not_generated' && <Btn sm variant="primary" onClick={gen}>Generate</Btn>}
         {status === 'ready' && <>
           <Btn sm onClick={onView}>View</Btn>
-          {!approved && <Btn sm variant="primary" onClick={async () => { await generationApi.approveConcept(jobId, conceptId, type); onChanged(); }}>Approve</Btn>}
+          {!approved && <Btn sm variant="primary" onClick={approve}>Approve</Btn>}
           <Btn sm variant="ghost" onClick={gen}>Regenerate</Btn>
         </>}
         {status === 'error' && <Btn sm variant="primary" onClick={gen}>Retry</Btn>}
         {status === 'generating' && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: W.text2 }}><Spin /> ~30–90s</span>}
+        {(state?.grounded_in?.length ?? 0) > 0 && (() => {
+          const chunkIds = state!.grounded_in!.flatMap(g => g.chunk_ids ?? []);
+          return (
+            <button
+              title="Generated with faculty reference material — click to see which excerpts"
+              onClick={() => chunkIds.length > 0 && setShowGrounding(true)}
+              style={{ fontSize: 11, color: W.greenFg, background: W.greenBg, borderRadius: 6,
+                       padding: '2px 8px', border: 'none', cursor: chunkIds.length ? 'pointer' : 'default' }}>
+              Grounded{chunkIds.length > 0 ? ` · ${chunkIds.length} excerpt${chunkIds.length > 1 ? 's' : ''}` : ''}
+            </button>
+          );
+        })()}
         {(state?.cost_usd ?? 0) > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{usd(state?.cost_usd)}</span>}
       </div>
+      {showGrounding && (
+        <GroundingModal
+          chunkIds={(state?.grounded_in ?? []).flatMap(g => g.chunk_ids ?? [])}
+          onClose={() => setShowGrounding(false)}
+        />
+      )}
     </div>
+  );
+}
+
+/* ── sticky concept rail — persistent index for long topics ──────────────── */
+
+function ConceptRail({ concepts, stateFor, onJump }: {
+  concepts: any[];
+  stateFor: (cid: string, t: ConceptArtType) => ConceptArtifactState | undefined;
+  onJump: (cid: string) => void;
+}) {
+  const [active, setActive] = useState<string | null>(null);
+
+  // Scroll-spy: highlight whichever concept card is nearest the top.
+  useEffect(() => {
+    const els = concepts
+      .map(c => document.getElementById(`concept-${c.concept_id}`))
+      .filter((e): e is HTMLElement => !!e);
+    if (!els.length) return;
+    const obs = new IntersectionObserver(
+      entries => {
+        const visible = entries.filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActive(visible[0].target.id.replace('concept-', ''));
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0 },
+    );
+    els.forEach(e => obs.observe(e));
+    return () => obs.disconnect();
+  }, [concepts]);
+
+  return (
+    <aside className="max-lg:hidden" style={{
+      width: 236, flexShrink: 0, position: 'sticky', top: 68, alignSelf: 'flex-start',
+      background: W.card, border: `1px solid ${W.border}`, borderRadius: 10,
+      boxShadow: W.shadowCard, overflow: 'hidden', maxHeight: 'calc(100vh - 96px)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{ padding: '11px 14px', borderBottom: `1px solid ${W.border}`, fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12, color: W.text2 }}>
+        Subtopics
+      </div>
+      <nav style={{ padding: 6, overflowY: 'auto' }}>
+        {concepts.map((c, i) => {
+          const on = active === c.concept_id;
+          return (
+            <button key={c.concept_id} onClick={() => onJump(c.concept_id)} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+              padding: '7px 8px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: on ? 'var(--tint-brand-bg)' : 'transparent',
+              color: on ? 'var(--tint-brand-fg)' : W.text2,
+              fontFamily: W.fontSans, fontSize: 12.5, fontWeight: on ? 600 : 500, transition: 'background .12s',
+            }}
+              onMouseEnter={e => { if (!on) (e.currentTarget as HTMLElement).style.background = 'var(--nav-hover)'; }}
+              onMouseLeave={e => { if (!on) (e.currentTarget as HTMLElement).style.background = ''; }}
+            >
+              <span style={{ fontSize: 10.5, color: on ? 'var(--tint-brand-fg)' : W.text3, width: 16, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{String(i + 1).padStart(2, '0')}</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.concept_name}</span>
+              <span style={{ display: 'inline-flex', gap: 3, flexShrink: 0 }}>
+                {CONCEPT_TYPES.map(t => {
+                  const s = stateFor(c.concept_id, t);
+                  const st = dotFor(s?.status, s?.approval_status === 'approved');
+                  return <span key={t} title={`${CONCEPT_LABEL[t]}: ${DOT_META[st].label}`} style={{ width: 7, height: 7, borderRadius: '50%', background: DOT_META[st].bg }} />;
+                })}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }
 
 /* ── concept card (editable plan + notes/slides/quiz tiles) ──────────────── */
 
-function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, onViewArtifact }: {
+function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, onViewArtifact, onEditingChange }: {
   index: number; job: GenJob; concept: any; edit: any; onEdit: (patch: any) => void;
   stateFor: (cid: string, t: ConceptArtType) => ConceptArtifactState | undefined; onChanged: () => void;
   onViewArtifact: (cid: string, t: ConceptArtType) => void;
+  onEditingChange?: (cid: string | null) => void;
 }) {
   const [showEdit, setShowEdit] = useState(false);
   const merged = { ...concept, ...edit };
   const flags = merged.flags ?? {};
   const secondary: string[] = merged.secondary_blocks ?? [];
   const notesReady = stateFor(concept.concept_id, 'student_notes')?.status === 'ready';
+  const toggleEdit = () => setShowEdit(s => {
+    const next = !s;
+    onEditingChange?.(next ? concept.concept_id : null);
+    return next;
+  });
+  useEffect(() => () => { if (showEdit) onEditingChange?.(null); }, []); // eslint-disable-line
 
   return (
-    <Card compact id={`concept-${concept.concept_id}`} style={{ marginBottom: 12, scrollMarginTop: 90 }}>
+    <Card compact id={`concept-${concept.concept_id}`} className="ds-rise" style={{ marginBottom: 12, scrollMarginTop: 96 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{
           width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
@@ -253,7 +456,7 @@ function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, o
         <b style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14.5, color: W.text }}>{concept.concept_name}</b>
         <CTBadge ct={merged.primary_content_type} />
         <Badge variant="muted">{merged.complexity_tier}</Badge>
-        <button onClick={() => setShowEdit(s => !s)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: W.brandTintFg, fontFamily: W.fontDisplay, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+        <button onClick={toggleEdit} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: W.brandTintFg, fontFamily: W.fontDisplay, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
           {showEdit ? '▾ Hide plan' : '✎ Edit plan'}
         </button>
       </div>
@@ -365,6 +568,9 @@ export default function WinTeachGenerate() {
   const [planStatus, setPlanStatus] = useState<{ ok: boolean; failures: any[] }>({ ok: true, failures: [] });
   const [edits, setEdits] = useState<Record<string, any>>({});
   const [starting, setStarting] = useState(false);
+  // Which concept's plan-edit panel is open — polling pauses while it is, so the
+  // board doesn't reflow/scroll-jump under the faculty member as they edit.
+  const [editingConcept, setEditingConcept] = useState<string | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
   const [error, setError] = useState('');
 
@@ -379,6 +585,11 @@ export default function WinTeachGenerate() {
 
   const topicTitle = (topic as any)?.title ?? 'Topic';
   const courseCode = (course as any)?.code ?? courseId ?? '';
+
+  // Grounding indicator: ready reference materials attached to this topic
+  // (count reported by the ReferenceMaterials card below the header).
+  const { toast } = useWinTeach();
+  const [groundedCount, setGroundedCount] = useState(0);
 
   const refetch = useCallback(async () => {
     if (!topicId) return;
@@ -405,9 +616,10 @@ export default function WinTeachGenerate() {
       || (job.artifacts ?? []).some(a => a.review_status === 'generating')
       || queueRun !== null;
     if (!planGenerating && !anyGenerating) return;
+    if (editingConcept) return;  // don't reflow the board mid-edit
     poll.current = setTimeout(refetch, 2600);
     return () => { if (poll.current) clearTimeout(poll.current); };
-  }, [job, refetch, queueRun]);
+  }, [job, refetch, queueRun, editingConcept]);
 
   const start = async () => {
     if (!courseId || !topicId) return;
@@ -462,6 +674,49 @@ export default function WinTeachGenerate() {
   const pendingQuiz = pendingFor('quiz');
 
   const conceptName = (cid: string) => concepts.find((c: any) => c.concept_id === cid)?.concept_name ?? cid;
+
+  // ── Batch approval + next-step guidance ──
+  const approvables = (job?.concept_artifacts ?? []).filter(
+    c => c.status === 'ready' && c.approval_status !== 'approved');
+  const [approvingAll, setApprovingAll] = useState(false);
+  const approveAll = async () => {
+    if (!job || approvables.length === 0) return;
+    setApprovingAll(true);
+    let ok = 0;
+    for (const c of approvables) {
+      try { await generationApi.approveConcept(job.id, c.concept_id, c.artifact_type); ok++; }
+      catch { /* keep going; the board shows what's left */ }
+    }
+    toast(ok === approvables.length ? `Approved ${ok} artifacts` : `Approved ${ok}, ${approvables.length - ok} failed`);
+    await refetch();
+    setApprovingAll(false);
+  };
+
+  // Failed concept artifacts, grouped by type — surfaced persistently (not just
+  // as a toast) with a one-click retry that re-enqueues them.
+  const failedByType: Record<ConceptArtType, string[]> = {
+    student_notes: [], slides: [], quiz: [],
+  };
+  for (const c of job?.concept_artifacts ?? []) {
+    if (c.status === 'error' && c.artifact_type in failedByType) failedByType[c.artifact_type].push(c.concept_id);
+  }
+  const failedTotal = Object.values(failedByType).reduce((n, a) => n + a.length, 0);
+  const failedTypes = (Object.keys(failedByType) as ConceptArtType[]).filter(t => failedByType[t].length > 0);
+
+  const nextStep = (() => {
+    if (!job || job.status === 'failed' || !plan) return null;
+    if (notesDone === 0 && pendingNotes.length > 0)
+      return `Plan validated — next, generate Notes for the ${conceptCount} subtopics ("Generate all Notes" runs them one by one).`;
+    if (approvables.length > 0)
+      return `${approvables.length} generated artifact${approvables.length > 1 ? 's are' : ' is'} awaiting your review — open with View, then Approve (or use "Approve all ready").`;
+    if (pendingNotes.length > 0)
+      return `${pendingNotes.length} subtopic${pendingNotes.length > 1 ? 's' : ''} still need${pendingNotes.length > 1 ? '' : 's'} Notes.`;
+    if (pendingSlides.length + pendingQuiz.length > 0)
+      return 'Notes are in — generate the remaining Slides and Quizzes (they derive from the approved Notes).';
+    if (topicArtsDone < TOPIC_ART_TYPES.length)
+      return 'Concept artifacts are done — generate the topic-wide artifacts at the bottom (summary, assignment, diagnostic, flashcards).';
+    return null; // everything generated & approved — no nagging
+  })();
 
   // Queue engine: watch the running item until it settles, then dispatch the next.
   // queueWaiting guards the window between dispatch and the post-dispatch refetch:
@@ -544,6 +799,31 @@ export default function WinTeachGenerate() {
   const scrollToConcept = (cid: string) =>
     document.getElementById(`concept-${cid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  // Keyboard shortcuts (studio): j/k move between subtopics, g generates all
+  // pending Notes, a approves everything ready. Ignored while typing or a
+  // dialog/modifier is active.
+  const navIdx = useRef(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)) return;
+      if (!plan || concepts.length === 0) return;
+      if (e.key === 'j' || e.key === 'k') {
+        e.preventDefault();
+        navIdx.current = Math.max(0, Math.min(concepts.length - 1, navIdx.current + (e.key === 'j' ? 1 : -1)));
+        scrollToConcept(concepts[navIdx.current].concept_id);
+      } else if (e.key === 'g' && pendingNotes.length > 0 && !queueBusy) {
+        e.preventDefault(); enqueueAll('student_notes');
+      } else if (e.key === 'a' && approvables.length > 0 && !approvingAll) {
+        e.preventDefault(); approveAll();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, concepts, pendingNotes.length, approvables.length, queueBusy, approvingAll]);
+
   return (
     <>
       <WinTopbar title="Generation Studio" actions={
@@ -552,13 +832,13 @@ export default function WinTeachGenerate() {
         </Btn>
       } />
       <WinContent>
+        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
         <Breadcrumb items={[
           { label: 'Courses', onClick: () => navigate('/winteach/courses') },
           { label: courseCode, onClick: () => navigate(`/winteach/courses/${courseId}`) },
           { label: topicTitle },
         ]} />
 
-        <div style={{ maxWidth: 940 }}>
 
           {/* ── Studio header: topic identity + cost ── */}
           <div className="ds-rise" style={{
@@ -575,6 +855,13 @@ export default function WinTeachGenerate() {
                   {bloom && <Badge variant="blue">{bloom}</Badge>}
                   {subtopics.length > 0 && <Badge variant="muted">{subtopics.length} subtopics</Badge>}
                   {hours != null && <Badge variant="muted">{hours} hrs</Badge>}
+                  {groundedCount > 0 && (
+                    <span title="New generations for this topic will be grounded in the attached reference materials. Already-generated artifacts show their own Grounded chip.">
+                      <Badge variant="green" dot>
+                        Grounding · {groundedCount} file{groundedCount > 1 ? 's' : ''}
+                      </Badge>
+                    </span>
+                  )}
                 </div>
                 {linkedCo?.description && (
                   <div style={{ fontSize: 12.5, color: W.text2, marginTop: 8, lineHeight: 1.55 }}>
@@ -586,13 +873,16 @@ export default function WinTeachGenerate() {
               {job && (
                 <div style={{ display: 'flex', gap: 10, flex: '0 0 auto' }}>
                   {([
-                    ['Estimated', `~${usd(job.est_cost_usd)}`, W.text],
-                    ['Spent', usd(job.cost_usd), W.brandTintFg],
-                    ['Tokens', (job.token_count ?? 0).toLocaleString(), W.text2],
-                  ] as [string, string, string][]).map(([l, v, color]) => (
-                    <div key={l} style={{ background: W.surfaceMuted, borderRadius: 8, padding: '10px 16px', minWidth: 86, textAlign: 'center' }}>
+                    ['Estimated', `~${usd(job.est_cost_usd)}`, W.text, 'Estimated when the Topic Plan was generated — attaching materials afterwards isn’t reflected here'],
+                    ['Spent', usd(job.cost_usd), W.brandTintFg, undefined],
+                    ['Tokens', (job.token_count ?? 0).toLocaleString(), W.text2, undefined],
+                  ] as [string, string, string, string | undefined][]).map(([l, v, color, tip]) => (
+                    <div key={l} title={tip} style={{ background: W.surfaceMuted, borderRadius: 8, padding: '10px 16px', minWidth: 86, textAlign: 'center' }}>
                       <div style={{ fontFamily: W.fontDisplay, fontSize: '.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: W.text3, marginBottom: 3 }}>{l}</div>
                       <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
+                      {l === 'Estimated' && groundedCount > 0 && (
+                        <div style={{ fontSize: 9.5, color: W.text3, marginTop: 2 }}>+ grounding</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -618,6 +908,29 @@ export default function WinTeachGenerate() {
             )}
           </div>
 
+          {/* Optional grounding: attach reference PDFs/DOCX before generating */}
+          {topicId && (
+            <ReferenceMaterials
+              courseId={(course as any)?.id ?? courseId ?? ''}
+              topicId={topicId}
+              toast={toast}
+              onReadyCount={setGroundedCount}
+              collapseWhenIdle
+            />
+          )}
+
+          {/* next-step guidance — one line, derived from live pipeline state */}
+          {nextStep && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, background: W.brandTintBg,
+              borderRadius: 10, padding: '10px 16px', marginBottom: 16,
+              fontSize: 13, color: W.text, lineHeight: 1.5,
+            }}>
+              <span style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', color: W.brandTintFg, flexShrink: 0 }}>Next</span>
+              {nextStep}
+            </div>
+          )}
+
           {dirty && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12, background: W.brandTintBg,
@@ -631,6 +944,14 @@ export default function WinTeachGenerate() {
           )}
 
           {error && <div style={{ background: W.redBg, color: W.redFg, borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+
+          {/* initial load — skeleton rather than a blank flash while resuming */}
+          {!resumed && (
+            <Card>
+              <Skeleton lines={1} height={22} width={220} style={{ marginBottom: 16 }} />
+              <Skeleton lines={4} height={13} />
+            </Card>
+          )}
 
           {/* ── empty state — pipeline preview + syllabus context ── */}
           {resumed && !job && (
@@ -669,9 +990,13 @@ export default function WinTeachGenerate() {
 
           {planGenerating && (
             <Card>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, marginBottom: 16 }}>
                 <Spin />
                 Generating & validating the Topic Plan…
+              </div>
+              <Skeleton lines={3} height={13} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 16 }}>
+                {[0, 1, 2].map(i => <Skeleton key={i} height={64} />)}
               </div>
             </Card>
           )}
@@ -681,7 +1006,12 @@ export default function WinTeachGenerate() {
               <div style={{ color: W.redFg, fontSize: 13.5, marginBottom: 10 }}>{job.error_msg || 'Topic Plan generation failed.'}</div>
               {planStatus.failures.length > 0 && (
                 <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12.5, color: W.redFg }}>
-                  {planStatus.failures.map((f: any, i: number) => <li key={i}>{f.name}: {f.detail}</li>)}
+                  {planStatus.failures.map((f: any, i: number) => (
+                    <li key={i} style={{ marginBottom: 4 }}>
+                      {friendlyCheck(f.name)}
+                      {f.detail && <div style={{ fontSize: 11, color: W.text3 }}>{f.detail}</div>}
+                    </li>
+                  ))}
                 </ul>
               )}
               <Btn variant="primary" onClick={start} disabled={starting}>Regenerate Topic Plan</Btn>
@@ -719,7 +1049,12 @@ export default function WinTeachGenerate() {
                     <tbody>
                       {concepts.map((c: any) => (
                         <tr key={c.concept_id} onClick={() => scrollToConcept(c.concept_id)}
+                          role="button" tabIndex={0}
+                          aria-label={`Jump to ${c.concept_name}`}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToConcept(c.concept_id); } }}
                           style={{ cursor: 'pointer' }}
+                          onFocus={e => { (e.currentTarget as HTMLElement).style.background = 'var(--row-hover)'; }}
+                          onBlur={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--row-hover)'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
                         >
@@ -765,10 +1100,22 @@ export default function WinTeachGenerate() {
               {/* concepts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Subtopics ({concepts.length})</div>
+                {concepts.length > 1 && (
+                  <span className="max-md:hidden" title="j/k move between subtopics · g generate all Notes · a approve all ready"
+                    style={{ fontSize: 11, color: W.text3, border: `1px solid ${W.border}`, borderRadius: 6, padding: '1px 7px', fontFamily: W.fontDisplay }}>
+                    ⌨ j k · g · a
+                  </span>
+                )}
                 {planStatus.ok ? <Badge variant="green" dot>Plan validated</Badge> : <Badge variant="orange">Plan needs revision</Badge>}
                 {plan.front_matter?.topic_plan_version && <Badge variant="muted">v{plan.front_matter.topic_plan_version}</Badge>}
-                {(pendingNotes.length > 0 || pendingSlides.length > 0 || pendingQuiz.length > 0) && (
+                {(pendingNotes.length > 0 || pendingSlides.length > 0 || pendingQuiz.length > 0 || approvables.length > 0) && (
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {approvables.length > 0 && (
+                      <Btn sm onClick={approveAll} disabled={approvingAll}>
+                        <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ICheck /></span>
+                        {approvingAll ? 'Approving…' : `Approve all ready (${approvables.length})`}
+                      </Btn>
+                    )}
                     {pendingNotes.length > 0 && (
                       <Btn sm variant="primary" onClick={() => enqueueAll('student_notes')} disabled={queueBusy && queueType !== 'student_notes'}>
                         <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>
@@ -788,6 +1135,24 @@ export default function WinTeachGenerate() {
                   </div>
                 )}
               </div>
+
+              {/* persistent failure banner — survives past the transient toast */}
+              {failedTotal > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12, background: W.redBg,
+                  border: `1px solid color-mix(in oklab, var(--tint-red-fg) 25%, transparent)`,
+                  borderRadius: 10, padding: '10px 16px', marginBottom: 14,
+                }}>
+                  <span style={{ fontSize: 13, color: W.redFg, flex: 1 }}>
+                    {failedTotal} generation{failedTotal > 1 ? 's' : ''} failed.
+                  </span>
+                  {failedTypes.map(t => (
+                    <Btn key={t} sm variant="ghost" onClick={() => enqueueAll(t)} disabled={queueBusy && queueType !== t}>
+                      Retry {CONCEPT_LABEL[t]} ({failedByType[t].length})
+                    </Btn>
+                  ))}
+                </div>
+              )}
 
               {/* ── Notes queue — sequential, visible, editable ── */}
               {queueVisible && (
@@ -856,11 +1221,19 @@ export default function WinTeachGenerate() {
                 </div>
               )}
 
-              {concepts.map((c: any, i: number) => (
-                <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
-                  onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
-                  onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
-              ))}
+              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                {concepts.length > 1 && (
+                  <ConceptRail concepts={concepts} stateFor={stateFor} onJump={scrollToConcept} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {concepts.map((c: any, i: number) => (
+                    <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
+                      onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
+                      onEditingChange={setEditingConcept}
+                      onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
+                  ))}
+                </div>
+              </div>
 
               {/* topic-level artifacts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 10px' }}>

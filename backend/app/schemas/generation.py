@@ -55,6 +55,10 @@ class JobCreateRequest(BaseModel):
     course_id: str
     topic_id: str
     artifact_types: list[ArtifactType] = []
+    # Optional grounding: restricts generation to these attached materials.
+    # None/[] → ground in whatever is attached to the topic (none attached =
+    # today's ungrounded prompts, byte-identical).
+    material_ids: list[str] | None = None
 
 
 class HoursAllocateTopic(BaseModel):

@@ -7,6 +7,7 @@ import { WinTopbar, WinContent } from './WinTeachLayout';
 import { BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
 import { IBack, IEdit, IAssess, IDashboard, IArrow } from './WinTeachIcons';
 import { coRefFor } from './winteachData';
+import { ReferenceMaterials } from './WinTeachMaterials';
 import type { CourseOutcome, COMapping } from '@/api/types';
 import type { TopicProgress } from '@/api/generation';
 
@@ -101,7 +102,7 @@ function Spinner() {
 export default function WinTeachCoursePage() {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
-  const { courses } = useWinTeach();
+  const { courses, toast } = useWinTeach();
 
   // Real API data
   const { data: apiCourse, isLoading: courseLoading } = useCourse(id);
@@ -486,6 +487,12 @@ export default function WinTeachCoursePage() {
           </div>
         </Modal>
         )}
+
+        {/* ── Course reference materials (optional grounding) ── */}
+        <ReferenceMaterials
+          courseId={apiCourse?.id ?? id} mode="course" toast={toast}
+          topics={units.flatMap((u: any) => (u.topics ?? []).map((t: any) => ({ id: t.id, title: t.title ?? t.name ?? '' })))}
+        />
 
         {/* ── Curriculum: units & topics ── */}
         {units.length > 0 && (

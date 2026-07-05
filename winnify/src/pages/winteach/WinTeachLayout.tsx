@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, Zap, Library, BookMarked,
+  LayoutDashboard, BookOpen, Zap, Library, BookMarked, FileText,
   Building2, Settings, LogOut, GraduationCap, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import PageTopbar from '@/components/layout/PageTopbar';
@@ -15,6 +15,7 @@ const PAGE_TITLES_WT: Record<string, string> = {
   '/winteach/courses':      'Courses',
   '/winteach/courses/new':  'Create New Course',
   '/winteach/generation':   'Content Generation',
+  '/winteach/materials':    'Reference Materials',
   '/winteach/library':      'CO Library',
   '/winteach/add-library':  'Additional Course Library',
   '/winteach/institutes':   'Institute PO & PSO',
@@ -38,6 +39,7 @@ function WinTeachSidebar() {
     { to: '/winteach',             label: 'Dashboard',           icon: LayoutDashboard, end: true },
     { to: '/winteach/courses',     label: 'Courses',             icon: BookOpen,   count: courses.length },
     { to: '/winteach/generation',  label: 'Content Generation',  icon: Zap,        count: pending },
+    { to: '/winteach/materials',   label: 'Reference Materials', icon: FileText },
     { to: '/winteach/library',     label: 'IO Library',          icon: Library },
     { to: '/winteach/add-library', label: 'Add. Course Library', icon: BookMarked, count: ADDITIONAL_LIBRARY.length },
     { to: '/winteach/institutes',  label: 'Institute PO & PSO',  icon: Building2,  count: institutes.length },
@@ -160,14 +162,19 @@ export default function WinTeachLayout() {
 // Topbar + content helpers used by each WinTeach page
 // These now simply wrap children — the real topbar is PageTopbar above
 export function WinTopbar({ title: _title, actions }: { title: string; actions?: React.ReactNode }) {
-  // Actions are rendered in a floating bar below the PageTopbar
+  // A sticky action bar directly under the page topbar. It pins to the top of
+  // the scroll container so primary navigation (Back to studio / course) and
+  // page actions stay reachable no matter how far the user has scrolled.
   if (!actions) return null;
   return (
     <div style={{
+      position: 'sticky', top: 0, zIndex: 30,
       display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-      gap: 10, padding: '0 36px 0', height: 48,
+      gap: 10, padding: '0 36px', height: 52,
       borderBottom: '1px solid var(--border)',
-      background: 'var(--app-bg)',
+      background: 'color-mix(in srgb, var(--app-bg) 88%, transparent)',
+      backdropFilter: 'saturate(180%) blur(8px)',
+      WebkitBackdropFilter: 'saturate(180%) blur(8px)',
     }}>
       {actions}
     </div>
@@ -176,7 +183,7 @@ export function WinTopbar({ title: _title, actions }: { title: string; actions?:
 
 export function WinContent({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: '0 36px 40px', flex: 1 }}>
+    <div style={{ padding: '18px 36px 48px', flex: 1 }}>
       {children}
     </div>
   );

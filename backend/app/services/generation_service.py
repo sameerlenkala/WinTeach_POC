@@ -211,7 +211,7 @@ _STAMP_FIELDS = frozenset({
     "topic_plan_version", "validated_at", "scope_hash", "notes_version",
     "content_hash", "unit_hash", "approved_at", "slides_version",
     "derived_from_notes_version", "derived_from_content_hash", "version",
-    "concept_id", "tlo_id",
+    "concept_id", "tlo_id", "grounded_in",
 })
 
 
@@ -833,14 +833,17 @@ def _word_count(text) -> int:
 
 def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
                    prev_title: str | None, next_title: str | None,
-                   prior_terms: list[str]) -> dict:
+                   prior_terms: list[str],
+                   grounding: list[dict] | None = None) -> dict:
     """Node B for one concept: Opening → Core → Closing (three calls). IDs are
-    echoed verbatim from the concept."""
+    echoed verbatim from the concept. `grounding` (optional) carries retrieved
+    reference-material chunks into the Opening and Core prompts."""
     from app.services import generation_prompts as p  # lazy
     opening = _chat_json(client, *p.build_opening_prompt(unit, ctx, plan,
-                         prev_title=prev_title, next_title=next_title), temperature=0.6)
+                         prev_title=prev_title, next_title=next_title,
+                         grounding=grounding), temperature=0.6)
     core = _chat_json(client, *p.build_core_prompt(unit, ctx, plan,
-                     prior_terms=prior_terms), temperature=0.7)
+                     prior_terms=prior_terms, grounding=grounding), temperature=0.7)
     closing = _chat_json(client, *p.build_closing_prompt(unit, ctx,
                         prev_title=prev_title, next_title=next_title,
                         condensed_core=_condense_core(core)), temperature=0.5)
@@ -1125,6 +1128,78 @@ def placeholder_artifact(artifact_type: str, notes: dict) -> dict:
 _MAX_ATTEMPTS = 2   # retry cap per generation node (§6)
 
 
+# ── Material grounding (Phase 1) ──────────────────────────────────────────────
+# Optional: when materials are attached to the topic/course, prompts carry
+# retrieved excerpts. No materials attached ⇒ prompts are byte-identical to the
+# ungrounded pipeline.
+
+def _grounding_tiers(db, job_id, course_id: str, topic_id: str) -> dict[str, str]:
+    """material_id → tier for this generation action. A non-empty material_ids
+    list on the job (the faculty's explicit pick at job creation) restricts the
+    set; otherwise whatever is currently attached grounds the prompts."""
+    from app.services import material_service as ms  # lazy
+    only = None
+    if job_id:
+        mids = _row(db, "generation_jobs", job_id).get("material_ids")
+        if isinstance(mids, list) and mids:
+            only = mids
+    return ms.resolve_topic_materials(db, topic_id, course_id, only_ids=only)
+
+
+def _concept_query_terms(plan: dict, unit: dict) -> list[str]:
+    """Retrieval query for one concept: name + coverage checklist + scope_in +
+    the statements of the TLOs it serves."""
+    tlo_by_id = {t.get("tlo_id"): t for t in plan.get("tlo_set", []) or []}
+    terms = [unit.get("concept_name", "")]
+    terms += list(unit.get("concepts_covered") or [])
+    terms += list(unit.get("scope_in") or [])
+    terms += [str((tlo_by_id.get(r) or {}).get("statement", ""))
+              for r in (unit.get("serves_tlos") or [])]
+    return [t for t in terms if t]
+
+
+def _grounded_stamp(db, tier_map: dict[str, str],
+                    chunks: list[dict] | None = None) -> list[dict]:
+    """Provenance for grounded artifacts: which materials (by content_hash) and
+    which chunks fed the prompt. Orchestrator-written, excluded from canonical
+    hashing (_STAMP_FIELDS), never round-tripped through the model."""
+    used = {c["material_id"] for c in chunks} if chunks is not None else set(tier_map)
+    if not used:
+        return []
+    rows = (db.table("materials").select("id,content_hash")
+            .in_("id", list(used)).execute().data or [])
+    by_id = {r["id"]: r.get("content_hash") for r in rows}
+    out = []
+    for mid in sorted(used):
+        entry = {"material_id": mid, "content_hash": by_id.get(mid)}
+        if chunks is not None:
+            entry["chunk_ids"] = [c["chunk_id"] for c in chunks
+                                  if c["material_id"] == mid]
+        out.append(entry)
+    return out
+
+
+def grounding_check(content: Any, chunks: list[dict]) -> CheckResult:
+    """Non-blocking heuristic (grounding:material_used): the share of the
+    injected material's distinctive terms that surface in the generated
+    artifact. Logged for telemetry; never fails a gate."""
+    from collections import Counter
+    from app.services.material_service import _STOP  # shared stop set
+    text = json.dumps(content, ensure_ascii=False).casefold()
+    counter: Counter = Counter()
+    for c in chunks:
+        counter.update(w for w in re.findall(r"[a-z0-9]{4,}", c["text"].casefold())
+                       if w not in _STOP)
+    key_terms = [w for w, _ in counter.most_common(20)]
+    if not key_terms:
+        return CheckResult(name="grounding:material_used", passed=True,
+                           detail="no distinctive material terms", blocking=False)
+    hit = sum(1 for w in key_terms if w in text) / len(key_terms)
+    return CheckResult(name="grounding:material_used", passed=hit >= 0.4,
+                       detail=f"{hit:.0%} of material key terms appear in the artifact",
+                       blocking=False)
+
+
 def enqueue_topic_job(job_id: str, course_id: str, topic_id: str) -> None:
     """Kick off the Topic Plan node off-request in a daemon thread. All state is
     persisted to the job row, so progress survives a restart."""
@@ -1162,6 +1237,15 @@ def run_topic_job(db, job_id: str, course_id: str, topic_id: str) -> None:
 
     ctx = _load_topic_context(db, course_id, topic_id)
 
+    # Optional grounding: a compact outline of the attached materials steers
+    # the concept inventory toward the faculty's reference (Node A).
+    tier_map = _grounding_tiers(db, job_id, course_id, topic_id)
+    if tier_map:
+        from app.services import material_service as ms
+        outline = ms.build_outline(db, tier_map)
+        if outline:
+            ctx = {**ctx, "grounding_outline": outline}
+
     plan: dict = {}
     result: ValidationResult | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
@@ -1188,6 +1272,8 @@ def run_topic_job(db, job_id: str, course_id: str, topic_id: str) -> None:
         return
 
     plan = stamp_topic_plan(plan)
+    if tier_map:
+        plan["grounded_in"] = _grounded_stamp(db, tier_map)
     p_tok, c_tok, cost = meter_read()
     _upsert_artifact(db, job_id, topic_id, "topic_plan", plan,
                      gate_type="validate", review_status="validated",
@@ -1199,16 +1285,22 @@ def run_topic_job(db, job_id: str, course_id: str, topic_id: str) -> None:
     # after this is generated by an explicit user action (no auto fan-out).
     _add_job_cost(db, job_id, p_tok + c_tok, cost)
     _set_job(db, job_id, status="done", phase="plan_ready",
-             est_cost_usd=estimate_topic_cost(plan))
+             est_cost_usd=estimate_topic_cost(plan, grounded=bool(tier_map)))
 
 
-def estimate_topic_cost(plan: dict) -> float:
-    """Upfront estimate: plan + per-concept (notes+slides+quiz) + topic artifacts."""
+def estimate_topic_cost(plan: dict, grounded: bool = False) -> float:
+    """Upfront estimate: plan + per-concept (notes+slides+quiz) + topic artifacts.
+    Grounded jobs pay ~GROUNDING_TOTAL_BUDGET_TOKENS extra prompt tokens on each
+    grounded node call (plan + three notes calls per concept)."""
     n = len(plan.get("concept_inventory", []) or [])
     per_concept = sum(ct.estimate_artifact_cost(t) for t in ("student_notes", "slides", "quiz"))
     topic_arts = sum(ct.estimate_artifact_cost(t)
                      for t in ("summary", "assignment", "faculty_diagnostic", "flashcards"))
-    return round(ct.estimate_artifact_cost("topic_plan") + n * per_concept + topic_arts, 4)
+    total = ct.estimate_artifact_cost("topic_plan") + n * per_concept + topic_arts
+    if grounded:
+        from app.services.material_service import GROUNDING_TOTAL_BUDGET_TOKENS
+        total += ct.usd_cost(GROUNDING_TOTAL_BUDGET_TOKENS * (1 + 3 * n), 0)
+    return round(total, 4)
 
 
 def _add_job_cost(db, job_id: str, tokens: int, cost: float) -> None:
@@ -1697,12 +1789,24 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
 
     if artifact_type == "student_notes":
         prev, nxt = _neighbors(plan, concept_id)
+        grounding: list[dict] = []
+        tier_map = _grounding_tiers(db, job_id, course_id, topic_id)
+        if tier_map:
+            from app.services import material_service as ms
+            grounding = ms.retrieve_chunks(db, tier_map, _concept_query_terms(plan, unit))
         out = gen_notes_unit(client, ctx, plan, unit, prev_title=prev, next_title=nxt,
-                             prior_terms=_prior_terms(db, topic_id, plan, concept_id))
+                             prior_terms=_prior_terms(db, topic_id, plan, concept_id),
+                             grounding=grounding or None)
         v = validate_and_expand_unit(client, out, unit, ctx)
         content = {**out, "unit_hash": canonical_hash(out),
                    "validation": {"all_pass": v.all_pass,
                                   "failures": [c.model_dump() for c in v.failures]}}
+        if grounding:
+            g = grounding_check(out, grounding)
+            logger.info("validator job=%s node=notes:%s check=%s passed=%s %s",
+                        job_id, concept_id, g.name, g.passed, g.detail)
+            content["validation"]["grounding"] = g.model_dump()
+            content["grounded_in"] = _grounded_stamp(db, tier_map, grounding)
     else:
         notes = _concept_row(db, topic_id, concept_id, "student_notes").get("content")
         if not notes:
@@ -1811,13 +1915,32 @@ def revise_concept_artifact(db, job_id, topic_id, concept_id, artifact_type, ins
     course_id = _course_id_for_topic(db, topic_id)
     ctx = _load_topic_context(db, course_id, topic_id)
     # Orchestrator-owned fields never round-trip through the model.
-    payload = ({k: v for k, v in current.items() if k not in ("unit_hash", "validation")}
+    payload = ({k: v for k, v in current.items()
+                if k not in ("unit_hash", "validation", "grounded_in")}
                if artifact_type == "student_notes" else current)
-    revised = _chat_json(client, *build_revision_prompt(artifact_type, payload, instruction, ctx),
+    # Grounded revisions ("revise per the textbook") only apply to notes —
+    # slides/quiz derive from approved notes and inherit their grounding.
+    grounding = None
+    if artifact_type == "student_notes":
+        tier_map = _grounding_tiers(db, job_id, course_id, topic_id)
+        if tier_map:
+            plan = _topic_plan_content(db, topic_id)
+            unit = next((c for c in plan.get("concept_inventory", []) or []
+                         if c.get("concept_id") == concept_id), None)
+            if unit:
+                from app.services import material_service as ms
+                grounding = ms.retrieve_chunks(
+                    db, tier_map, _concept_query_terms(plan, unit) + [instruction]) or None
+    revised = _chat_json(client, *build_revision_prompt(artifact_type, payload, instruction,
+                                                        ctx, grounding=grounding),
                          temperature=0.4)
     if artifact_type == "student_notes":
         revised = {**revised, "unit_hash": canonical_hash(revised),
                    "validation": current.get("validation", {})}
+        if grounding:
+            revised["grounded_in"] = _grounded_stamp(db, tier_map, grounding)
+        elif current.get("grounded_in"):
+            revised["grounded_in"] = current["grounded_in"]
 
     p_tok, c_tok, cost = meter_read()
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,

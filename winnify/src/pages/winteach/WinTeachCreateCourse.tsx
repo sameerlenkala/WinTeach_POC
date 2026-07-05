@@ -6,7 +6,7 @@ import { W, bloomStyle } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import {
   Card, Btn, Breadcrumb, Stepper, Field, Input, Select, Textarea,
-  CoIcon, BloomBadge, SubChip, Modal,
+  CoIcon, BloomBadge, SubChip, Modal, useClickOutside,
 } from './WinTeachUI';
 import {
   IBack, IPlus, IUpload, IText, IFile,
@@ -96,8 +96,13 @@ export default function WinTeachCreateCourse() {
       'MBA', 'BBA', 'B.Com', 'M.Com', 'B.Arch', 'Ph.D',
     ];
     const [majorOpen, setMajorOpen] = useState(false);
-    const toggleMajor = (m: string) =>
+    const majorRef = useClickOutside<HTMLDivElement>(majorOpen, () => setMajorOpen(false));
+    const toggleMajor = (m: string) => {
       setMajors(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+      setErrors(e => ({ ...e, major: '' }));
+    };
+    const allMajorsSelected = majors.length === MAJORS.length;
+    const toggleAllMajors = () => { setMajors(allMajorsSelected ? [] : [...MAJORS]); setErrors(e => ({ ...e, major: '' })); };
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const next = () => {
@@ -105,6 +110,7 @@ export default function WinTeachCreateCourse() {
       if (!code.trim()) errs.code = 'Required';
       if (!name.trim()) errs.name = 'Required';
       if (!program) errs.program = 'Required';
+      if (!majors.length) errs.major = 'Select at least one';
       if (!sem.trim()) errs.sem = 'Required';
       if (!credits.trim()) errs.credits = 'Required';
       if (Object.keys(errs).length) { setErrors(errs); return; }
@@ -138,15 +144,23 @@ export default function WinTeachCreateCourse() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
               {/* Major — multi-select dropdown */}
-              <Field label="Major" optional>
-                <div style={{ position: 'relative' }}>
+              <Field label="Major" error={errors.major}>
+                <div ref={majorRef} style={{ position: 'relative' }}>
                   <button type="button" onClick={() => setMajorOpen(o => !o)}
                     style={{ width: '100%', background: 'var(--input-bg)', border: `1px solid ${majorOpen ? W.brand : 'transparent'}`, borderRadius: 8, padding: '11px 14px', fontFamily: W.fontSans, fontSize: 14, color: majors.length ? W.text : W.text3, outline: 'none', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: majorOpen ? '0 0 0 3px rgba(108,92,231,0.12)' : 'none' }}>
-                    <span>{majors.length ? majors.join(', ') : 'Select majors…'}</span>
+                    <span>{allMajorsSelected ? 'All majors' : majors.length ? majors.join(', ') : 'Select majors…'}</span>
                     <span style={{ fontSize: 10, color: W.text3 }}>▾</span>
                   </button>
                   {majorOpen && (
                     <div style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4, background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(60,50,140,.12)', padding: 8, maxHeight: 220, overflowY: 'auto' }}>
+                      {/* All — select/clear every major at once */}
+                      <div onClick={toggleAllMajors}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${W.border}`, marginBottom: 4 }}>
+                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${allMajorsSelected ? W.brand : W.border}`, background: allMajorsSelected ? W.brand : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {allMajorsSelected && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                        </div>
+                        <span style={{ fontFamily: W.fontSans, fontSize: 13, fontWeight: 600, color: W.text }}>All</span>
+                      </div>
                       {MAJORS.map(m => (
                         <div key={m} onClick={() => toggleMajor(m)}
                           style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: majors.includes(m) ? 'var(--tint-brand-bg)' : 'transparent' }}>
@@ -525,6 +539,18 @@ export default function WinTeachCreateCourse() {
     const [coModal, setCoModal] = useState<{ idx: number | null } | null>(null);
     const [saving, setSaving] = useState(false);
     const [bloomDropIdx, setBloomDropIdx] = useState<number | null>(null);
+    // Close the (per-row) bloom dropdown on outside click / Escape.
+    useEffect(() => {
+      if (bloomDropIdx === null) return;
+      const close = (ev: Event) => {
+        if (ev instanceof KeyboardEvent && ev.key !== 'Escape') return;
+        if (ev instanceof MouseEvent && (ev.target as HTMLElement)?.closest('[data-bloom-drop]')) return;
+        setBloomDropIdx(null);
+      };
+      document.addEventListener('mousedown', close);
+      document.addEventListener('keydown', close);
+      return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+    }, [bloomDropIdx]);
 
     if (!e) return null;
     const cos = e.cos || [];
@@ -665,7 +691,7 @@ export default function WinTeachCreateCourse() {
                   )}
                   <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.text}</div>
                   {/* Inline bloom editor */}
-                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <div data-bloom-drop style={{ position: 'relative', display: 'inline-block' }}>
                     <span style={{ cursor: 'pointer' }} onClick={() => setBloomDropIdx(bloomDropIdx === i ? null : i)}>
                       <BloomBadge bloom={co.bloom || 'Set level'} />
                     </span>

@@ -213,6 +213,30 @@ co_mapping topic_weight_pct sums to 100; concept relative_weight_pct sums to 100
 ≥1 TLO; every TLO is served by ≥1 concept; every concept appears in ≥1 session."""
 
 
+def format_grounding_block(chunks: list[dict] | None) -> str:
+    """The REFERENCE MATERIAL block injected into grounded Node-B prompts.
+    Chunks are labelled with material name + pages only — tier and chunk ids
+    are orchestrator bookkeeping and never reach the model. Returns "" when
+    ungrounded so existing prompts stay byte-identical."""
+    if not chunks:
+        return ""
+    parts = [
+        "REFERENCE MATERIAL (faculty-provided). Ground your definitions, examples, "
+        "notation, and terminology in the excerpts below. You may fill gaps from your "
+        "own knowledge, but you must NOT contradict them. Do not cite, name, or mention "
+        "this material or its page numbers anywhere in your output."
+    ]
+    for c in chunks:
+        pages = ""
+        if c.get("page_start"):
+            pages = f" p.{c['page_start']}"
+            if c.get("page_end") and c["page_end"] != c["page_start"]:
+                pages += f"-{c['page_end']}"
+        heading = f' — "{c["heading"]}"' if c.get("heading") else ""
+        parts.append(f"[{c.get('filename', 'material')}{pages}{heading}]\n{c['text']}")
+    return "\n\n".join(parts)
+
+
 def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
     """Return (system, user) for Node A given a TopicContext (§5.1)."""
     system = preamble(ctx) + "\n\n" + _TOPIC_PLAN_SYSTEM.format(
@@ -249,6 +273,12 @@ def build_topic_plan_prompt(ctx: dict) -> tuple[str, str]:
         prereqs=_j(ctx.get("prerequisites", [])), refs=_j(ctx.get("reference_books", [])),
         topic_total_minutes=int(round(float(ctx.get("topic_hours_allocated", 0) or 0) * 60)),
     )
+    if ctx.get("grounding_outline"):
+        user += (
+            "\n\nREFERENCE MATERIAL OUTLINE (faculty-provided). Prefer its terminology, "
+            "sequencing, and scope when building the concept inventory and TLOs; do not "
+            "mention the material itself in your output:\n" + ctx["grounding_outline"]
+        )
     return system, user
 
 
@@ -365,7 +395,8 @@ Output ONLY this JSON — no explanation, no markdown:
 
 
 def build_opening_prompt(unit: dict, ctx: dict, plan: dict, *, prev_title: str | None,
-                         next_title: str | None) -> tuple[str, str]:
+                         next_title: str | None,
+                         grounding: list[dict] | None = None) -> tuple[str, str]:
     budgets = unit.get("budgets") or ct.resolve_budgets(int(unit.get("time_minutes", 0) or 0),
                                                         unit.get("complexity_tier", "moderate"))
     system = preamble(ctx)
@@ -384,6 +415,8 @@ def build_opening_prompt(unit: dict, ctx: dict, plan: dict, *, prev_title: str |
         prev_subtopic=prev_title or "None — this is the first subtopic",
         next_subtopic=next_title or "None — this is the last subtopic",
     )
+    if grounding:
+        user += "\n\n" + format_grounding_block(grounding)
     return system, user
 
 
@@ -611,7 +644,8 @@ Output ONLY this JSON — no explanation, no markdown:
 }}"""
 
 
-def build_core_prompt(unit: dict, ctx: dict, plan: dict, *, prior_terms: list[str]) -> tuple[str, str]:
+def build_core_prompt(unit: dict, ctx: dict, plan: dict, *, prior_terms: list[str],
+                      grounding: list[dict] | None = None) -> tuple[str, str]:
     tier = unit.get("complexity_tier", "moderate")
     mins = ct.notes_word_minimums(tier)
     flags = unit.get("flags", {}) or {}
@@ -651,6 +685,8 @@ def build_core_prompt(unit: dict, ctx: dict, plan: dict, *, prior_terms: list[st
         exec_trace_block=exec_block, worked_block=worked_block,
         analysis_block=analysis_block, comparison_block=comparison_block,
     )
+    if grounding:
+        user += "\n\n" + format_grounding_block(grounding)
     return system, user
 
 
@@ -1265,10 +1301,12 @@ Output ONLY the complete revised JSON — same schema, no explanation, no markdo
 
 
 def build_revision_prompt(artifact_type: str, current: dict, instruction: str,
-                          ctx: dict) -> tuple[str, str]:
+                          ctx: dict, grounding: list[dict] | None = None) -> tuple[str, str]:
     label = {"student_notes": "Student Notes", "slides": "Slides deck",
              "quiz": "Quiz"}.get(artifact_type, artifact_type)
     user = _REVISION_TEMPLATE.format(
         label=label, instruction=instruction.strip(), current=_j(current),
         rules=_REVISION_RULES.get(artifact_type, ""))
+    if grounding:
+        user += "\n\n" + format_grounding_block(grounding)
     return preamble(ctx), user

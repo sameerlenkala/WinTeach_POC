@@ -391,7 +391,7 @@ export default function SignIn() {
                 <FieldLabel>Organization code</FieldLabel>
                 <div className="w-field">
                   <KeyRound size={15} />
-                  <input type="text" placeholder="e.g. MAVIGUN" value={orgCode} onChange={e => setOrgCode(e.target.value.toUpperCase())} required
+                  <input type="text" placeholder="Ask your admin" value={orgCode} onChange={e => setOrgCode(e.target.value.toUpperCase())} required
                     style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }} />
                 </div>
                 <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>Provided by your institution.</span>

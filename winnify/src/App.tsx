@@ -73,6 +73,7 @@ import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
 import StudentCourses from './pages/student/StudentCourses';
 import StudentCourseTopics from './pages/student/StudentCourseTopics';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
+import WinTeachMaterialsPage from './pages/winteach/WinTeachMaterialsPage';
 import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
 import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
 import WinTeachInstitutes from './pages/winteach/WinTeachInstitutes';
@@ -172,6 +173,7 @@ export default function App() {
             <Route path="courses/:id/topic/:topicId/slides/:conceptId" element={<WinTeachConceptReader type="slides" />} />
             <Route path="courses/:id/topic/:topicId/quiz/:conceptId" element={<WinTeachConceptReader type="quiz" />} />
             <Route path="generation" element={<WinTeachGeneration />} />
+            <Route path="materials" element={<WinTeachMaterialsPage />} />
             <Route path="library" element={<WinTeachLibrary />} />
             <Route path="add-library" element={<WinTeachAddLibrary />} />
             <Route path="institutes" element={<WinTeachInstitutes />} />

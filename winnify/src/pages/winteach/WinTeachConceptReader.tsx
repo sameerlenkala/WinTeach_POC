@@ -1459,7 +1459,7 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
 
           {/* ── Contents rail ── */}
           <aside className="max-lg:hidden" style={{
-            width: 264, flexShrink: 0, position: 'sticky', top: 16,
+            width: 264, flexShrink: 0, position: 'sticky', top: 68,
             background: W.card, border: `1px solid ${W.border}`, borderRadius: 12,
             boxShadow: W.shadowCard, overflow: 'hidden',
           }}>
@@ -1516,6 +1516,27 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                 <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(studioPath)}>{topicTitle}</span>
                 {' / '}{meta.label}
               </div>
+
+              {/* Mobile concept nav — the Contents rail is hidden below lg, so
+                  small screens get a dropdown to move between subtopics. */}
+              {concepts.length > 1 && (
+                <select
+                  className="lg:hidden"
+                  value={conceptId}
+                  onChange={e => goto(e.target.value)}
+                  aria-label="Jump to subtopic"
+                  style={{
+                    width: '100%', marginBottom: 12, padding: '8px 10px', borderRadius: 8,
+                    border: `1px solid ${W.border}`, background: W.card, color: W.text,
+                    fontFamily: W.fontSans, fontSize: 13,
+                  }}
+                >
+                  {concepts.map((c, i) => (
+                    <option key={c.concept_id} value={c.concept_id}>{i + 1}. {c.concept_name}</option>
+                  ))}
+                </select>
+              )}
+
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                 <h1 style={{ flex: '1 1 300px', minWidth: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 27, letterSpacing: '-0.025em', color: W.text, margin: 0, lineHeight: 1.22 }}>
                   {concept?.concept_name ?? meta.tab}
@@ -1664,6 +1685,24 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                   <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prev.concept_name}</div>
                 </button>
               ) : <span />}
+
+              {/* Act after reading a lesson end to end — the full action set,
+                  so faculty never scroll back up to the header. */}
+              {!student && (nState?.status === 'ready' || nState?.status === 'error') && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <Btn sm variant="ghost" onClick={() => setRevOpen(true)} disabled={regenning || approving}>Revise…</Btn>
+                  <Btn sm variant="ghost" onClick={regenerate} disabled={regenning || approving}>
+                    {regenning ? 'Restarting…' : 'Regenerate'}
+                  </Btn>
+                  {nState?.status === 'ready' && !approved && (
+                    <Btn variant="primary" sm onClick={() => approve(!!next)} disabled={approving || regenning}>
+                      <span style={{ width: 13, height: 13, display: 'inline-flex' }}><ICheck /></span>
+                      {approving ? 'Approving…' : next ? 'Approve & next' : 'Approve'}
+                    </Btn>
+                  )}
+                </div>
+              )}
+
               {next ? (
                 <button onClick={() => goto(next.concept_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'right', padding: 0, maxWidth: '45%' }}>
                   <div style={{ fontSize: 11, color: W.text3, marginBottom: 2 }}>Next →</div>

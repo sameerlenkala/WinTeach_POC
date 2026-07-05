@@ -86,6 +86,9 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
         "triggered_by": user["id"],
         "status": "queued",
         "phase": "generating_topic_plan",
+        # Optional grounding: non-empty restricts generation to these attached
+        # materials; null/[] grounds in whatever is attached to the topic.
+        "material_ids": payload.material_ids,
     }).execute()
 
     # Node orchestration runs off-request; the job is driven from DB state so a
@@ -139,7 +142,10 @@ def _job_detail(db: Client, job: dict) -> dict:
     )
     concept_artifacts = (
         db.table("concept_artifacts")
-        .select("concept_id,artifact_type,status,approval_status,cost_usd,token_count,error")
+        # grounded_in: provenance stamp pulled out of the content JSON so the
+        # studio can show which concepts were grounded without shipping content.
+        .select("concept_id,artifact_type,status,approval_status,cost_usd,token_count,error,"
+                "grounded_in:content->grounded_in")
         .eq("topic_id", topic_id).execute().data or []
     )
     return {**job, "artifacts": artifacts, "concept_artifacts": concept_artifacts}

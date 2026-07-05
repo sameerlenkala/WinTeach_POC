@@ -223,6 +223,70 @@ export function Modal({ onClose, title, subtitle, maxWidth = 520, children }: {
   );
 }
 
+// ---- useClickOutside ----
+// Returns a ref; calls onOutside when a mousedown lands outside the ref'd
+// element while `active`. For closing custom dropdowns/popovers on outside click.
+export function useClickOutside<T extends HTMLElement>(active: boolean, onOutside: () => void) {
+  const ref = React.useRef<T>(null);
+  const cb = React.useRef(onOutside);
+  cb.current = onOutside;
+  React.useEffect(() => {
+    if (!active) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) cb.current();
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') cb.current(); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', esc); };
+  }, [active]);
+  return ref;
+}
+
+// ---- ConfirmModal ----
+// Themed replacement for window.confirm — consistent with the app's dialog
+// language, keyboard-dismissable, with a destructive variant.
+export function ConfirmModal({ title, body, confirmLabel = 'Confirm', danger, onConfirm, onClose }: {
+  title: string; body: React.ReactNode; confirmLabel?: string; danger?: boolean;
+  onConfirm: () => void; onClose: () => void;
+}) {
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+  return (
+    <Modal onClose={onClose} title={title} maxWidth={440}>
+      <div style={{ fontSize: 13.5, color: W.text2, lineHeight: 1.6, marginBottom: 22 }}>{body}</div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn variant="primary" onClick={() => { onConfirm(); onClose(); }}
+          style={danger ? { background: 'var(--status-red, #DC2133)' } : undefined}>
+          {confirmLabel}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
+// ---- Skeleton ----
+// Shimmer placeholder for loading states. `lines` stacks bars; `height`/`width`
+// size a single block.
+export function Skeleton({ lines = 1, height = 14, width = '100%', style }: {
+  lines?: number; height?: number; width?: number | string; style?: React.CSSProperties;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, ...style }}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="ds-skeleton" style={{
+          height, width: i === lines - 1 && lines > 1 ? '70%' : width,
+          borderRadius: 6,
+        }} />
+      ))}
+    </div>
+  );
+}
+
 // ---- Toast ----
 export function Toast({ msg }: { msg: string }) {
   if (!msg) return null;

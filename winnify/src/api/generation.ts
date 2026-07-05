@@ -43,6 +43,8 @@ export interface ConceptArtifactState {
   cost_usd?: number;
   token_count?: number;
   error?: string | null;
+  /** Grounding provenance: which materials/chunks fed this artifact's prompt. */
+  grounded_in?: { material_id: string; content_hash?: string | null; chunk_ids?: string[] }[] | null;
 }
 
 export interface GenJobArtifact {
@@ -120,6 +122,9 @@ interface JobCreatePayload {
   course_id: string;
   topic_id: string;
   artifact_types?: ArtifactType[];
+  /** Optional grounding: restrict to these attached materials. Omitted/empty →
+   * the backend grounds in whatever is attached to the topic (none = ungrounded). */
+  material_ids?: string[];
 }
 
 export const generationApi = {

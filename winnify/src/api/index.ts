@@ -6,4 +6,5 @@ export { uploadsApi }    from './uploads';
 export { libraryApi }    from './library';
 export { generationApi } from './generation';
 export { dashboardApi }  from './dashboard';
+export { materialsApi }  from './materials';
 export type * from './types';
