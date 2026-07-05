@@ -46,8 +46,8 @@ function CollegeModal({ editing, onClose }: { editing: Institute | null; onClose
           {editing ? 'Edit college' : 'Add college'}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Inp label="College name" value={name} onChange={setName} placeholder="e.g. VJIT" />
-          <Inp label="Short code" value={shortName} onChange={setShortName} placeholder="VJIT" />
+          <Inp label="College name" value={name} onChange={setName} placeholder="e.g. CIET" />
+          <Inp label="Short code" value={shortName} onChange={setShortName} placeholder="CIET" />
           <Inp label="City" value={city} onChange={setCity} placeholder="Hyderabad" />
           <Inp label="State" value={state} onChange={setState} placeholder="Telangana" />
           <Inp label="Regulation" value={regulation} onChange={setRegulation} placeholder="JNTUH R22" />

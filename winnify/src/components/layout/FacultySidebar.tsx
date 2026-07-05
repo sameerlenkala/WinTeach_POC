@@ -30,7 +30,7 @@ export default function FacultySidebar() {
           <span className="ws-user-email">{user.role}</span>
         </div>
       </div>
-      <div className="ws-college-pill">VJIT College</div>
+      <div className="ws-college-pill">CIET College</div>
       <nav className="ws-nav">
         {navItems.map((item) => (
           <NavLink

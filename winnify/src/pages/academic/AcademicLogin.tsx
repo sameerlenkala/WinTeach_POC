@@ -7,8 +7,8 @@ type Role = 'hod' | 'faculty' | 'winteach';
 
 const ROLES: { id: Role; label: string; sub: string; Icon: React.ElementType; email: string; dest: string }[] = [
   { id: 'winteach', Icon: Sparkles,      label: 'WinTeach Console',   sub: 'Content author · AI generation',   email: 'content@winnify.in', dest: '/winteach' },
-  { id: 'hod',      Icon: Users,         label: 'Head of Department', sub: 'Approvals · Analytics · Faculty',  email: 'hod@vjit.ac.in',     dest: '/academic/hod' },
-  { id: 'faculty',  Icon: GraduationCap, label: 'Faculty',            sub: 'Courses · Lectures · Attendance',  email: 'faculty@vjit.ac.in', dest: '/academic/faculty' },
+  { id: 'hod',      Icon: Users,         label: 'Head of Department', sub: 'Approvals · Analytics · Faculty',  email: 'hod@ciet.ac.in',     dest: '/academic/hod' },
+  { id: 'faculty',  Icon: GraduationCap, label: 'Faculty',            sub: 'Courses · Lectures · Attendance',  email: 'faculty@ciet.ac.in', dest: '/academic/faculty' },
 ];
 
 /* Demo accounts seed themselves server-side with this password on first login. */

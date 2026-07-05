@@ -22,9 +22,9 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 # ── Demo accounts (mirror of frontend DEMO map) ───────────────────────────────
 _DEMO_ACCOUNTS: dict[str, dict] = {
     "student@gmail.com":      {"name": "Aarav Gupta",      "role": "student",     "password": "demo@123"},
-    "admin@vjit.ac.in":       {"name": "Dr. Priya Sharma", "role": "admin",       "password": "demo@123"},
+    "admin@ciet.ac.in":       {"name": "Dr. Priya Sharma", "role": "admin",       "password": "demo@123"},
     "superadmin@winnify.ai":  {"name": "Sai Teja",         "role": "superadmin",  "password": "demo@123"},
-    "faculty@vjit.ac.in":     {"name": "Dr. Amit Singh",   "role": "faculty",     "password": "demo@123"},
+    "faculty@ciet.ac.in":     {"name": "Dr. Amit Singh",   "role": "faculty",     "password": "demo@123"},
 }
 
 

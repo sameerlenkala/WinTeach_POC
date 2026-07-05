@@ -105,8 +105,8 @@ export default function SignIn() {
   // Quick-login buttons for non-student roles
   const PORTAL_ROLES: { role: UserRole; label: string; email: string; Icon: React.ElementType; tone: string }[] = [
     { role: 'superadmin', label: 'Super Admin',   email: 'superadmin@winnify.ai', Icon: ShieldCheck,   tone: 'pink' },
-    { role: 'admin',      label: 'College Admin', email: 'admin@vjit.ac.in',      Icon: Building2,     tone: 'teal' },
-    { role: 'faculty',    label: 'Faculty',       email: 'faculty@vjit.ac.in',    Icon: GraduationCap, tone: 'orange' },
+    { role: 'admin',      label: 'College Admin', email: 'admin@ciet.ac.in',      Icon: Building2,     tone: 'teal' },
+    { role: 'faculty',    label: 'Faculty',       email: 'faculty@ciet.ac.in',    Icon: GraduationCap, tone: 'orange' },
   ];
 
   const handlePortalLogin = async (role: UserRole, demoEmail: string) => {
@@ -185,7 +185,7 @@ export default function SignIn() {
             Your placement journey,<br />all in one place.
           </h1>
           <p className="ds-rise" style={{ fontSize: 15, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, margin: '0 0 28px', maxWidth: 380, ...rise(1) }}>
-            AI-powered tools for coding, communication, mock tests, drives and learning — built for VJIT College students.
+            AI-powered tools for coding, communication, mock tests, drives and learning — built for CIET College students.
           </p>
           {([
             { Icon: Mic,           label: 'WinSpeak',   sub: 'AI speech coaching & weekly challenges' },
@@ -323,7 +323,7 @@ export default function SignIn() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 30, color: '#F6A623', lineHeight: 1 }}>Winnify</span>
               <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', borderRadius: 999, padding: '4px 10px', letterSpacing: '0.04em' }}>
-                VJIT College
+                CIET College
               </span>
             </div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h1)', color: 'var(--text)', margin: '0 0 4px', lineHeight: 'var(--lh-h1)' }}>

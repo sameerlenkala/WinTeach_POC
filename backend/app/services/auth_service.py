@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # Superadmin is intentionally excluded — must exist in real Supabase auth (no auto-seed).
 _DEMO_ACCOUNTS: dict[str, dict] = {
     "student@gmail.com":          {"name": "Aarav Gupta",      "role": "student",  "password": "demo@123"},
-    "admin@vjit.ac.in":           {"name": "Dr. Priya Sharma", "role": "admin",    "password": "demo@123"},
-    "faculty@vjit.ac.in":         {"name": "Dr. Amit Singh",   "role": "faculty",  "password": "demo@123"},
+    "admin@ciet.ac.in":           {"name": "Dr. Priya Sharma", "role": "admin",    "password": "demo@123"},
+    "faculty@ciet.ac.in":         {"name": "Dr. Amit Singh",   "role": "faculty",  "password": "demo@123"},
     "winnify.student@winnify.ai": {"name": "Winnify Student",  "role": "student",  "password": "Winnify@I23"},
     "winteach@winnify.ai":        {"name": "WinTeach Admin",   "role": "admin",    "password": "Winnify@I23"},
     "hod@winnify.ai":             {"name": "Winnify HOD",      "role": "faculty",  "password": "Winnify@I23"},
