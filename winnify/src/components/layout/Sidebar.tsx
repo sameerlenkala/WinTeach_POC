@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Mic, Briefcase, Map, Zap, User, Code2, Video, Target } from 'lucide-react';
+import { Home, Mic, Briefcase, Map, Zap, User, Code2, Video, Target, BookOpen } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/winnify-logo.png';
 
 const navItems = [
   { to: '/home',          label: 'Home',          icon: Home },
+  { to: '/home/courses',  label: 'Courses',       icon: BookOpen },
   { to: '/home/winspeak', label: 'WinSpeak',      icon: Mic },
   { to: '/home/drives',   label: 'Drives',        icon: Briefcase },
   { to: '/home/journey',  label: 'Journey',       icon: Map },
@@ -34,7 +35,7 @@ export default function Sidebar() {
       </div>
 
       {/* College pill */}
-      <div className="ws-college-pill">VJIT College</div>
+      <div className="ws-college-pill">CIET College</div>
 
       {/* Nav list */}
       <nav className="ws-nav">

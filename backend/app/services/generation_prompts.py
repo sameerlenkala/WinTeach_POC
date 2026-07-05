@@ -1226,3 +1226,49 @@ Output ONLY this JSON:
 def build_concept_coverage_prompt(subtopic_title: str, missing: list[str], current_text: str) -> str:
     return _CONCEPT_COVERAGE_TEMPLATE.format(
         subtopic_title=subtopic_title, missing=", ".join(missing), current_text=current_text or "")
+
+
+# ── Targeted revision (item 4) — apply ONE faculty instruction, change nothing else ─
+
+_REVISION_RULES = {
+    "student_notes": (
+        "Keep the exact same JSON schema (opening/core/closing with all their sections). "
+        "Maintain the style contract everywhere: **bold** first-use terms, `inline code`, "
+        "$...$ LaTeX math, > callouts, short paragraphs separated by blank lines, the "
+        "Mermaid diagram rules, and every scope/coverage obligation of the original."
+    ),
+    "slides": (
+        "Keep the exact same deck JSON schema (slides[] with layout/kicker/body_blocks/"
+        "code/visual/myth/reality/takeaway/build_steps/speaker_notes). Face limits still "
+        "apply: ≤6 bullets, ≤10 words each; titles are claims; speaker notes 60–150 words."
+    ),
+    "quiz": (
+        "Keep the exact same quiz JSON schema (mcq[] with question/options/answer_index/"
+        "explanation/bloom_level, short_answer[] with model_answer). Never exceed the "
+        "original Bloom levels; distractors stay grounded in the notes."
+    ),
+}
+
+_REVISION_TEMPLATE = """A faculty reviewer wants ONE targeted change to the {label} JSON below.
+
+FACULTY INSTRUCTION:
+{instruction}
+
+CURRENT {label} JSON:
+{current}
+
+Apply ONLY what the instruction requires. Preserve every other field, section, and
+sentence exactly as-is — do not rewrite, reorder, shorten, or "improve" anything the
+instruction does not touch. {rules}
+
+Output ONLY the complete revised JSON — same schema, no explanation, no markdown."""
+
+
+def build_revision_prompt(artifact_type: str, current: dict, instruction: str,
+                          ctx: dict) -> tuple[str, str]:
+    label = {"student_notes": "Student Notes", "slides": "Slides deck",
+             "quiz": "Quiz"}.get(artifact_type, artifact_type)
+    user = _REVISION_TEMPLATE.format(
+        label=label, instruction=instruction.strip(), current=_j(current),
+        rules=_REVISION_RULES.get(artifact_type, ""))
+    return preamble(ctx), user

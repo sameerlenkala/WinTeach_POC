@@ -152,6 +152,14 @@ export const useCourseProgress = (courseId: string) =>
     staleTime: 3000,
   });
 
+export const useDashboard = () =>
+  useQuery({
+    queryKey: ['winteach', 'dashboard'],
+    queryFn: () => generationApi.getDashboard(),
+    refetchInterval: 8000,
+    staleTime: 5000,
+  });
+
 export const useAddCOs = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({

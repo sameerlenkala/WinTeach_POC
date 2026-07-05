@@ -5,10 +5,11 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Btn, Badge } from './WinTeachUI';
+import { Btn, Badge, Modal } from './WinTeachUI';
 import { IBack, ICheck, INotes } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi, CONCEPT_TYPES, type GenJob, type ConceptArtifactState, type ConceptArtType } from '@/api/generation';
+import { studentApi } from '@/api/student';
 
 /* ── per-type metadata ───────────────────────────────────────────────────── */
 
@@ -416,7 +417,7 @@ function SteppedRows({ columns, rows }: { columns: string[]; rows: any[][] }) {
 }
 
 // A real quiz: pick an option, then get feedback — answers are never pre-shown.
-function QuizMCQ({ q, i }: { q: any; i: number }) {
+function QuizMCQ({ q, i, onAnswer }: { q: any; i: number; onAnswer?: (correct: boolean) => void }) {
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
   const [picked, setPicked] = useState<number | null>(null);
   useEffect(() => { setPicked(null); }, [q]);
@@ -438,7 +439,7 @@ function QuizMCQ({ q, i }: { q: any; i: number }) {
               : isPicked ? 'color-mix(in oklab, var(--status-red) 8%, transparent)' : 'transparent';
           const color = !answered ? W.text2 : isAnswer ? W.greenFg : isPicked ? W.redFg : W.text3;
           return (
-            <button key={oi} disabled={answered} onClick={() => setPicked(oi)} style={{
+            <button key={oi} disabled={answered} onClick={() => { setPicked(oi); onAnswer?.(oi === q.answer_index); }} style={{
               display: 'flex', gap: 8, alignItems: 'baseline', padding: '6px 10px', borderRadius: 7,
               fontSize: 13.5, lineHeight: 1.5, textAlign: 'left', width: '100%',
               border: `1px solid ${!answered ? W.border : 'transparent'}`,
@@ -1209,9 +1210,19 @@ function SlidesArticle({ content }: { content: any }) {
   );
 }
 
-function QuizArticle({ content }: { content: any }) {
+function QuizArticle({ content, onScore }: { content: any; onScore?: (score: number, total: number) => void }) {
   const mcq: any[] = content?.mcq ?? [];
   const sa: any[] = content?.short_answer ?? [];
+  const answersRef = useRef<Record<number, boolean>>({});
+  const reportedRef = useRef(false);
+  useEffect(() => { answersRef.current = {}; reportedRef.current = false; }, [content]);
+  const handleAnswer = (i: number, correct: boolean) => {
+    answersRef.current[i] = correct;
+    if (!reportedRef.current && onScore && Object.keys(answersRef.current).length === mcq.length) {
+      reportedRef.current = true;
+      onScore(Object.values(answersRef.current).filter(Boolean).length, mcq.length);
+    }
+  };
   if (!mcq.length && !sa.length) return null;
   let n = 0;
   return (
@@ -1219,7 +1230,7 @@ function QuizArticle({ content }: { content: any }) {
       {mcq.length > 0 && (
         <Section n={++n} title="Multiple choice">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {mcq.map((q: any, i: number) => <QuizMCQ key={i} q={q} i={i} />)}
+            {mcq.map((q: any, i: number) => <QuizMCQ key={i} q={q} i={i} onAnswer={c => handleAnswer(i, c)} />)}
           </div>
         </Section>
       )}
@@ -1247,7 +1258,7 @@ function QuizArticle({ content }: { content: any }) {
 
 const CT_LABEL: Record<string, string> = { P1: 'Conceptual', P2: 'Code', P3: 'Proof', P4: 'Systems', P5: 'Lab' };
 
-export default function WinTeachConceptReader({ type }: { type: ConceptArtType }) {
+export default function WinTeachConceptReader({ type, student }: { type: ConceptArtType; student?: boolean }) {
   const navigate = useNavigate();
   const { id: courseId, topicId, conceptId } = useParams();
   const { data: course } = useCourse(courseId ?? '');
@@ -1261,6 +1272,14 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
   const [approving, setApproving] = useState(false);
   const [regenning, setRegenning] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [reload, setReload] = useState(0);   // manual content refetch (e.g. after restore)
+  // Revise + version history (faculty only)
+  const [revOpen, setRevOpen] = useState(false);
+  const [revText, setRevText] = useState('');
+  const [revBusy, setRevBusy] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+  const [versions, setVersions] = useState<{ version_no: number; note?: string; created_at: string }[] | null>(null);
+  const [histBusy, setHistBusy] = useState<number | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Section reveal: fade-up as sections enter the viewport. Sections default
@@ -1286,9 +1305,12 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
   const concept = idx >= 0 ? concepts[idx] : null;
   const nState = job && conceptId ? artState(job, conceptId, type) : undefined;
   const approved = nState?.approval_status === 'approved';
-  const studioPath = `/winteach/courses/${courseId}/topic/${topicId}`;
+  // Student mode lives under /home/courses and links back to the course page,
+  // not the generation studio.
+  const rootPath = student ? '/home/courses' : '/winteach/courses';
+  const studioPath = student ? `${rootPath}/${courseId}` : `${rootPath}/${courseId}/topic/${topicId}`;
   const readerPath = (t: ConceptArtType, cid: string) =>
-    `/winteach/courses/${courseId}/topic/${topicId}/${READER_META[t].segment}/${cid}`;
+    `${rootPath}/${courseId}/topic/${topicId}/${READER_META[t].segment}/${cid}`;
 
   // job + plan
   useEffect(() => {
@@ -1320,7 +1342,26 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
       .then(r => setContent(r.content))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [jobId, conceptId, type, nStatus]);
+  }, [jobId, conceptId, type, nStatus, reload]);
+
+  // Student progress: mark the lesson viewed once its content loads.
+  useEffect(() => {
+    if (!student || !content || !topicId || !conceptId || type !== 'student_notes') return;
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: type, status: 'viewed',
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student, content, topicId, conceptId, type]);
+
+  const recordQuizScore = useCallback((score: number, total: number) => {
+    if (!student || !topicId || !conceptId) return;
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: 'quiz', quiz_score: score, quiz_total: total,
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student, topicId, conceptId, courseId]);
 
   const goto = useCallback((cid: string) => navigate(readerPath(type, cid)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1361,6 +1402,36 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
     finally { setRegenning(false); }
   };
 
+  const submitRevise = async () => {
+    if (!job || !conceptId || !revText.trim()) return;
+    setRevBusy(true);
+    try {
+      await generationApi.reviseConcept(job.id, conceptId, type, revText.trim());
+      setRevOpen(false); setRevText('');
+      setJob(await generationApi.getTopicJob(topicId!));
+    } catch { /* */ }
+    finally { setRevBusy(false); }
+  };
+
+  const openHistory = async () => {
+    setHistOpen(true); setVersions(null);
+    if (!job || !conceptId) return;
+    try { setVersions(await generationApi.listVersions(job.id, conceptId, type)); }
+    catch { setVersions([]); }
+  };
+
+  const restore = async (versionNo: number) => {
+    if (!job || !conceptId) return;
+    setHistBusy(versionNo);
+    try {
+      await generationApi.restoreVersion(job.id, conceptId, type, versionNo);
+      setHistOpen(false);
+      setJob(await generationApi.getTopicJob(topicId!));
+      setReload(r => r + 1);   // status stays 'ready' — force a content refetch
+    } catch { /* */ }
+    finally { setHistBusy(null); }
+  };
+
   // Slides and quiz derive from approved notes, so they can only be generated
   // once this concept's notes are ready (mirrors the studio's tile lock).
   const notesState = job && conceptId ? artState(job, conceptId, 'student_notes') : undefined;
@@ -1371,14 +1442,16 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
   const next = idx >= 0 && idx < concepts.length - 1 ? concepts[idx + 1] : null;
   const readyCount = concepts.filter(c => {
     const s = artState(job, c.concept_id, type);
-    return s?.status === 'ready' || s?.approval_status === 'approved';
+    return student ? s?.approval_status === 'approved'
+      : (s?.status === 'ready' || s?.approval_status === 'approved');
   }).length;
 
   return (
     <>
       <WinTopbar title={meta.tab} actions={
         <Btn variant="ghost" onClick={() => navigate(studioPath)}>
-          <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>Back to studio
+          <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>
+          {student ? 'Back to course' : 'Back to studio'}
         </Btn>
       } />
       <WinContent>
@@ -1453,12 +1526,16 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
                       {exporting ? 'Exporting…' : type === 'slides' ? 'Download .pptx' : 'Download .docx'}
                     </Btn>
                   )}
-                  {(nState?.status === 'ready' || nState?.status === 'error') && (
-                    <Btn sm variant="ghost" onClick={regenerate} disabled={regenning || approving}>
-                      {regenning ? 'Restarting…' : 'Regenerate'}
-                    </Btn>
+                  {!student && (nState?.status === 'ready' || nState?.status === 'error') && (
+                    <>
+                      <Btn sm variant="ghost" onClick={openHistory}>History</Btn>
+                      <Btn sm variant="ghost" onClick={() => setRevOpen(true)} disabled={regenning || approving}>Revise…</Btn>
+                      <Btn sm variant="ghost" onClick={regenerate} disabled={regenning || approving}>
+                        {regenning ? 'Restarting…' : 'Regenerate'}
+                      </Btn>
+                    </>
                   )}
-                  {nState?.status === 'ready' && !approved && (
+                  {!student && nState?.status === 'ready' && !approved && (
                     <>
                       {next && <Btn sm onClick={() => approve(false)} disabled={approving || regenning}>Approve</Btn>}
                       <Btn variant="primary" sm onClick={() => approve(!!next)} disabled={approving || regenning}>
@@ -1467,7 +1544,7 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
                       </Btn>
                     </>
                   )}
-                  {approved && <Badge variant="green" dot>Approved</Badge>}
+                  {approved && <Badge variant="green" dot>{student ? 'Published' : 'Approved'}</Badge>}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
@@ -1536,7 +1613,14 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
                   </>
                 )
                   : type === 'slides' ? <SlidesArticle content={content} />
-                    : <QuizArticle content={content} />
+                    : <QuizArticle content={content} onScore={student ? recordQuizScore : undefined} />
+              ) : student ? (
+                <div style={{ textAlign: 'center', padding: '48px 0 72px', color: W.text2 }}>
+                  <div style={{ width: 40, height: 40, color: W.text3, margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}><INotes /></div>
+                  <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, color: W.text, marginBottom: 6 }}>Not published yet</div>
+                  <div style={{ fontSize: 13, marginBottom: 18 }}>Your faculty hasn't published this lesson yet — check back soon.</div>
+                  <Btn onClick={() => navigate(studioPath)}>Back to course</Btn>
+                </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '48px 0 72px', color: W.text2 }}>
                   <div style={{ width: 40, height: 40, color: W.text3, margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}><INotes /></div>
@@ -1592,6 +1676,53 @@ export default function WinTeachConceptReader({ type }: { type: ConceptArtType }
           </article>
         </div>
       </WinContent>
+
+      {revOpen && !student && (
+        <Modal onClose={() => setRevOpen(false)} title={`Revise ${meta.tab.toLowerCase()}`}
+          subtitle="One targeted instruction — everything else is preserved. The current version is saved to history first." maxWidth={520}>
+          <textarea value={revText} onChange={e => setRevText(e.target.value)} rows={4} autoFocus
+            placeholder='e.g. "Make the worked example use Python instead of pseudocode"'
+            style={{ width: '100%', border: `1px solid ${W.borderStrong}`, borderRadius: 8, padding: '10px 12px', fontFamily: W.fontSans, fontSize: 13.5, resize: 'vertical', background: 'var(--card)', color: W.text, boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <Btn variant="ghost" onClick={() => setRevOpen(false)}>Cancel</Btn>
+            <Btn variant="primary" onClick={submitRevise} disabled={revBusy || !revText.trim()}>
+              {revBusy ? 'Starting…' : 'Revise'}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {histOpen && !student && (
+        <Modal onClose={() => setHistOpen(false)} title="Version history"
+          subtitle="Restoring saves the current version first, so nothing is ever lost." maxWidth={560}>
+          {versions === null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '10px 0' }}>
+              <span className="wt-spin" style={{ width: 14, height: 14, border: `2px solid ${W.border}`, borderTopColor: W.brand, borderRadius: '50%', display: 'inline-block' }} />
+              Loading versions…
+            </div>
+          ) : versions.length === 0 ? (
+            <div style={{ color: W.text2, fontSize: 13.5, lineHeight: 1.6 }}>
+              No previous versions yet — a version is saved automatically before every regenerate, revise, or restore.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+              {versions.map(v => (
+                <div key={v.version_no} style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${W.border}`, borderRadius: 8, padding: '10px 14px' }}>
+                  <span style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 12.5, color: W.text, flexShrink: 0 }}>v{v.version_no}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: W.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.note || '—'}</div>
+                    <div style={{ fontSize: 11, color: W.text3 }}>{new Date(v.created_at).toLocaleString()}</div>
+                  </div>
+                  <Btn sm onClick={() => restore(v.version_no)} disabled={histBusy !== null}>
+                    {histBusy === v.version_no ? 'Restoring…' : 'Restore'}
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+
       <style>{`@keyframes wt-spin { to { transform: rotate(360deg); } } .wt-spin { animation: wt-spin .8s linear infinite; }`}</style>
     </>
   );

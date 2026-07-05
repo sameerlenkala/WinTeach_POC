@@ -1666,6 +1666,7 @@ def enqueue_concept_artifact(job_id, topic_id, concept_id, artifact_type) -> Non
         from app.db.supabase import get_client
         db = get_client()
         try:
+            _snapshot_version(db, topic_id, concept_id, artifact_type, "pre-regenerate")
             generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type)
         except Exception as e:  # pragma: no cover - recorded on the row
             logger.exception("concept artifact %s/%s failed: %s", concept_id, artifact_type, e)
@@ -1724,6 +1725,107 @@ def approve_concept_artifact(db, user, topic_id, concept_id, artifact_type) -> d
     return {"concept_id": concept_id, "artifact_type": artifact_type, "approval_status": "approved"}
 
 
+# ── Version history + targeted revision (item 4) ─────────────────────────────
+# A snapshot is written before every regenerate / revise / restore so faculty
+# can always roll back. Snapshots are best-effort: a missing table or an empty
+# artifact never blocks generation.
+
+def _snapshot_version(db, topic_id, concept_id, artifact_type, note: str) -> None:
+    try:
+        row = _concept_row(db, topic_id, concept_id, artifact_type)
+        if not row.get("content"):
+            return
+        prev = (db.table("concept_artifact_versions").select("version_no")
+                .eq("topic_id", topic_id).eq("concept_id", concept_id)
+                .eq("artifact_type", artifact_type)
+                .order("version_no", desc=True).limit(1).execute().data or [])
+        next_no = (prev[0]["version_no"] + 1) if prev else 1
+        db.table("concept_artifact_versions").insert({
+            "topic_id": topic_id, "concept_id": concept_id, "artifact_type": artifact_type,
+            "version_no": next_no, "content": row["content"], "note": note,
+        }).execute()
+    except Exception:
+        logger.warning("version snapshot failed for %s/%s", concept_id, artifact_type, exc_info=True)
+
+
+def list_artifact_versions(db, topic_id, concept_id, artifact_type) -> list[dict]:
+    try:
+        return (db.table("concept_artifact_versions")
+                .select("version_no, note, created_at")
+                .eq("topic_id", topic_id).eq("concept_id", concept_id)
+                .eq("artifact_type", artifact_type)
+                .order("version_no", desc=True).execute().data or [])
+    except Exception:
+        return []
+
+
+def restore_artifact_version(db, job_id, topic_id, concept_id, artifact_type, version_no: int) -> dict:
+    v = (db.table("concept_artifact_versions").select("content")
+         .eq("topic_id", topic_id).eq("concept_id", concept_id)
+         .eq("artifact_type", artifact_type).eq("version_no", version_no)
+         .limit(1).execute().data or [])
+    if not v or not v[0].get("content"):
+        raise ValueError("Version not found")
+    _snapshot_version(db, topic_id, concept_id, artifact_type, f"pre-restore of v{version_no}")
+    _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                    status="ready", approval_status="pending",
+                    content=v[0]["content"], error=None)
+    return {"restored": version_no}
+
+
+def enqueue_concept_revision(job_id, topic_id, concept_id, artifact_type, instruction: str) -> None:
+    """Targeted revision: apply one faculty instruction to the current artifact,
+    snapshotting the outgoing content first. Off-request like generation — the
+    row's status drives the studio/reader polling."""
+    def _worker():
+        from app.db.supabase import get_client
+        db = get_client()
+        try:
+            revise_concept_artifact(db, job_id, topic_id, concept_id, artifact_type, instruction)
+        except Exception as e:  # pragma: no cover — recorded on the row
+            logger.exception("revision %s/%s failed: %s", concept_id, artifact_type, e)
+            _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                            status="error", error=f"{type(e).__name__}: {e}")
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def revise_concept_artifact(db, job_id, topic_id, concept_id, artifact_type, instruction: str) -> None:
+    row = _concept_row(db, topic_id, concept_id, artifact_type)
+    current = row.get("content")
+    if not current:
+        _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                        status="error", error="Nothing to revise — generate this artifact first.")
+        return
+    client = _openai_client()
+    if client is None:
+        _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                        status="error", error="OPENAI_API_KEY not configured")
+        return
+
+    _snapshot_version(db, topic_id, concept_id, artifact_type, f"pre-revise: {instruction[:80]}")
+    _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                    status="generating", error=None)
+    meter_reset()
+
+    from app.services.generation_prompts import build_revision_prompt  # lazy
+    course_id = _course_id_for_topic(db, topic_id)
+    ctx = _load_topic_context(db, course_id, topic_id)
+    # Orchestrator-owned fields never round-trip through the model.
+    payload = ({k: v for k, v in current.items() if k not in ("unit_hash", "validation")}
+               if artifact_type == "student_notes" else current)
+    revised = _chat_json(client, *build_revision_prompt(artifact_type, payload, instruction, ctx),
+                         temperature=0.4)
+    if artifact_type == "student_notes":
+        revised = {**revised, "unit_hash": canonical_hash(revised),
+                   "validation": current.get("validation", {})}
+
+    p_tok, c_tok, cost = meter_read()
+    _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
+                    status="ready", approval_status="pending", content=revised,
+                    token_count=p_tok + c_tok, cost_usd=cost, error=None)
+    _add_job_cost(db, job_id, p_tok + c_tok, cost)
+
+
 def enqueue_topic_artifact(job_id, topic_id, artifact_type) -> None:
     def _worker():
         from app.db.supabase import get_client
@@ -1775,6 +1877,130 @@ def generate_topic_artifact(db, job_id, topic_id, artifact_type) -> None:
     _add_job_cost(db, job_id, p_tok + c_tok, cost)
 
 
+_TOPIC_CONTENT_TYPES = ("summary", "assignment", "faculty_diagnostic", "flashcards")
+_RUNNING_JOB = ("queued", "running")
+
+
+def faculty_dashboard(db, user: dict) -> dict:
+    """One-call real aggregate for the WinTeach dashboard: generation rollups,
+    cost, approval gaps, live jobs, student engagement, and recent courses —
+    computed with a handful of batched queries over the caller's courses."""
+    role = user.get("role")
+    q = db.table("courses").select(
+        "id,name,code,status,semester,created_at,units(id,topics(id,title))")
+    if role == "faculty":
+        q = q.or_(f"faculty_id.eq.{user['id']},faculty_id.is.null")
+    elif role == "admin":
+        q = q.eq("institute_id", user.get("institute_id"))
+    courses = q.order("created_at", desc=True).execute().data or []
+
+    topics_of = {c["id"]: [t for u in (c.get("units") or []) for t in (u.get("topics") or [])]
+                 for c in courses}
+    all_tids = [t["id"] for ts in topics_of.values() for t in ts]
+
+    plan_total: dict[str, int] = {}
+    ca_by_topic: dict[str, list] = {}
+    ta_ready: dict[str, int] = {}
+    job_by_topic: dict[str, dict] = {}
+    prog: list[dict] = []
+    if all_tids:
+        for a in (db.table("artifacts").select("topic_id,content")
+                  .eq("type", "topic_plan").in_("topic_id", all_tids).execute().data or []):
+            plan_total[a["topic_id"]] = len((a.get("content") or {}).get("concept_inventory") or [])
+        for a in (db.table("artifacts").select("topic_id,review_status")
+                  .in_("type", list(_TOPIC_CONTENT_TYPES)).in_("topic_id", all_tids).execute().data or []):
+            if a["review_status"] == "ready":
+                ta_ready[a["topic_id"]] = ta_ready.get(a["topic_id"], 0) + 1
+        for c in (db.table("concept_artifacts").select("topic_id,artifact_type,status,approval_status")
+                  .in_("topic_id", all_tids).execute().data or []):
+            ca_by_topic.setdefault(c["topic_id"], []).append(c)
+        for j in (db.table("generation_jobs").select("topic_id,status,cost_usd,created_at")
+                  .in_("topic_id", all_tids).order("created_at", desc=True).execute().data or []):
+            job_by_topic.setdefault(j["topic_id"], j)  # first seen = latest
+        try:
+            prog = (db.table("student_progress").select("user_id,artifact_type,status,quiz_score,quiz_total")
+                    .in_("topic_id", all_tids).execute().data or [])
+        except Exception:
+            prog = []
+
+    def topic_roll(tid: str) -> dict:
+        ct = plan_total.get(tid, 0)
+        cas = ca_by_topic.get(tid, [])
+        ready = sum(1 for c in cas if c["status"] == "ready") + ta_ready.get(tid, 0)
+        total = ct * 3 + len(_TOPIC_CONTENT_TYPES) if ct else 0
+        job = job_by_topic.get(tid, {})
+        return {"ct": ct, "ready": ready, "total": total,
+                "job_status": job.get("status"), "cost": float(job.get("cost_usd") or 0),
+                "pending_approval": sum(1 for c in cas
+                                        if c["status"] == "ready" and c["approval_status"] != "approved")}
+
+    art_ready = art_total = cost = pending_approval = 0
+    t_complete = t_progress = t_notstarted = 0
+    running = failed = 0
+    recent = []
+    # Deep-link targets for the "needs attention" actions (first match wins),
+    # plus the first draft course — the studio is where retry + approve live.
+    failed_target = approval_target = draft_target = None
+    for c in courses:
+        c_ready = c_total = c_complete = 0
+        if c.get("status") == "draft" and draft_target is None:
+            draft_target = {"course_id": c["id"]}
+        for t in topics_of[c["id"]]:
+            r = topic_roll(t["id"])
+            art_ready += r["ready"]; art_total += r["total"]; cost += r["cost"]
+            pending_approval += r["pending_approval"]
+            c_ready += r["ready"]; c_total += r["total"]
+            if r["pending_approval"] > 0 and approval_target is None:
+                approval_target = {"course_id": c["id"], "topic_id": t["id"]}
+            if r["job_status"] in _RUNNING_JOB:
+                running += 1
+            if r["job_status"] == "failed":
+                failed += 1
+                if failed_target is None:
+                    failed_target = {"course_id": c["id"], "topic_id": t["id"]}
+            if r["total"] > 0 and r["ready"] >= r["total"]:
+                t_complete += 1; c_complete += 1
+            elif r["ready"] > 0 or r["ct"] > 0:
+                t_progress += 1
+            else:
+                t_notstarted += 1
+        recent.append({
+            "id": c["id"], "code": c.get("code"), "name": c["name"], "status": c.get("status"),
+            "semester": c.get("semester"),
+            "artifact_ready": c_ready, "artifact_total": c_total,
+            "pct": round(c_ready / c_total * 100) if c_total else 0,
+            "topics_complete": c_complete, "topics_total": len(topics_of[c["id"]]),
+        })
+
+    notes = [p for p in prog if p["artifact_type"] == "student_notes"]
+    quiz = [p for p in prog if p["artifact_type"] == "quiz" and p.get("quiz_total")]
+    published = sum(1 for cas in ca_by_topic.values() for c in cas
+                    if c["artifact_type"] == "student_notes" and c["approval_status"] == "approved")
+
+    return {
+        "courses": {"total": len(courses),
+                    "active": sum(1 for c in courses if c.get("status") == "active"),
+                    "draft": sum(1 for c in courses if c.get("status") == "draft")},
+        "topics": {"total": len(all_tids), "complete": t_complete,
+                   "in_progress": t_progress, "not_started": t_notstarted},
+        "artifacts": {"ready": art_ready, "total": art_total,
+                      "pct": round(art_ready / art_total * 100) if art_total else 0},
+        "pending_approval": pending_approval,
+        "running": running, "failed": failed,
+        "cost_usd": round(cost, 2),
+        "targets": {"failed": failed_target, "approval": approval_target, "draft": draft_target},
+        "students": {
+            "published_lessons": published,
+            "learners": len({p["user_id"] for p in prog}),
+            "lessons_read": len(notes),
+            "quiz_attempts": len(quiz),
+            "avg_quiz_pct": round(sum(p["quiz_score"] / p["quiz_total"] for p in quiz) / len(quiz) * 100)
+            if quiz else 0,
+        },
+        "recent_courses": recent[:5],
+    }
+
+
 def course_progress(db, course_id: str) -> list[dict]:
     """Real per-topic generation progress for the course board: latest job phase,
     plan status, per-concept notes counts, and cost. One call for the whole course."""
@@ -1797,6 +2023,16 @@ def course_progress(db, course_id: str) -> list[dict]:
         notes = [c for c in cas if c["artifact_type"] == "student_notes"]
         notes_ready = sum(1 for c in notes if c["status"] == "ready")
         notes_approved = sum(1 for c in notes if c["approval_status"] == "approved")
+        # Artifact-level rollup. Per planned topic: concepts × 3 concept
+        # artifacts (notes/slides/quiz) + the 4 topic-level artifacts
+        # (summary/assignment/faculty_diagnostic/flashcards). topic_plan is the
+        # blueprint, not a counted deliverable.
+        topic_arts = (db.table("artifacts").select("type,review_status")
+                      .eq("topic_id", tid).execute().data or [])
+        topic_ready = sum(1 for a in topic_arts
+                          if a["type"] in _TOPIC_CONTENT_TYPES and a["review_status"] == "ready")
+        artifact_total = (concept_total * 3 + len(_TOPIC_CONTENT_TYPES)) if concept_total else 0
+        artifact_ready = sum(1 for c in cas if c["status"] == "ready") + topic_ready
         out.append({
             "topic_id": tid,
             "phase": (job or {}).get("phase"),
@@ -1805,6 +2041,8 @@ def course_progress(db, course_id: str) -> list[dict]:
             "concept_total": concept_total,
             "notes_ready": notes_ready,
             "notes_approved": notes_approved,
+            "artifact_total": artifact_total,
+            "artifact_ready": artifact_ready,
             "cost_usd": (job or {}).get("cost_usd") or 0,
             "est_cost_usd": (job or {}).get("est_cost_usd"),
         })

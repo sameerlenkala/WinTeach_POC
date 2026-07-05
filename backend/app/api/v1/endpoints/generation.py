@@ -12,6 +12,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from fastapi.responses import Response, StreamingResponse
 from supabase import Client
 
@@ -99,6 +100,12 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
 def course_progress(course_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     """Live per-topic generation progress for the course board."""
     return gen.course_progress(db, course_id)
+
+
+@router.get("/dashboard")
+def dashboard(user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Real aggregate metrics for the WinTeach dashboard."""
+    return gen.faculty_dashboard(db, user)
 
 
 @router.get("/topics/{topic_id}/job")
@@ -224,6 +231,42 @@ def approve_concept(job_id: str, concept_id: str, artifact_type: str,
     return gen.approve_concept_artifact(db, user, topic_id, concept_id, artifact_type)
 
 
+class ReviseRequest(BaseModel):
+    instruction: str
+
+
+@router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/revise", status_code=202)
+def revise_concept(job_id: str, concept_id: str, artifact_type: str, payload: ReviseRequest,
+                   user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Targeted revision: apply one faculty instruction to the current artifact.
+    The outgoing content is snapshotted to version history first."""
+    if artifact_type not in _CONCEPT_TYPES:
+        raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
+    if not payload.instruction.strip():
+        raise HTTPException(status_code=422, detail="Instruction is required")
+    topic_id = _topic_of(db, job_id)
+    gen.enqueue_concept_revision(job_id, topic_id, concept_id, artifact_type,
+                                 payload.instruction.strip())
+    return {"status": "generating", "concept_id": concept_id, "artifact_type": artifact_type}
+
+
+@router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/versions")
+def list_concept_versions(job_id: str, concept_id: str, artifact_type: str,
+                          user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    topic_id = _topic_of(db, job_id)
+    return gen.list_artifact_versions(db, topic_id, concept_id, artifact_type)
+
+
+@router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/versions/{version_no}/restore")
+def restore_concept_version(job_id: str, concept_id: str, artifact_type: str, version_no: int,
+                            user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    topic_id = _topic_of(db, job_id)
+    try:
+        return gen.restore_artifact_version(db, job_id, topic_id, concept_id, artifact_type, version_no)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+
 @router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/export")
 def export_concept(job_id: str, concept_id: str, artifact_type: str,
                    user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
@@ -243,6 +286,9 @@ def get_concept(job_id: str, concept_id: str, artifact_type: str,
     row = gen._concept_row(db, topic_id, concept_id, artifact_type)
     if not row:
         raise HTTPException(status_code=404, detail="Not generated yet")
+    # Students only ever see faculty-approved (published) content.
+    if user.get("role") == "student" and row.get("approval_status") != "approved":
+        raise HTTPException(status_code=404, detail="Not published yet")
     return {"content": row.get("content"), "status": row.get("status"),
             "approval_status": row.get("approval_status"),
             "cost_usd": row.get("cost_usd"), "error": row.get("error")}

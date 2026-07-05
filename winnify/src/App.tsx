@@ -70,6 +70,8 @@ import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
 import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
 import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
 import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
+import StudentCourses from './pages/student/StudentCourses';
+import StudentCourseTopics from './pages/student/StudentCourseTopics';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
 import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
 import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
@@ -195,6 +197,12 @@ export default function App() {
             <Route path="/judge0"     element={<Judge0Page />} />
             <Route path="/daily-co"   element={<DailyCoPage />} />
             <Route path="/home"       element={<Home />} />
+            {/* Student courses: published (approved) content, read-only */}
+            <Route path="/home/courses" element={<StudentCourses />} />
+            <Route path="/home/courses/:id" element={<StudentCourseTopics />} />
+            <Route path="/home/courses/:id/topic/:topicId/notes/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="student_notes" student /></div>} />
+            <Route path="/home/courses/:id/topic/:topicId/slides/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="slides" student /></div>} />
+            <Route path="/home/courses/:id/topic/:topicId/quiz/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="quiz" student /></div>} />
             <Route path="/home/winspeak" element={<WinSpeak />} />
             <Route path="/home/winspeak/challenge" element={<WinSpeakChallenge />} />
             <Route path="/home/winspeak/leaderboard" element={<WinSpeakLeaderboard />} />

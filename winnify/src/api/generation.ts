@@ -54,6 +54,31 @@ export interface GenJobArtifact {
   cost_usd?: number;
 }
 
+export interface DashboardRecentCourse {
+  id: string; code?: string; name: string; status?: string; semester?: string;
+  artifact_ready: number; artifact_total: number; pct: number;
+  topics_complete: number; topics_total: number;
+}
+export interface DashboardSummary {
+  courses: { total: number; active: number; draft: number };
+  topics: { total: number; complete: number; in_progress: number; not_started: number };
+  artifacts: { ready: number; total: number; pct: number };
+  pending_approval: number;
+  running: number;
+  failed: number;
+  cost_usd: number;
+  targets: {
+    failed: { course_id: string; topic_id: string } | null;
+    approval: { course_id: string; topic_id: string } | null;
+    draft: { course_id: string } | null;
+  };
+  students: {
+    published_lessons: number; learners: number; lessons_read: number;
+    quiz_attempts: number; avg_quiz_pct: number;
+  };
+  recent_courses: DashboardRecentCourse[];
+}
+
 export interface TopicProgress {
   topic_id: string;
   phase?: string | null;
@@ -62,6 +87,8 @@ export interface TopicProgress {
   concept_total: number;
   notes_ready: number;
   notes_approved: number;
+  artifact_total: number;   // concepts × 3 (notes/slides/quiz)
+  artifact_ready: number;   // generated artifacts across all three types
   cost_usd: number;
   est_cost_usd?: number | null;
 }
@@ -135,9 +162,22 @@ export const generationApi = {
     api.get<{ content: any; status: ArtStatus; approval_status: string; cost_usd?: number; error?: string }>(
       `/generate/jobs/${jobId}/concepts/${conceptId}/${type}`),
 
+  getDashboard: () => api.get<DashboardSummary>('/generate/dashboard'),
+
   // Notes/quiz download as .docx, slides as .pptx (with speaker notes).
   exportConcept: (jobId: string, conceptId: string, type: ConceptArtType, fallbackName: string) =>
     api.download(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/export`, fallbackName),
+
+  // Targeted revision + version history (outgoing content is snapshotted first).
+  reviseConcept: (jobId: string, conceptId: string, type: ConceptArtType, instruction: string) =>
+    api.post<any>(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/revise`, { instruction }),
+
+  listVersions: (jobId: string, conceptId: string, type: ConceptArtType) =>
+    api.get<{ version_no: number; note?: string; created_at: string }[]>(
+      `/generate/jobs/${jobId}/concepts/${conceptId}/${type}/versions`),
+
+  restoreVersion: (jobId: string, conceptId: string, type: ConceptArtType, versionNo: number) =>
+    api.post<any>(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/versions/${versionNo}/restore`),
 
   genTopicArtifact: (jobId: string, type: TopicArtType) =>
     api.post<any>(`/generate/jobs/${jobId}/topic/${type}/generate`),
