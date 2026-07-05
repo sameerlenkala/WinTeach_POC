@@ -578,6 +578,149 @@ def _run_p5(client: Any, module_tree: list[dict], final_cos: list[dict]) -> dict
     ))
 
 
+# ── P5 coverage repair ────────────────────────────────────────────────────────
+# Closes two observed mapping gaps: topics left without a primary evaluated CO
+# (their bloom falls back to an unrelated CO's level) and COs mapped to no
+# topic (they silently drop out of coverage). Best-effort: failures leave the
+# original mapping untouched.
+
+_P5_REPAIR_TEMPLATE = """You are fixing gaps in a CO–topic mapping for an Indian engineering course.
+Close BOTH kinds of gaps below using genuine subject-matter fit — never invent COs or topics.
+
+━━━ COURSE OUTCOMES ━━━
+{cos}
+
+━━━ ALL TOPICS (unit_id / topic_title) ━━━
+{topics}
+
+━━━ GAP 1: TOPICS MISSING A PRIMARY EVALUATED CO ━━━
+Every topic must have the single best-fitting evaluated CO (id starting "CO") as primary.
+{uncovered_topics}
+
+━━━ GAP 2: COs MAPPED TO NO TOPIC ━━━
+Map each to the topic(s) that genuinely serve it — primary if the topic substantially
+addresses it, else supporting. If truly NO topic covers a CO, list its id in
+"unmappable_cos" instead of forcing a bad mapping.
+{orphaned_cos}
+
+Output ONLY this JSON — no explanation, no markdown:
+{{
+  "topic_fixes": [
+    {{"unit_id": "UNIT-V", "topic_title": "exact topic title", "primary_co": "CO1",
+      "reason": "one sentence"}}
+  ],
+  "co_fixes": [
+    {{"co_id": "CO5", "assignments": [
+      {{"unit_id": "UNIT-VI", "topic_title": "exact topic title", "contribution": "primary|supporting"}}
+    ]}}
+  ],
+  "unmappable_cos": []
+}}"""
+
+
+def _p5_gaps(p5: dict, topics: list[dict], cos: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(topics missing a primary evaluated CO, COs mapped to no topic)."""
+    entry_by_key = {(e.get("unit_id", ""), e.get("topic_title", "")): e
+                    for e in p5.get("co_topic_mapping", [])}
+    uncovered = []
+    for t in topics:
+        e = entry_by_key.get((t.get("unit_id", ""), t.get("topic_title", "")))
+        mapped = (e or {}).get("mapped_cos", [])
+        if not any(m.get("contribution") == "primary" and str(m.get("co_id", "")).startswith("CO")
+                   for m in mapped):
+            uncovered.append(t)
+    mapped_ids = {m.get("co_id") for e in p5.get("co_topic_mapping", []) for m in e.get("mapped_cos", [])}
+    orphaned = [c for c in cos if c.get("id") not in mapped_ids]
+    return uncovered, orphaned
+
+
+def _rebuild_coverage_summary(p5: dict, cos: list[dict]) -> None:
+    """Recompute co_coverage_summary deterministically from the mapping."""
+    primary: dict[str, list[str]] = {}
+    supporting: dict[str, list[str]] = {}
+    for e in p5.get("co_topic_mapping", []):
+        for m in e.get("mapped_cos", []):
+            bucket = primary if m.get("contribution") == "primary" else supporting
+            bucket.setdefault(m.get("co_id", ""), []).append(e.get("topic_title", ""))
+    p5["co_coverage_summary"] = [{
+        "co_id": c["id"],
+        "co_text": c.get("text", ""),
+        "primary_topics": primary.get(c["id"], []),
+        "supporting_topics": supporting.get(c["id"], []),
+        "coverage": ("well_covered" if primary.get(c["id"])
+                     else "partially_covered" if supporting.get(c["id"]) else "not_covered"),
+    } for c in cos]
+
+
+def repair_p5_coverage(client: Any, p5: dict, topics: list[dict], cos: list[dict]) -> dict:
+    """One LLM repair pass closing coverage gaps, then a deterministic summary
+    rebuild. `topics` is [{unit_id, unit_title, topic_title}] — callers may pass
+    syllabus topics (pipeline) or DB topics including elective units (backfill)."""
+    try:
+        uncovered, orphaned = _p5_gaps(p5, topics, cos)
+        if not uncovered and not orphaned:
+            _rebuild_coverage_summary(p5, cos)
+            return p5
+
+        result = _chat(client, _P5_REPAIR_TEMPLATE.format(
+            cos=json.dumps(cos, indent=2),
+            topics=json.dumps(topics, indent=2),
+            uncovered_topics=json.dumps(uncovered, indent=2) if uncovered else "None",
+            orphaned_cos=json.dumps(orphaned, indent=2) if orphaned else "None",
+        ))
+
+        valid_cos = {c["id"] for c in cos}
+        entry_by_key = {(e.get("unit_id", ""), e.get("topic_title", "")): e
+                        for e in p5.setdefault("co_topic_mapping", [])}
+
+        def entry_for(unit_id: str, topic_title: str) -> dict | None:
+            e = entry_by_key.get((unit_id, topic_title))
+            if e is None:
+                # Topic exists (e.g. elective unit) but had no mapping row yet.
+                known = next((t for t in topics if t.get("unit_id") == unit_id
+                              and t.get("topic_title") == topic_title), None)
+                if known is None:
+                    return None
+                e = {"unit_id": unit_id, "unit_title": known.get("unit_title", ""),
+                     "topic_title": topic_title, "mapped_cos": []}
+                p5["co_topic_mapping"].append(e)
+                entry_by_key[(unit_id, topic_title)] = e
+            return e
+
+        for fix in result.get("topic_fixes", []) or []:
+            co_id = fix.get("primary_co")
+            if co_id not in valid_cos or not str(co_id).startswith("CO"):
+                continue
+            e = entry_for(fix.get("unit_id", ""), fix.get("topic_title", ""))
+            if e is None:
+                continue
+            existing = next((m for m in e["mapped_cos"] if m.get("co_id") == co_id), None)
+            if existing:
+                existing["contribution"] = "primary"
+            else:
+                e["mapped_cos"].append({"co_id": co_id, "contribution": "primary",
+                                        "reason": fix.get("reason", "coverage repair")})
+
+        for fix in result.get("co_fixes", []) or []:
+            co_id = fix.get("co_id")
+            if co_id not in valid_cos:
+                continue
+            for a in fix.get("assignments", []) or []:
+                e = entry_for(a.get("unit_id", ""), a.get("topic_title", ""))
+                if e is None or any(m.get("co_id") == co_id for m in e["mapped_cos"]):
+                    continue
+                contribution = a.get("contribution") if a.get("contribution") in ("primary", "supporting") else "supporting"
+                e["mapped_cos"].append({"co_id": co_id, "contribution": contribution,
+                                        "reason": "coverage repair"})
+
+        if result.get("unmappable_cos"):
+            logger.warning("P5 repair: COs with no covering topic: %s", result["unmappable_cos"])
+        _rebuild_coverage_summary(p5, cos)
+    except Exception:
+        logger.warning("P5 coverage repair failed — keeping original mapping", exc_info=True)
+    return p5
+
+
 # ── Convert P4B output → P4 format ───────────────────────────────────────────
 
 def _p4b_to_p4_format(p4b: dict) -> dict:
@@ -799,6 +942,13 @@ def run_pipeline(syllabus_text: str) -> dict:
             for s in p4.get("suggested_cos", [])
         ]
         p5 = _run_p5(client, module_tree, final_cos_for_p5)
+
+        # Coverage repair: every topic gets a primary evaluated CO; every CO
+        # lands on ≥1 topic (or is flagged unmappable) — see repair_p5_coverage.
+        all_topics = [{"unit_id": u.get("unit_id", ""), "unit_title": u.get("title", ""),
+                       "topic_title": t["title"]}
+                      for u in module_tree for t in u.get("topics", [])]
+        p5 = repair_p5_coverage(client, p5, all_topics, final_cos_for_p5)
 
         # ── Assemble result ───────────────────────────────────────────────────
         ai_extraction = _to_ai_extraction(p1, p4, p5)
