@@ -1744,10 +1744,10 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
   const concept = idx >= 0 ? concepts[idx] : null;
   const nState = job && conceptId ? artState(job, conceptId, type) : undefined;
   const approved = nState?.approval_status === 'approved';
-  // Student mode lives under /home/courses and links back to the course page,
-  // not the generation studio.
+  // Both modes link back to the topic page: the faculty studio for teachers,
+  // the student topic landing page (subtopics + study aids) for students.
   const rootPath = student ? '/home/courses' : '/winteach/courses';
-  const studioPath = student ? `${rootPath}/${courseId}` : `${rootPath}/${courseId}/topic/${topicId}`;
+  const studioPath = `${rootPath}/${courseId}/topic/${topicId}`;
   const readerPath = (t: ConceptArtType, cid: string) =>
     `${rootPath}/${courseId}/topic/${topicId}/${READER_META[t].segment}/${cid}`;
 
@@ -1953,7 +1953,7 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
       <WinTopbar title={meta.tab} actions={
         <Btn variant="ghost" onClick={() => navigate(studioPath)}>
           <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>
-          {student ? 'Back to course' : 'Back to studio'}
+          {student ? 'Back to topic' : 'Back to studio'}
         </Btn>
       } />
       <WinContent>

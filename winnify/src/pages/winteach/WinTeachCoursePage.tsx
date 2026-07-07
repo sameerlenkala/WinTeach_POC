@@ -4,7 +4,7 @@ import { useWinTeach } from './WinTeachContext';
 import { useCourse, useCOs, useCOMap, useSetCourseStatus, useUnits, useSaveCOMap, useUpdateCO, useCourseProgress } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { BloomBadge, ProgressBar, Card, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
+import { BloomBadge, ProgressBar, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
 import { IBack, IEdit, IAssess, IDashboard, IArrow } from './WinTeachIcons';
 import { coRefFor } from './winteachData';
 import { ReferenceMaterials } from './WinTeachMaterials';

@@ -34,6 +34,36 @@ export interface StudentCourseDetail {
   }[];
 }
 
+export interface StudentSubtopic {
+  concept_id: string;
+  title: string;
+  // false → still on the roadmap but not faculty-approved; render locked.
+  published: boolean;
+  has_notes: boolean;
+  has_slides: boolean;
+  has_quiz: boolean;
+}
+
+export interface StudentTopicDetail {
+  course_id: string;
+  course_name: string;
+  code?: string;
+  topic_id: string;
+  title: string;
+  bloom_level?: string;
+  subtopics: StudentSubtopic[];
+  first_concept_id: string | null;
+  // Which topic-level artifacts are published (ready) for this topic.
+  artifacts: { summary: boolean; assignment: boolean; flashcards: boolean };
+}
+
+export interface StudentTopicArtifact {
+  kind: 'summary' | 'assignment' | 'flashcards';
+  content: any;
+  topic_title: string;
+  code?: string;
+}
+
 export interface LearnHome {
   resume: {
     course_id: string; course_name: string; topic_id: string;
@@ -69,6 +99,10 @@ export interface MasteryPayload {
 export const studentApi = {
   courses: () => api.get<StudentCourse[]>('/student/courses'),
   course: (courseId: string) => api.get<StudentCourseDetail>(`/student/courses/${courseId}`),
+  topic: (courseId: string, topicId: string) =>
+    api.get<StudentTopicDetail>(`/student/courses/${courseId}/topic/${topicId}`),
+  topicArtifact: (courseId: string, topicId: string, kind: 'summary' | 'assignment' | 'flashcards') =>
+    api.get<StudentTopicArtifact>(`/student/courses/${courseId}/topic/${topicId}/artifact/${kind}`),
   home: () => api.get<LearnHome>('/student/home'),
   mastery: (courseId: string) => api.get<MasteryPayload>(`/student/courses/${courseId}/mastery`),
   revision: (courseId: string) => api.get<RevisionPayload>(`/student/revision/${courseId}`),

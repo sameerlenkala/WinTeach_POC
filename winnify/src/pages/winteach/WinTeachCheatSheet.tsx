@@ -10,6 +10,7 @@ import { Btn } from './WinTeachUI';
 import { IBack, IBook } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi } from '@/api/generation';
+import { studentApi } from '@/api/student';
 import { MathText } from './WinTeachConceptReader';
 
 /* ── inline icons (panel glyphs not in the shared set) ───────────────────── */
@@ -161,7 +162,7 @@ function Panel({ p }: { p: any }) {
   const Icon = meta.icon;
   return (
     <div className="cheat-panel" style={{
-      breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', marginBottom: 14,
+      breakInside: 'avoid', marginBottom: 14,
       background: W.card, border: `1px solid ${W.border}`, borderRadius: 12,
       overflow: 'hidden', boxShadow: W.shadowCard,
     }}>
@@ -211,29 +212,39 @@ const PRINT_CSS = `@media print {
 }`;
 
 /* ── page ────────────────────────────────────────────────────────────────── */
-export default function WinTeachCheatSheet() {
+export default function WinTeachCheatSheet({ student }: { student?: boolean } = {}) {
   const navigate = useNavigate();
   const { id: courseId, topicId } = useParams();
-  const { data: course } = useCourse(courseId ?? '');
-  const { data: topic } = useTopic(courseId ?? '', topicId ?? '');
+  // Faculty hooks 403 for students — skip them and read the published payload.
+  const { data: course } = useCourse(student ? '' : courseId ?? '');
+  const { data: topic } = useTopic(student ? '' : courseId ?? '', topicId ?? '');
   const [content, setContent] = useState<any>(null);
+  const [meta, setMeta] = useState<{ topic_title?: string; code?: string }>({});
   const [status, setStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
 
   useEffect(() => {
-    if (!topicId) return;
+    if (!topicId || !courseId) return;
     setStatus('loading');
-    generationApi.getTopicJob(topicId)
-      .then(j => generationApi.getArtifact(j.id, 'summary'))
-      .then(r => {
-        const c = r.content;
-        const has = c && ((c.panels ?? []).length > 0 || (c.key_concepts ?? []).length > 0);
-        setContent(c); setStatus(has ? 'ready' : 'empty');
-      })
-      .catch(() => setStatus('empty'));
-  }, [topicId]);
+    const onContent = (c: any) => {
+      const has = c && ((c.panels ?? []).length > 0 || (c.key_concepts ?? []).length > 0);
+      setContent(c); setStatus(has ? 'ready' : 'empty');
+    };
+    if (student) {
+      studentApi.topicArtifact(courseId, topicId, 'summary')
+        .then(r => { setMeta({ topic_title: r.topic_title, code: r.code }); onContent(r.content); })
+        .catch(() => setStatus('empty'));
+    } else {
+      generationApi.getTopicJob(topicId)
+        .then(j => generationApi.getArtifact(j.id, 'summary'))
+        .then(r => onContent(r.content))
+        .catch(() => setStatus('empty'));
+    }
+  }, [topicId, courseId, student]);
 
-  const courseCode = (course as any)?.code ?? courseId ?? '';
-  const topicTitle = (topic as any)?.title ?? content?.topic_title ?? 'Topic';
+  const courseCode = student ? (meta.code ?? '') : ((course as any)?.code ?? courseId ?? '');
+  const topicTitle = student
+    ? (meta.topic_title ?? content?.topic_title ?? 'Topic')
+    : ((topic as any)?.title ?? content?.topic_title ?? 'Topic');
   const panels: any[] = content?.panels ?? [];
 
   // Group panels by subtopic in first-seen order; "" → topic-wide bucket.
@@ -248,7 +259,10 @@ export default function WinTeachCheatSheet() {
     return order.map(st => ({ subtopic: st, panels: by[st] }));
   }, [panels]);
 
-  const studioPath = `/winteach/courses/${courseId}/topic/${topicId}`;
+  const studioPath = student
+    ? `/home/courses/${courseId}/topic/${topicId}`
+    : `/winteach/courses/${courseId}/topic/${topicId}`;
+  const backLabel = student ? 'Back to topic' : 'Back to studio';
 
   return (
     <>
@@ -259,7 +273,7 @@ export default function WinTeachCheatSheet() {
             <span style={{ width: 14, height: 14, display: 'inline-flex' }}><IPrint /></span>Print
           </Btn>}
           <Btn variant="ghost" onClick={() => navigate(studioPath)}>
-            <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>Back to studio
+            <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>{backLabel}
           </Btn>
         </div>
       } />
@@ -301,8 +315,8 @@ export default function WinTeachCheatSheet() {
           {status === 'empty' && (
             <div style={{ textAlign: 'center', padding: '56px 0' }}>
               <div style={{ fontSize: 14.5, fontWeight: 600, color: W.text, marginBottom: 6 }}>No cheat sheet yet</div>
-              <div style={{ fontSize: 13, color: W.text2, marginBottom: 16 }}>Generate the topic-wide Summary from the studio to build this cheat sheet.</div>
-              <Btn variant="primary" onClick={() => navigate(studioPath)}>Back to studio</Btn>
+              <div style={{ fontSize: 13, color: W.text2, marginBottom: 16 }}>{student ? 'This topic doesn’t have a cheat sheet yet.' : 'Generate the topic-wide Summary from the studio to build this cheat sheet.'}</div>
+              <Btn variant="primary" onClick={() => navigate(studioPath)}>{backLabel}</Btn>
             </div>
           )}
 

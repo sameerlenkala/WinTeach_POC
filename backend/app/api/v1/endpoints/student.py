@@ -157,6 +157,130 @@ def course_detail(course_id: str, user: dict = Depends(get_current_user),
             "progress": progress_rows}
 
 
+# Topic-level artifacts a student may see. Faculty Diagnostic is intentionally
+# excluded — it is a private pre-teaching self-check ("nothing reported upward")
+# and must never be served to learners.
+_STUDENT_TOPIC_ARTS = ("summary", "assignment", "flashcards")
+
+
+def _topic_in_course(db: Client, course_id: str, topic_id: str) -> dict | None:
+    """Return {"course": ..., "topic": ...} when topic_id belongs to course_id,
+    else None — so a student can't read one course's topic through another."""
+    res = db.table("courses").select(
+        "id, name, code, units(id, unit_number, title, topics(id, title, bloom_level))"
+    ).eq("id", course_id).limit(1).execute()
+    if not res.data:
+        return None
+    course = res.data[0]
+    for u in course.get("units") or []:
+        for t in u.get("topics") or []:
+            if t["id"] == topic_id:
+                return {"course": course, "topic": t}
+    return None
+
+
+def _sanitize_assignment(content: dict) -> dict:
+    """Strip instructor-only material from a student-facing assignment: the
+    per-task model-answer outlines and the legacy single model solution. Rubric
+    criteria and the integrity policy are kept — students should see those."""
+    c = dict(content or {})
+    c.pop("model_solution", None)
+    c["tasks"] = [{k: v for k, v in (t or {}).items() if k != "model_answer_outline"}
+                  for t in (c.get("tasks") or [])]
+    return c
+
+
+@router.get("/courses/{course_id}/topic/{topic_id}")
+def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current_user),
+                 db: Client = Depends(get_db)):
+    """Student topic landing page: published subtopics (notes/slides/quiz) plus
+    which topic-level artifacts are ready. Mirrors the faculty studio, gated to
+    approved concept artifacts and student-safe topic artifacts."""
+    found = _topic_in_course(db, course_id, topic_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    course, topic = found["course"], found["topic"]
+
+    # Approved concept artifacts → per-subtopic capabilities.
+    by_concept: dict[str, set[str]] = {}
+    for a in (db.table("concept_artifacts").select("concept_id, artifact_type")
+              .eq("topic_id", topic_id).eq("approval_status", "approved")
+              .execute().data or []):
+        by_concept.setdefault(a["concept_id"], set()).add(a["artifact_type"])
+
+    # The full subtopic roadmap comes from the topic plan's concept inventory
+    # (in its pedagogical order); titles too. We surface every subtopic — the
+    # ones without approved notes render as locked "not published yet" — so the
+    # topic page shows the same complete structure the course page does.
+    names: dict[str, str] = {}
+    order: list[str] = []
+    plan_rows = (db.table("artifacts").select("content")
+                 .eq("topic_id", topic_id).eq("type", "topic_plan")
+                 .limit(1).execute().data or [])
+    if plan_rows:
+        for c in (plan_rows[0].get("content") or {}).get("concept_inventory") or []:
+            cid = c.get("concept_id")
+            if cid and cid not in names:
+                names[cid] = c.get("concept_name") or cid
+                order.append(cid)
+    # Any approved concept missing from the plan (older topics, plan edits) still
+    # gets listed so a published lesson is never hidden.
+    for cid in sorted(by_concept, key=_concept_sort_key):
+        if cid not in names:
+            names[cid] = cid
+            order.append(cid)
+
+    subtopics = []
+    for cid in order:
+        types = by_concept.get(cid, set())
+        published = "student_notes" in types
+        subtopics.append({
+            "concept_id": cid, "title": names.get(cid, cid),
+            "published": published, "has_notes": published,
+            "has_slides": "slides" in types, "has_quiz": "quiz" in types,
+        })
+    first_published = next((s["concept_id"] for s in subtopics if s["published"]), None)
+
+    # Topic artifacts are "published" for students once review_status is ready —
+    # they derive from already-approved notes, so there is no separate approval.
+    ready: set[str] = set()
+    for a in (db.table("artifacts").select("type, review_status")
+              .eq("topic_id", topic_id).in_("type", list(_STUDENT_TOPIC_ARTS))
+              .execute().data or []):
+        if a.get("review_status") == "ready":
+            ready.add(a["type"])
+
+    return {
+        "course_id": course_id, "course_name": course["name"], "code": course.get("code"),
+        "topic_id": topic_id, "title": topic["title"], "bloom_level": topic.get("bloom_level"),
+        "subtopics": subtopics,
+        "first_concept_id": first_published,
+        "artifacts": {k: (k in ready) for k in _STUDENT_TOPIC_ARTS},
+    }
+
+
+@router.get("/courses/{course_id}/topic/{topic_id}/artifact/{kind}")
+def topic_artifact(course_id: str, topic_id: str, kind: str,
+                   user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+    """Sanitized topic-level artifact content for a student. Only summary,
+    assignment, and flashcards are servable; faculty_diagnostic is never
+    exposed. An artifact must be review_status=ready to be published."""
+    if kind not in _STUDENT_TOPIC_ARTS:
+        raise HTTPException(status_code=404, detail="Artifact not available")
+    found = _topic_in_course(db, course_id, topic_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    rows = (db.table("artifacts").select("content, review_status")
+            .eq("topic_id", topic_id).eq("type", kind).limit(1).execute().data or [])
+    if not rows or rows[0].get("review_status") != "ready":
+        raise HTTPException(status_code=404, detail="Not published yet")
+    content = rows[0].get("content") or {}
+    if kind == "assignment":
+        content = _sanitize_assignment(content)
+    return {"kind": kind, "content": content,
+            "topic_title": found["topic"]["title"], "code": found["course"].get("code")}
+
+
 class ProgressUpsert(BaseModel):
     course_id: str | None = None
     topic_id: str

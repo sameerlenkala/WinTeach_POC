@@ -10,6 +10,7 @@ import { Btn, Badge } from './WinTeachUI';
 import { IBack, IAssess, IFile, IFlash } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi, type ArtifactType } from '@/api/generation';
+import { studentApi } from '@/api/student';
 import { MathText } from './WinTeachConceptReader';
 
 type Kind = 'assignment' | 'faculty_diagnostic' | 'flashcards';
@@ -201,30 +202,49 @@ function hasBody(kind: Kind, c: any): boolean {
 }
 
 /* ── page ────────────────────────────────────────────────────────────────── */
-export default function WinTeachTopicArtifact() {
+export default function WinTeachTopicArtifact({ student }: { student?: boolean } = {}) {
   const navigate = useNavigate();
   const { id: courseId, topicId, type } = useParams();
   const kind = (KINDS.includes(type as Kind) ? type : 'assignment') as Kind;
-  const { data: course } = useCourse(courseId ?? '');
-  const { data: topic } = useTopic(courseId ?? '', topicId ?? '');
+  // Faculty hooks 403 for students — skip them and read the published payload.
+  const { data: course } = useCourse(student ? '' : courseId ?? '');
+  const { data: topic } = useTopic(student ? '' : courseId ?? '', topicId ?? '');
   const [content, setContent] = useState<any>(null);
+  const [meta2, setMeta2] = useState<{ topic_title?: string; code?: string }>({});
   const [status, setStatus] = useState<'loading' | 'ready' | 'empty'>('loading');
 
   useEffect(() => {
-    if (!topicId) return;
+    if (!topicId || !courseId) return;
     setStatus('loading'); setContent(null);
-    generationApi.getTopicJob(topicId)
-      .then(j => generationApi.getArtifact(j.id, kind as ArtifactType))
-      .then(r => { setContent(r.content); setStatus(hasBody(kind, r.content) ? 'ready' : 'empty'); })
-      .catch(() => setStatus('empty'));
-  }, [topicId, kind]);
+    if (student) {
+      // Only assignment + flashcards are student-facing here; the private
+      // Faculty Diagnostic is never served.
+      if (kind !== 'assignment' && kind !== 'flashcards') { setStatus('empty'); return; }
+      studentApi.topicArtifact(courseId, topicId, kind)
+        .then(r => {
+          setMeta2({ topic_title: r.topic_title, code: r.code });
+          setContent(r.content); setStatus(hasBody(kind, r.content) ? 'ready' : 'empty');
+        })
+        .catch(() => setStatus('empty'));
+    } else {
+      generationApi.getTopicJob(topicId)
+        .then(j => generationApi.getArtifact(j.id, kind as ArtifactType))
+        .then(r => { setContent(r.content); setStatus(hasBody(kind, r.content) ? 'ready' : 'empty'); })
+        .catch(() => setStatus('empty'));
+    }
+  }, [topicId, courseId, kind, student]);
 
   const meta = META[kind];
   const Icon = meta.icon;
-  const courseCode = (course as any)?.code ?? courseId ?? '';
-  const topicTitle = (topic as any)?.title ?? content?.title ?? 'Topic';
+  const courseCode = student ? (meta2.code ?? '') : ((course as any)?.code ?? courseId ?? '');
+  const topicTitle = student
+    ? (meta2.topic_title ?? content?.title ?? 'Topic')
+    : ((topic as any)?.title ?? content?.title ?? 'Topic');
   const heroTitle = kind === 'assignment' ? (content?.title ?? topicTitle) : topicTitle;
-  const studioPath = `/winteach/courses/${courseId}/topic/${topicId}`;
+  const studioPath = student
+    ? `/home/courses/${courseId}/topic/${topicId}`
+    : `/winteach/courses/${courseId}/topic/${topicId}`;
+  const backLabel = student ? 'Back to topic' : 'Back to studio';
 
   const count = kind === 'assignment' ? (content?.tasks ?? []).length
     : kind === 'flashcards' ? (content?.cards ?? []).length
@@ -235,7 +255,7 @@ export default function WinTeachTopicArtifact() {
     <>
       <WinTopbar title={meta.eyebrow} actions={
         <Btn variant="ghost" onClick={() => navigate(studioPath)}>
-          <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>Back to studio
+          <span style={{ width: 15, height: 15, display: 'inline-flex' }}><IBack /></span>{backLabel}
         </Btn>
       } />
       <WinContent>
@@ -269,9 +289,11 @@ export default function WinTeachTopicArtifact() {
                 {content?.error ? 'Not ready yet' : 'Nothing generated yet'}
               </div>
               <div style={{ fontSize: 13, color: W.text2, marginBottom: 16 }}>
-                {content?.error ?? `Generate this ${meta.eyebrow.split(' ')[0].toLowerCase()} from the studio.`}
+                {student
+                  ? `This topic doesn’t have ${kind === 'assignment' ? 'an assignment' : 'interview prep'} yet.`
+                  : (content?.error ?? `Generate this ${meta.eyebrow.split(' ')[0].toLowerCase()} from the studio.`)}
               </div>
-              <Btn variant="primary" onClick={() => navigate(studioPath)}>Back to studio</Btn>
+              <Btn variant="primary" onClick={() => navigate(studioPath)}>{backLabel}</Btn>
             </div>
           )}
 

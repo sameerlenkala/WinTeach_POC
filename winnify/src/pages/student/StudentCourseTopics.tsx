@@ -170,8 +170,10 @@ export default function StudentCourseTopics() {
                     const published = t.published_lessons > 0;
                     const done = prog != null && prog.viewed >= t.published_lessons && published;
                     const openReader = () => {
+                      // Land on the topic page (subtopics + study aids), not
+                      // straight into the first lesson's notes.
                       if (published && t.first_concept_id) {
-                        navigate(`/home/courses/${course.id}/topic/${t.id}/notes/${t.first_concept_id}`);
+                        navigate(`/home/courses/${course.id}/topic/${t.id}`);
                       }
                     };
                     return (

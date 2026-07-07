@@ -143,7 +143,7 @@ export default function WinTeachCourses() {
                           </span>
                         </td>
                         <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle', minWidth: 160 }}>
-                          <GenerationCell courseId={c.id} topicCount={ts.length} />
+                          <GenerationCell courseId={c.id ?? ''} topicCount={ts.length} />
                         </td>
                         <td style={{ padding: '14px 24px', borderBottom: isLast ? 'none' : '1px solid var(--border)', verticalAlign: 'middle' }}>
                           <StatusBadge status={c.status} />

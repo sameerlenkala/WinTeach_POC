@@ -74,6 +74,7 @@ import WinTeachCheatSheet from './pages/winteach/WinTeachCheatSheet';
 import WinTeachTopicArtifact from './pages/winteach/WinTeachTopicArtifact';
 import StudentCourses from './pages/student/StudentCourses';
 import StudentCourseTopics from './pages/student/StudentCourseTopics';
+import StudentTopic from './pages/student/StudentTopic';
 import StudentRevision from './pages/student/StudentRevision';
 import StudentMastery from './pages/student/StudentMastery';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
@@ -210,6 +211,9 @@ export default function App() {
             <Route path="/home/courses/:id" element={<StudentCourseTopics />} />
             <Route path="/home/courses/:id/revision" element={<StudentRevision />} />
             <Route path="/home/courses/:id/mastery" element={<StudentMastery />} />
+            <Route path="/home/courses/:id/topic/:topicId" element={<StudentTopic />} />
+            <Route path="/home/courses/:id/topic/:topicId/cheatsheet" element={<div className="wt-pro"><WinTeachCheatSheet student /></div>} />
+            <Route path="/home/courses/:id/topic/:topicId/artifact/:type" element={<div className="wt-pro"><WinTeachTopicArtifact student /></div>} />
             <Route path="/home/courses/:id/topic/:topicId/notes/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="student_notes" student /></div>} />
             <Route path="/home/courses/:id/topic/:topicId/slides/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="slides" student /></div>} />
             <Route path="/home/courses/:id/topic/:topicId/quiz/:conceptId" element={<div className="wt-pro"><WinTeachConceptReader type="quiz" student /></div>} />
