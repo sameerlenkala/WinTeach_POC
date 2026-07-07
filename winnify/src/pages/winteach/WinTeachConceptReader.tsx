@@ -9,7 +9,7 @@ import { Btn, Badge, Modal } from './WinTeachUI';
 import { IBack, ICheck, INotes } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi, CONCEPT_TYPES, type GenJob, type ConceptArtifactState, type ConceptArtType } from '@/api/generation';
-import { studentApi } from '@/api/student';
+import { studentApi, track } from '@/api/student';
 
 /* ── per-type metadata ───────────────────────────────────────────────────── */
 
@@ -688,6 +688,36 @@ function VisualBlock({ v }: { v: any }) {
   );
 }
 
+// A pause-and-think self-check: reveal the answer, then the student grades
+// themselves. The grade fires a check-in analytics event (telemetry only).
+function CheckIn({ q, index }: { q: any; index: number }) {
+  const [graded, setGraded] = useState<null | boolean>(null);
+  const grade = (correct: boolean) => {
+    setGraded(correct);
+    track('learn_checkin_answered', { index, correct });
+  };
+  return (
+    <div>
+      <div style={{ fontWeight: 600, fontSize: 13.5, color: W.text, lineHeight: 1.5 }}><RichText inline text={q.question} /></div>
+      {q.answer && (
+        <Reveal label="Show answer">
+          <div style={{ fontSize: 13, lineHeight: 1.6, color: W.text2 }}><RichText inline text={q.answer} /></div>
+          {graded === null ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button onClick={() => grade(false)} style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 99, border: `1px solid ${W.border}`, background: W.card, color: W.text2 }}>Missed it</button>
+              <button onClick={() => grade(true)} style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 99, border: 'none', background: 'var(--tint-teal-bg)', color: 'var(--tint-teal-fg)' }}>Got it ✓</button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: graded ? 'var(--tint-teal-fg)' : W.text3 }}>
+              {graded ? 'Nice — keep going.' : 'Revisit the section above.'}
+            </div>
+          )}
+        </Reveal>
+      )}
+    </div>
+  );
+}
+
 function NotesArticle({ content }: { content: any }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const readFraction = useReadFraction(rootRef);
@@ -890,16 +920,7 @@ function NotesArticle({ content }: { content: any }) {
         <div style={{ margin: '0 0 32px', border: `1px solid ${W.border}`, borderLeft: '3px solid var(--brand)', borderRadius: 8, padding: '14px 18px', background: 'color-mix(in oklab, var(--tint-brand-bg) 40%, var(--card))' }}>
           <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11.5, letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--tint-brand-fg)', marginBottom: 10 }}>Pause & think</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {pause.map((p: any, i: number) => (
-              <div key={i}>
-                <div style={{ fontWeight: 600, fontSize: 13.5, color: W.text, lineHeight: 1.5 }}><RichText inline text={p.question} /></div>
-                {p.answer && (
-                  <Reveal label="Show answer">
-                    <div style={{ fontSize: 13, lineHeight: 1.6, color: W.text2 }}><RichText inline text={p.answer} /></div>
-                  </Reveal>
-                )}
-              </div>
-            ))}
+            {pause.map((p: any, i: number) => <CheckIn key={i} q={p} index={i} />)}
           </div>
         </div>
       )}
@@ -1561,6 +1582,10 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
   const lessonCompleted = markedDone
     || !!quizScoreInfo
     || myProgress.some(p => p.artifact_type === 'student_notes' && p.status === 'completed');
+  // Mirror completion into a ref the telemetry interval can read without being
+  // in its deps — so an already-completed lesson never re-fires auto-complete.
+  const completedRef = useRef(false);
+  useEffect(() => { completedRef.current = lessonCompleted; }, [lessonCompleted]);
   const courseCode = student
     ? (studentCourse?.code ?? studentCourse?.name ?? '')
     : ((course as any)?.code ?? courseId ?? '');
@@ -1623,29 +1648,75 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
 
   const recordQuizScore = useCallback((score: number, total: number) => {
     if (!student || !topicId || !conceptId) return;
-    studentApi.progress({
+    // A full attempt records history and completes the lesson server-side.
+    studentApi.quizAttempt({
       course_id: courseId, topic_id: topicId, concept_id: conceptId,
-      artifact_type: 'quiz', quiz_score: score, quiz_total: total,
+      score, total,
     }).catch(() => {});
-    // Finishing the quiz completes the lesson.
-    studentApi.progress({
-      course_id: courseId, topic_id: topicId, concept_id: conceptId,
-      artifact_type: 'student_notes', status: 'completed',
-    }).catch(() => {});
+    track('learn_quiz_submitted', { concept_id: conceptId, score, total });
     setLocalQuiz({ score, total });
     setMarkedDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student, topicId, conceptId, courseId]);
 
-  const markComplete = useCallback(() => {
+  const markComplete = useCallback((auto = false) => {
     if (!student || !topicId || !conceptId) return;
     studentApi.progress({
       course_id: courseId, topic_id: topicId, concept_id: conceptId,
       artifact_type: 'student_notes', status: 'completed',
     }).catch(() => {});
+    track('learn_lesson_completed', { concept_id: conceptId, auto });
     setMarkedDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student, topicId, conceptId, courseId]);
+
+  // Reading telemetry → scroll+dwell auto-completion. Dwell accrues only while
+  // the notes tab is visible; a throttled progress POST persists scroll_pct +
+  // dwell_sec (and refreshes the resume pointer). When scroll ≥ 85% AND dwell ≥
+  // 40% of the estimated reading time, the lesson auto-completes once.
+  const readingMinutes: number =
+    content?.opening?.sections?.topic_overview?.subtopic_metadata?.reading_time_minutes || 0;
+  useEffect(() => {
+    if (!student || type !== 'student_notes' || !content || !topicId || !conceptId) return;
+    track('learn_lesson_opened', { concept_id: conceptId });
+    let dwell = 0, maxScroll = 0, lastFlush = 0, done = false;
+    const scrollEl = () => document.querySelector('main') as HTMLElement | null;
+    const tick = () => {
+      if (document.hidden) return;
+      dwell += 1;
+      const el = scrollEl();
+      if (el) {
+        const denom = el.scrollHeight - el.clientHeight;
+        const pct = denom > 60 ? Math.round((el.scrollTop / denom) * 100) : 100;
+        maxScroll = Math.max(maxScroll, Math.min(pct, 100));
+      }
+      const threshold = Math.max((readingMinutes || 3) * 60 * 0.4, 20);
+      // Skip if already completed (manual mark, quiz, or prior auto) — a content
+      // refetch re-runs this effect and would otherwise re-fire completion.
+      if (!done && !completedRef.current && maxScroll >= 85 && dwell >= threshold) {
+        done = true;
+        markComplete(true);
+      }
+      // Persist telemetry + resume roughly every 15s.
+      if (dwell - lastFlush >= 15) {
+        lastFlush = dwell;
+        studentApi.progress({
+          course_id: courseId, topic_id: topicId, concept_id: conceptId,
+          artifact_type: 'student_notes', scroll_pct: maxScroll, dwell_sec: dwell,
+        }).catch(() => {});
+      }
+    };
+    const t = window.setInterval(tick, 1000);
+    return () => {
+      window.clearInterval(t);
+      // Final flush on unmount so resume + telemetry survive navigation.
+      if (dwell > 0) studentApi.progress({
+        course_id: courseId, topic_id: topicId, concept_id: conceptId,
+        artifact_type: 'student_notes', scroll_pct: maxScroll, dwell_sec: dwell,
+      }).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student, type, content, topicId, conceptId, courseId, readingMinutes]);
 
   const goto = useCallback((cid: string) => navigate(readerPath(type, cid)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1917,7 +1988,7 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                         quizReady={!!(job && artState(job, conceptId, 'quiz')?.approval_status === 'approved')}
                         quizScore={quizScoreInfo}
                         completed={lessonCompleted}
-                        onMark={markComplete}
+                        onMark={() => markComplete(false)}
                         onSlides={() => navigate(readerPath('slides', conceptId))}
                         onPresent={() => navigate(`${readerPath('slides', conceptId)}?present=1`)}
                         onQuiz={() => navigate(readerPath('quiz', conceptId))}

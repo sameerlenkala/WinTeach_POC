@@ -118,6 +118,16 @@ export default function StudentCourseTopics() {
                     transition: 'width 0.4s ease',
                   }} />
                 </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button onClick={() => navigate(`/home/courses/${course.id}/revision`)} style={{
+                    flex: 1, cursor: 'pointer', borderRadius: 10, padding: '9px 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'var(--tint-brand-bg)', border: 'none', color: 'var(--tint-brand-fg)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)',
+                  }}>🗂️ Revision</button>
+                  <button onClick={() => navigate(`/home/courses/${course.id}/mastery`)} style={{
+                    flex: 1, cursor: 'pointer', borderRadius: 10, padding: '9px 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'var(--surface-muted, var(--border))', border: 'none', color: 'var(--text-2)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)',
+                  }}>📊 Mastery</button>
+                </div>
               </div>
             )}
 

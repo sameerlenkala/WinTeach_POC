@@ -34,11 +34,75 @@ export interface StudentCourseDetail {
   }[];
 }
 
+export interface LearnHome {
+  resume: {
+    course_id: string; course_name: string; topic_id: string;
+    topic_title: string; concept_id: string; scroll_pct: number;
+  } | null;
+  due_cards: number;
+  // The single course the Revision chip opens, and its due count — so the
+  // number shown always matches the deck the tap lands on.
+  revision: { course_id: string; due_cards: number } | null;
+  week: { lessons_completed: number; active_days: number };
+  courses: {
+    id: string; name: string; code?: string; semester?: string;
+    published_lessons: number; read_lessons: number; mastery_pct: number;
+  }[];
+}
+
+export interface RevisionPayload {
+  course_id: string; name: string;
+  due_cards: { card_key: string; front: string; back: string;
+    concept_id: string; topic_id: string; topic_title: string; bucket: number }[];
+  formulas: { topic_title: string; formula: string }[];
+  pyq: Record<'easy' | 'medium' | 'hard',
+    { topic_title: string; question: string; answer: string; bloom_level?: string }[]>;
+  weak_topics: { id: string; title: string; published_lessons: number; read: number; mastery_pct: number }[];
+}
+
+export interface MasteryPayload {
+  course_id: string; name: string; mastery_pct: number;
+  topics: { id: string; title: string; published_lessons: number; read: number; mastery_pct: number }[];
+  weak_topics: { id: string; title: string; mastery_pct: number }[];
+}
+
 export const studentApi = {
   courses: () => api.get<StudentCourse[]>('/student/courses'),
   course: (courseId: string) => api.get<StudentCourseDetail>(`/student/courses/${courseId}`),
+  home: () => api.get<LearnHome>('/student/home'),
+  mastery: (courseId: string) => api.get<MasteryPayload>(`/student/courses/${courseId}/mastery`),
+  revision: (courseId: string) => api.get<RevisionPayload>(`/student/revision/${courseId}`),
   progress: (payload: {
     course_id?: string; topic_id: string; concept_id: string;
     artifact_type?: string; status?: string; quiz_score?: number; quiz_total?: number;
+    scroll_pct?: number; dwell_sec?: number;
   }) => api.post<{ status: string }>('/student/progress', payload),
+  quizAttempt: (payload: {
+    course_id?: string; topic_id: string; concept_id: string;
+    score: number; total: number; answers?: unknown[]; duration_sec?: number;
+  }) => api.post<{ attempt_no: number }>('/student/quiz/attempts', payload),
+  reviewCard: (payload: {
+    course_id?: string; topic_id: string; concept_id: string;
+    card_key: string; result: 'again' | 'got_it';
+  }) => api.post<{ bucket: number; due_at: string }>('/student/flashcards/review', payload),
+  events: (events: Record<string, unknown>[]) =>
+    api.post<{ accepted: number }>('/student/events', { events }),
 };
+
+// Fire-and-forget analytics: batch events, flush on a timer / tab hide.
+let _evtQueue: Record<string, unknown>[] = [];
+let _evtTimer: ReturnType<typeof setTimeout> | null = null;
+function _flush() {
+  if (!_evtQueue.length) return;
+  const batch = _evtQueue; _evtQueue = [];
+  studentApi.events(batch).catch(() => {});
+}
+export function track(event: string, props: Record<string, unknown> = {}) {
+  _evtQueue.push({ event, ...props, ts: new Date().toISOString() });
+  if (_evtTimer) clearTimeout(_evtTimer);
+  _evtTimer = setTimeout(_flush, 4000);
+  if (_evtQueue.length >= 12) _flush();
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('visibilitychange', () => { if (document.hidden) _flush(); });
+}

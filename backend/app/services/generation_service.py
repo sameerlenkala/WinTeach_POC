@@ -2077,6 +2077,14 @@ def _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, **fields) -
     existing = _concept_row(db, topic_id, concept_id, artifact_type)
     fields["updated_at"] = "now()"
     fields.pop("updated_at", None)  # let DB default handle; avoid string cast issues
+    # Materialize the revision-card count for student notes so Learn Home's
+    # due-count never has to pull note content (see student.flashcard_count_for).
+    if artifact_type == "student_notes" and isinstance(fields.get("content"), dict):
+        try:
+            from app.api.v1.endpoints.student import flashcard_count_for
+            fields["flashcard_count"] = flashcard_count_for(fields["content"])
+        except Exception:
+            pass
     row = {"job_id": job_id, "topic_id": topic_id, "concept_id": concept_id,
            "artifact_type": artifact_type, **fields}
     if existing:
