@@ -9,7 +9,8 @@ Checks, per artifact type:
                  placeholder / codeless-mermaid visuals
   slides         non-list list fields, malformed code/visual objects,
                  empty table visuals, literal \\n in speaker notes
-  quiz           MCQ option count, answer_index range, malformed members
+  quiz           questions[] type/answer/options shape (mcq letter, maq letter
+                 array, true_false); legacy mcq[] option count + answer_index
 
 Exit code 1 when any CRASH-class finding exists (safe for CI); renderer-recovered
 classes (run-ons, literal \\n) are reported but do not fail the run.
@@ -131,8 +132,41 @@ def audit_slides(content: dict) -> list[str]:
     return probs
 
 
+_QUIZ_TYPES = {"mcq", "maq", "true_false"}
+_LETTERS = {"A", "B", "C", "D"}
+
+
 def audit_quiz(content: dict) -> list[str]:
     probs: list[str] = []
+    # New schema: questions[] with mcq/maq/true_false items.
+    qs = content.get("questions")
+    if qs is not None and not isinstance(qs, list):
+        return ["CRASH questions not a list"]
+    for i, q in enumerate(qs or []):
+        if not isinstance(q, dict):
+            probs.append(f"CRASH questions[{i}] is {type(q).__name__}")
+            continue
+        qt, ans, opts = q.get("type"), q.get("answer"), q.get("options")
+        if qt not in _QUIZ_TYPES:
+            probs.append(f"questions[{i}] type={qt!r}")
+            continue
+        if qt == "true_false":
+            if opts not in (None, []):
+                probs.append(f"questions[{i}] true_false has options")
+            if ans not in ("True", "False"):
+                probs.append(f"questions[{i}] answer={ans!r}")
+            continue
+        if not isinstance(opts, list) or len(opts) != 4:
+            probs.append(f"questions[{i}] options={opts if not isinstance(opts, list) else len(opts)}")
+        if qt == "mcq" and ans not in _LETTERS:
+            probs.append(f"questions[{i}] answer={ans!r}")
+        if qt == "maq" and (not isinstance(ans, list) or not 2 <= len(ans) <= 3
+                            or not set(ans) <= _LETTERS):
+            probs.append(f"questions[{i}] maq answer={ans!r}")
+    if qs:
+        return probs  # new-schema artifact — legacy keys don't apply
+
+    # Legacy schema: mcq[] + short_answer[] (pre-MAQ artifacts still in the DB).
     mcq = content.get("mcq")
     if mcq is not None and not isinstance(mcq, list):
         return ["CRASH mcq not a list"]

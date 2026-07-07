@@ -54,6 +54,7 @@ export interface GenJobArtifact {
   is_stale?: boolean;
   artifact_version?: string | null;
   cost_usd?: number;
+  error?: string | null;               // failure reason (e.g. notes-completeness gate)
 }
 
 export interface DashboardRecentCourse {

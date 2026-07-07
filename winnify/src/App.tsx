@@ -70,6 +70,8 @@ import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
 import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
 import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
 import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
+import WinTeachCheatSheet from './pages/winteach/WinTeachCheatSheet';
+import WinTeachTopicArtifact from './pages/winteach/WinTeachTopicArtifact';
 import StudentCourses from './pages/student/StudentCourses';
 import StudentCourseTopics from './pages/student/StudentCourseTopics';
 import StudentRevision from './pages/student/StudentRevision';
@@ -174,6 +176,8 @@ export default function App() {
             <Route path="courses/:id/topic/:topicId/notes/:conceptId" element={<WinTeachConceptReader type="student_notes" />} />
             <Route path="courses/:id/topic/:topicId/slides/:conceptId" element={<WinTeachConceptReader type="slides" />} />
             <Route path="courses/:id/topic/:topicId/quiz/:conceptId" element={<WinTeachConceptReader type="quiz" />} />
+            <Route path="courses/:id/topic/:topicId/cheatsheet" element={<WinTeachCheatSheet />} />
+            <Route path="courses/:id/topic/:topicId/artifact/:type" element={<WinTeachTopicArtifact />} />
             <Route path="generation" element={<WinTeachGeneration />} />
             <Route path="materials" element={<WinTeachMaterialsPage />} />
             <Route path="library" element={<WinTeachLibrary />} />

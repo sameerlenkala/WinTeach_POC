@@ -34,7 +34,7 @@ const CONCEPT_ICON: Record<ConceptArtType, React.ReactNode> = {
   student_notes: <INotes />, slides: <IImage />, quiz: <IQuiz />,
 };
 const TOPIC_LABEL: Record<TopicArtType, string> = {
-  summary: 'Summary / Cheat-sheet', assignment: 'Assignment', faculty_diagnostic: 'Faculty Diagnostic', flashcards: 'Flashcards',
+  summary: 'Summary / Cheat-sheet', assignment: 'Assignment', faculty_diagnostic: 'Faculty Diagnostic', flashcards: 'Interview Prep',
 };
 const TOPIC_ICON: Record<TopicArtType, React.ReactNode> = {
   summary: <IText />, assignment: <IAssess />, faculty_diagnostic: <IFile />, flashcards: <IFlash />,
@@ -102,88 +102,6 @@ function statusBadge(s?: ArtStatus, approved?: boolean) {
   return <Badge variant="muted">Not generated</Badge>;
 }
 
-/* ── artifact content renderers ──────────────────────────────────────────── */
-
-function Field({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: W.brandTintFg, marginBottom: 5 }}>{title}</div>
-      <div style={{ fontSize: 13.5, lineHeight: 1.65, color: W.text }}>{children}</div>
-    </div>
-  );
-}
-
-function TopicArtifactBody({ type, content }: { type: TopicArtType; content: any }) {
-  if (!content) return null;
-  if (content.placeholder) return (
-    <div style={{ fontSize: 13, color: W.text2, padding: '10px 0' }}>{content.note ?? 'Not generated yet.'}</div>
-  );
-  if (type === 'flashcards') return (
-    <Field title={`${(content.cards ?? []).length} cards`}>
-      {(content.cards ?? []).map((c: any, i: number) => (
-        <div key={i} style={{ padding: '8px 12px', background: W.surfaceMuted, borderRadius: 8, marginBottom: 6 }}>
-          <b>{c.front}</b> <span style={{ color: W.text3 }}>→</span> {c.back}
-          {c.concept_ref && <span style={{ fontSize: 10.5, color: W.text3, marginLeft: 8 }}>({c.concept_ref})</span>}
-        </div>
-      ))}
-    </Field>
-  );
-  if (type === 'summary') return (
-    <>
-      <Field title="Key concepts">{(content.key_concepts ?? []).map((k: any, i: number) => <div key={i} style={{ marginBottom: 4 }}><b>{k.concept}</b>: {k.one_liner}</div>)}</Field>
-      {(content.formulas_or_syntax ?? []).length > 0 && (
-        <Field title="Formulas / syntax">{content.formulas_or_syntax.map((f: string, i: number) => (
-          <div key={i} style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12.5, padding: '4px 10px', background: W.surfaceMuted, borderRadius: 6, marginBottom: 4 }}>{f}</div>
-        ))}</Field>
-      )}
-      {(content.common_mistakes ?? []).length > 0 && (
-        <Field title="Common mistakes">{content.common_mistakes.map((m: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {m}</div>)}</Field>
-      )}
-      {(content.exam_pointers ?? []).length > 0 && (
-        <Field title="Exam pointers">{content.exam_pointers.map((p: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {p}</div>)}</Field>
-      )}
-    </>
-  );
-  if (type === 'assignment') return (
-    <>
-      <Field title="Tasks">{(content.tasks ?? []).map((t: any, i: number) => (
-        <div key={i} style={{ marginBottom: 8 }}>
-          <b>[{t.marks}m{t.bloom_level ? ` · ${t.bloom_level}` : ''}]</b> {t.prompt}
-        </div>
-      ))}</Field>
-      <Field title="Rubric">{(content.rubric ?? []).map((r: any, i: number) => (
-        <div key={i} style={{ marginBottom: 4 }}><b>{r.criterion}</b> ({r.points} pts){r.descriptor ? ` — ${r.descriptor}` : ''}</div>
-      ))}</Field>
-      {content.model_solution && (
-        <details style={{ marginBottom: 14 }}>
-          <summary style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: W.brandTintFg, cursor: 'pointer' }}>Model solution (instructor copy)</summary>
-          <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text, marginTop: 6 }}>{content.model_solution}</div>
-        </details>
-      )}
-      {content.integrity_policy && <Field title="Integrity policy">{content.integrity_policy}</Field>}
-    </>
-  );
-  // faculty_diagnostic
-  return (
-    <>
-      {(content.dimensions ?? []).map((d: any, i: number) => (
-        <Field key={i} title={String(d.name ?? '').replace(/_/g, ' ')}>
-          {(d.items ?? []).map((it: any, j: number) => (
-            <div key={j} style={{ padding: '8px 12px', background: W.surfaceMuted, borderRadius: 8, marginBottom: 6 }}>
-              <div style={{ fontWeight: 600, marginBottom: 3 }}>{it.prompt}</div>
-              {it.what_good_looks_like && <div style={{ fontSize: 12.5, color: W.text2, marginBottom: 3 }}><b>Good looks like:</b> {it.what_good_looks_like}</div>}
-              {it.remediation && <div style={{ fontSize: 12.5, color: W.text2 }}><b>If unsure:</b> {it.remediation}</div>}
-            </div>
-          ))}
-        </Field>
-      ))}
-      {(content.gap_map ?? []).length > 0 && (
-        <Field title="Gap map">{content.gap_map.map((g: string, i: number) => <div key={i} style={{ marginBottom: 3 }}>• {g}</div>)}</Field>
-      )}
-    </>
-  );
-}
-
 /* ── plain-language names for code-validator checks ──────────────────────── */
 
 const CHECK_FRIENDLY: Record<string, string> = {
@@ -227,25 +145,6 @@ function PipelineStage({ icon, label, count, state, last }: {
       </div>
       {!last && <div style={{ flex: 1, height: 2, borderRadius: 2, background: state === 'done' ? 'color-mix(in oklab, var(--status-green) 40%, transparent)' : W.border, minWidth: 16, margin: '0 10px' }} />}
     </>
-  );
-}
-
-/* ── artifact viewer modal (lazy content) ────────────────────────────────── */
-
-function ViewerModal({ title, subtitle, loading, error, onRetry, children, onClose }: {
-  title: string; subtitle?: string; loading: boolean; error?: boolean; onRetry?: () => void; children: React.ReactNode; onClose: () => void;
-}) {
-  return (
-    <Modal onClose={onClose} title={title} subtitle={subtitle} maxWidth={720}>
-      {error
-        ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.redFg, fontSize: 13.5, padding: '18px 0' }}>
-            Failed to load content.
-            {onRetry && <Btn sm onClick={onRetry}>Retry</Btn>}
-          </div>
-        : loading
-          ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '18px 0' }}><Spin /> Loading content…</div>
-          : children}
-    </Modal>
   );
 }
 
@@ -516,19 +415,11 @@ function ConceptCard({ index, job, concept, edit, onEdit, stateFor, onChanged, o
 
 /* ── topic artifact card ─────────────────────────────────────────────────── */
 
-function TopicArtCard({ jobId, topicTitle, type, artifact, onChanged }: {
-  jobId: string; topicTitle: string; type: TopicArtType; artifact?: { review_status: string; cost_usd?: number }; onChanged: () => void;
+function TopicArtCard({ jobId, type, artifact, onChanged, onOpenPage }: {
+  jobId: string; type: TopicArtType; artifact?: { review_status: string; cost_usd?: number; error?: string | null }; onChanged: () => void; onOpenPage: () => void;
 }) {
-  const [content, setContent] = useState<any>(null);
-  const [open, setOpen] = useState(false);
-  const [loadErr, setLoadErr] = useState(false);
   const status = artifact?.review_status;
-  const gen = async () => { await generationApi.genTopicArtifact(jobId, type); setContent(null); onChanged(); };
-  const view = async () => {
-    setOpen(true);
-    setLoadErr(false);
-    if (!content) { try { setContent((await generationApi.getArtifact(jobId, type as ArtifactType)).content); } catch { setLoadErr(true); } }
-  };
+  const gen = async () => { await generationApi.genTopicArtifact(jobId, type); onChanged(); };
   return (
     <div style={{ border: `1.5px solid ${W.border}`, borderRadius: 10, padding: '13px 14px', background: 'var(--card)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -540,17 +431,15 @@ function TopicArtCard({ jobId, topicTitle, type, artifact, onChanged }: {
           {status === 'ready' ? <Badge variant="info">Ready</Badge> : status === 'generating' ? <Badge variant="orange">Generating…</Badge> : status === 'error' ? <Badge variant="red">Error</Badge> : <Badge variant="muted">Not generated</Badge>}
         </div>
       </div>
+      {status === 'error' && artifact?.error && (
+        <div style={{ fontSize: 11.5, color: W.redFg, marginTop: 6 }}>{artifact.error}</div>
+      )}
       <div style={{ display: 'flex', gap: 6, marginTop: 10, alignItems: 'center' }}>
         {(!status || status === 'error') && <Btn sm variant="primary" onClick={gen}>Generate</Btn>}
-        {status === 'ready' && <><Btn sm onClick={view}>View</Btn><Btn sm variant="ghost" onClick={gen}>Regenerate</Btn></>}
+        {status === 'ready' && <><Btn sm onClick={onOpenPage}>View</Btn><Btn sm variant="ghost" onClick={gen}>Regenerate</Btn></>}
         {status === 'generating' && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: W.text2 }}><Spin /> ~20–40s</span>}
         {(artifact?.cost_usd ?? 0) > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{usd(artifact?.cost_usd)}</span>}
       </div>
-      {open && (
-        <ViewerModal title={TOPIC_LABEL[type]} subtitle={topicTitle} loading={!content} error={loadErr} onRetry={view} onClose={() => setOpen(false)}>
-          <TopicArtifactBody type={type} content={content} />
-        </ViewerModal>
-      )}
     </div>
   );
 }
@@ -1242,7 +1131,10 @@ export default function WinTeachGenerate() {
               </div>
               {!anyNotesReady && <div style={{ fontSize: 12.5, color: W.text3, marginBottom: 10 }}>Generate at least one subtopic's Notes first.</div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, opacity: anyNotesReady ? 1 : 0.55, pointerEvents: anyNotesReady ? 'auto' : 'none' }}>
-                {TOPIC_ART_TYPES.map(t => <TopicArtCard key={t} jobId={job!.id} topicTitle={topicTitle} type={t} artifact={topicArt(t)} onChanged={refetch} />)}
+                {TOPIC_ART_TYPES.map(t => <TopicArtCard key={t} jobId={job!.id} type={t} artifact={topicArt(t)} onChanged={refetch}
+                  onOpenPage={() => navigate(t === 'summary'
+                    ? `/winteach/courses/${courseId}/topic/${topicId}/cheatsheet`
+                    : `/winteach/courses/${courseId}/topic/${topicId}/artifact/${t}`)} />)}
               </div>
             </>
           )}

@@ -187,7 +187,7 @@ function splitMath(text: string): MathSeg[] {
 // Typesets LaTeX wrapped in $…$ / $$…$$ via lazily-loaded KaTeX; anything else
 // (including content generated before the LaTeX prompt rule) passes through as
 // plain text, and invalid LaTeX falls back to the raw delimited source.
-function MathText({ text }: { text: any }) {
+export function MathText({ text }: { text: any }) {
   const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
   const hasMath = /\$[^$]/.test(str);
   const [nodes, setNodes] = useState<React.ReactNode[] | null>(null);
@@ -479,6 +479,97 @@ function QuizMCQ({ q, i, onAnswer }: { q: any; i: number; onAnswer?: (correct: b
         <div style={{ marginLeft: 28, marginTop: 10 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, fontFamily: W.fontDisplay, color: correct ? W.greenFg : W.redFg }}>
             {correct ? 'Correct!' : `Not quite — the answer is ${LETTERS[q.answer_index] ?? '?'}.`}
+          </div>
+          {q.explanation && <div style={{ marginTop: 4, fontSize: 12.5, lineHeight: 1.6, color: W.text2 }}><MathText text={q.explanation} /></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// New-schema quiz item — questions[] with type mcq (single pick), maq
+// (multi-select, graded as a set on "Check answer") or true_false. Options
+// arrive letter-prefixed ("A) ..."); the prefix is stripped because the letter
+// chip renders separately, matching the legacy MCQ card.
+const QUIZ_DIFF_BADGE: Record<string, 'green' | 'orange' | 'red'> = { easy: 'green', medium: 'orange', hard: 'red' };
+
+function QuizQuestion({ q, i, onAnswer }: { q: any; i: number; onAnswer?: (correct: boolean) => void }) {
+  const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const isMaq = q.type === 'maq';
+  const isTf = q.type === 'true_false';
+  const options: string[] = isTf ? ['True', 'False']
+    : (q.options ?? []).map((o: string) => String(o).replace(/^[A-F]\)\s*/, ''));
+  // Correct option indexes, from letters ("B" / ["A","C"]) or "True"/"False".
+  const correctSet = new Set<number>(
+    isTf ? [String(q.answer).toLowerCase() === 'true' ? 0 : 1]
+      : (Array.isArray(q.answer) ? q.answer : [q.answer])
+        .map((l: any) => LETTERS.indexOf(String(l).trim().toUpperCase()))
+        .filter((n: number) => n >= 0));
+  const [picked, setPicked] = useState<number[]>([]);
+  const [answered, setAnswered] = useState(false);
+  useEffect(() => { setPicked([]); setAnswered(false); }, [q]);
+  const correct = answered && picked.length === correctSet.size && picked.every(p => correctSet.has(p));
+  const answerLabel = isTf ? String(q.answer)
+    : [...correctSet].sort((a, b) => a - b).map(n => LETTERS[n]).join(', ');
+  const settle = (sel: number[]) => {
+    setAnswered(true);
+    onAnswer?.(sel.length === correctSet.size && sel.every(p => correctSet.has(p)));
+  };
+  const pick = (oi: number) => {
+    if (answered) return;
+    if (isMaq) { setPicked(p => p.includes(oi) ? p.filter(x => x !== oi) : [...p, oi]); return; }
+    setPicked([oi]); settle([oi]);
+  };
+  return (
+    <div style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>Q{i + 1}</span>
+        <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5, flex: 1 }}><MathText text={q.question} /></div>
+        {q.difficulty && <Badge variant={QUIZ_DIFF_BADGE[q.difficulty] ?? 'muted'}>{q.difficulty}</Badge>}
+        {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 28 }}>
+        {options.map((o: string, oi: number) => {
+          const isAnswer = correctSet.has(oi);
+          const isPicked = picked.includes(oi);
+          const bg = !answered ? (isPicked ? 'var(--tint-brand-bg)' : 'transparent')
+            : isAnswer ? 'color-mix(in oklab, var(--status-green) 10%, transparent)'
+              : isPicked ? 'color-mix(in oklab, var(--status-red) 8%, transparent)' : 'transparent';
+          const color = !answered ? W.text2 : isAnswer ? W.greenFg : isPicked ? W.redFg : W.text3;
+          return (
+            <button key={oi} disabled={answered} onClick={() => pick(oi)} style={{
+              display: 'flex', gap: 8, alignItems: 'baseline', padding: '6px 10px', borderRadius: 7,
+              fontSize: 13.5, lineHeight: 1.5, textAlign: 'left', width: '100%',
+              border: `1px solid ${!answered ? W.border : 'transparent'}`,
+              background: bg, color, fontWeight: (answered && (isAnswer || isPicked)) || (!answered && isPicked) ? 600 : 400,
+              cursor: answered ? 'default' : 'pointer', fontFamily: W.fontSans,
+            }}>
+              {isMaq && <span style={{ flexShrink: 0, fontSize: 12 }}>{isPicked ? '☑' : '☐'}</span>}
+              {!isTf && <span style={{ fontWeight: 600, flexShrink: 0 }}>{LETTERS[oi] ?? oi + 1}.</span>}
+              <span style={{ flex: 1 }}><MathText text={o} /></span>
+              {answered && isAnswer && <span style={{ fontSize: 11, flexShrink: 0 }}>✓</span>}
+              {answered && isPicked && !isAnswer && <span style={{ fontSize: 11, flexShrink: 0 }}>✗</span>}
+            </button>
+          );
+        })}
+      </div>
+      {isMaq && !answered && (
+        <div style={{ marginLeft: 28, marginTop: 10 }}>
+          <button style={{ ...stepBtn, opacity: picked.length ? 1 : 0.5 }} disabled={!picked.length}
+            onClick={() => settle(picked)}>Check answer</button>
+        </div>
+      )}
+      {!answered && q.hint && (
+        <div style={{ marginLeft: 28 }}>
+          <Reveal label="Show hint">
+            <div style={{ fontSize: 12.5, lineHeight: 1.6, color: W.text2, fontStyle: 'italic' }}>💡 <MathText text={q.hint} /></div>
+          </Reveal>
+        </div>
+      )}
+      {answered && (
+        <div style={{ marginLeft: 28, marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, fontFamily: W.fontDisplay, color: correct ? W.greenFg : W.redFg }}>
+            {correct ? 'Correct!' : `Not quite — the answer is ${answerLabel}.`}
           </div>
           {q.explanation && <div style={{ marginTop: 4, fontSize: 12.5, lineHeight: 1.6, color: W.text2 }}><MathText text={q.explanation} /></div>}
         </div>
@@ -1126,7 +1217,7 @@ function SlideVisual({ v }: { v: any }) {
   return null;
 }
 
-function SlideBullets({ items, small, light }: { items: string[]; small?: boolean; light?: boolean }) {
+function SlideBullets({ items, small, light, big }: { items: string[]; small?: boolean; light?: boolean; big?: boolean }) {
   if (!items.length) return null;
   // Consecutive "A) … D) …" bullets are MCQ options — render them as a compact
   // 2-column grid so quiz slides fit their 16:9 face.
@@ -1137,13 +1228,14 @@ function SlideBullets({ items, small, light }: { items: string[]; small?: boolea
     if (last && last.options === isOpt) last.items.push(b);
     else groups.push({ options: isOpt, items: [b] });
   }
+  const bulletFs = big ? 20 : small ? 12.5 : 15.5;   // present mode scales text up
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: small ? 6 : 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: big ? 15 : small ? 6 : 10 }}>
       {groups.map((g, gi) => g.options ? (
-        <div key={gi} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px 14px', paddingLeft: 16 }}>
+        <div key={gi} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: big ? '10px 18px' : '6px 14px', paddingLeft: 16 }}>
           {g.items.map((b, i) => (
             <div key={i} style={{
-              fontSize: small ? 12 : 13.5, lineHeight: 1.45, padding: '6px 12px', borderRadius: 8,
+              fontSize: big ? 16 : small ? 12 : 13.5, lineHeight: 1.45, padding: '6px 12px', borderRadius: 8,
               border: `1px solid ${light ? 'rgba(255,255,255,.3)' : W.border}`,
               background: light ? 'rgba(255,255,255,.08)' : W.surfaceMuted,
               color: light ? 'rgba(255,255,255,.92)' : W.text2,
@@ -1153,12 +1245,12 @@ function SlideBullets({ items, small, light }: { items: string[]; small?: boolea
           ))}
         </div>
       ) : g.items.map((b, i) => (
-        <div key={`${gi}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+        <div key={`${gi}-${i}`} style={{ display: 'flex', gap: big ? 13 : 10, alignItems: 'baseline' }}>
           <span style={{
-            width: 6, height: 6, borderRadius: 2, flexShrink: 0, transform: 'translateY(-2px)',
+            width: big ? 8 : 6, height: big ? 8 : 6, borderRadius: 2, flexShrink: 0, transform: 'translateY(-2px)',
             background: light ? 'rgba(255,255,255,.75)' : 'var(--brand)',
           }} />
-          <span style={{ fontSize: small ? 12.5 : 15.5, lineHeight: 1.5, color: light ? 'rgba(255,255,255,.92)' : W.text2 }}>
+          <span style={{ fontSize: bulletFs, lineHeight: 1.5, color: light ? 'rgba(255,255,255,.92)' : W.text2 }}>
             <RichText inline text={b} />
           </span>
         </div>
@@ -1175,7 +1267,7 @@ const ROLE_ACCENT: Record<string, string> = {
   diagram: 'var(--tint-blue-fg)', complexity: 'var(--tint-blue-fg)',
 };
 
-function SlideCard({ s, index, total }: { s: any; index: number; total: number }) {
+function SlideCard({ s, index, total, present }: { s: any; index: number; total: number; present?: boolean }) {
   const bullets: string[] = (s.body_blocks ?? []).filter((b: any) => typeof b === 'string' && b.trim());
   const hasCode = !!s.code?.content;
   const hasVisual = !!(s.visual && (s.visual.mermaid_code || (s.visual.rows?.length ?? 0) > 0));
@@ -1200,26 +1292,28 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
       }}>
         {!statement && <div style={{ height: 4, flexShrink: 0, background: accent }} />}
 
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '22px 34px 10px' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: present ? '40px 56px 16px' : '22px 34px 10px' }}>
           {s.kicker && (
-            <div style={{ fontFamily: W.fontDisplay, fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: light ? 'rgba(255,255,255,.75)' : 'var(--brand)', marginBottom: 8 }}>
+            <div style={{ fontFamily: W.fontDisplay, fontSize: present ? 15 : 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: light ? 'rgba(255,255,255,.75)' : 'var(--brand)', marginBottom: present ? 14 : 8 }}>
               {s.kicker}
             </div>
           )}
 
           {statement ? (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 27, lineHeight: 1.25, letterSpacing: '-0.02em', color: '#fff', maxWidth: '90%' }}>
+              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: present ? 42 : 27, lineHeight: 1.22, letterSpacing: '-0.02em', color: '#fff', maxWidth: '90%' }}>
                 <RichText inline text={s.title} />
               </div>
-              {s.takeaway && <div style={{ marginTop: 14, fontSize: 14.5, color: 'rgba(255,255,255,.85)', lineHeight: 1.55, maxWidth: '80%' }}><RichText inline text={s.takeaway} /></div>}
+              {s.takeaway && <div style={{ marginTop: present ? 22 : 14, fontSize: present ? 20 : 14.5, color: 'rgba(255,255,255,.85)', lineHeight: 1.55, maxWidth: '80%' }}><RichText inline text={s.takeaway} /></div>}
             </div>
           ) : (
             <>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 19.5, lineHeight: 1.3, letterSpacing: '-0.01em', color: dark ? '#e7e9f5' : W.text, marginBottom: 13 }}>
+              <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: present ? 30 : 19.5, lineHeight: 1.28, letterSpacing: '-0.01em', color: dark ? '#e7e9f5' : W.text, marginBottom: present ? 22 : 13 }}>
                 <RichText inline text={s.title} />
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Present mode centres sparse content in the tall 16:9 face so it
+                  doesn't hug the top and leave a large void below. */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', justifyContent: present ? 'center' : 'flex-start', gap: present ? 16 : 10 }}>
                 {layout === 'myth_reality' ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, flex: 1 }}>
                     <div style={{ borderRadius: 10, padding: '13px 16px', background: W.redBg, borderTop: '3px solid var(--status-red)' }}>
@@ -1274,20 +1368,20 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
                   </div>
                 ) : layout === 'definition' && s.definition_core ? (
                   <>
-                    <div style={{ borderRadius: 10, padding: '14px 18px', background: 'var(--tint-brand-bg)', borderLeft: '4px solid var(--brand)' }}>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--tint-brand-fg)', lineHeight: 1.5 }}><RichText inline text={s.definition_core} /></div>
+                    <div style={{ borderRadius: 10, padding: present ? '18px 24px' : '14px 18px', background: 'var(--tint-brand-bg)', borderLeft: `${present ? 5 : 4}px solid var(--brand)` }}>
+                      <div style={{ fontSize: present ? 22 : 15, fontWeight: 600, color: 'var(--tint-brand-fg)', lineHeight: 1.5 }}><RichText inline text={s.definition_core} /></div>
                     </div>
-                    <SlideBullets items={bullets} small />
+                    <SlideBullets items={bullets} small={!present} big={present} />
                   </>
                 ) : (
-                  <SlideBullets items={bullets} />
+                  <SlideBullets items={bullets} big={present} />
                 )}
                 {s.takeaway && (
-                  <div style={{ marginTop: 'auto', paddingTop: 8, flexShrink: 0, display: 'flex' }}>
+                  <div style={{ marginTop: present ? 20 : 'auto', paddingTop: 8, flexShrink: 0, display: 'flex' }}>
                     <span style={{
-                      display: 'inline-flex', alignItems: 'baseline', gap: 7, padding: '6px 14px', borderRadius: 99,
+                      display: 'inline-flex', alignItems: 'baseline', gap: 7, padding: present ? '8px 18px' : '6px 14px', borderRadius: 99,
                       background: dark ? 'rgba(255,255,255,.12)' : 'var(--tint-brand-bg)',
-                      color: dark ? '#e7e9f5' : 'var(--tint-brand-fg)', fontSize: 12.5, fontWeight: 600, lineHeight: 1.45,
+                      color: dark ? '#e7e9f5' : 'var(--tint-brand-fg)', fontSize: present ? 15.5 : 12.5, fontWeight: 600, lineHeight: 1.45,
                     }}>★ <RichText inline text={s.takeaway} /></span>
                   </div>
                 )}
@@ -1297,9 +1391,9 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
         </div>
 
         {/* footer: role + progress dots */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 34px 13px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: present ? '0 56px 20px' : '0 34px 13px', flexShrink: 0 }}>
           {s.role && (
-            <span style={{ fontFamily: W.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: light ? 'rgba(255,255,255,.6)' : W.text3 }}>
+            <span style={{ fontFamily: W.fontDisplay, fontSize: present ? 12 : 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: light ? 'rgba(255,255,255,.6)' : W.text3 }}>
               {s.role}
             </span>
           )}
@@ -1317,7 +1411,9 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
         </div>
       </div>
 
-      {s.speaker_notes && (
+      {/* In present mode the SlideShow renders speaker notes in its own panel,
+          so the in-card reveal is suppressed to keep the slide face clean. */}
+      {!present && s.speaker_notes && (
         <Reveal label="Speaker notes">
           <div style={{ fontSize: 12.5, lineHeight: 1.65, color: W.text2, padding: '10px 14px', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 8 }}>
             <RichText text={s.speaker_notes} />
@@ -1328,40 +1424,78 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
   );
 }
 
-// Fullscreen presentation overlay — ←/→/Space to navigate, Esc to exit.
+// Fullscreen presentation overlay — ←/→/Space to navigate, N toggles notes,
+// Esc to exit. The slide is sized to FIT the viewport height (not just width),
+// so the 16:9 face never overflows and the page can't bleed through beneath it.
 function SlideShow({ slides, onClose }: { slides: any[]; onClose: () => void }) {
   const [idx, setIdx] = useState(0);
+  const [showNotes, setShowNotes] = useState(false);
   const go = useCallback((d: number) => setIdx(i => Math.max(0, Math.min(slides.length - 1, i + d))), [slides.length]);
+  const notes = slides[idx]?.speaker_notes;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      else if (e.key === 'n' || e.key === 'N') setShowNotes(v => !v);
       else if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [go, onClose]);
+  // Lock body scroll while presenting so nothing behind the overlay can show.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
   const navBtn: React.CSSProperties = {
     width: 38, height: 38, borderRadius: 99, border: '1px solid rgba(255,255,255,.25)',
     background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 17, cursor: 'pointer',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   };
+  const pillBtn: React.CSSProperties = {
+    ...navBtn, width: 'auto', padding: '0 16px', fontSize: 12.5, fontFamily: W.fontDisplay, fontWeight: 600,
+  };
+  // Reserve vertical room for the control bar (+ notes panel when open); the
+  // slide width is clamped so its derived 16:9 height fits what remains. Kept
+  // deliberately modest (≤900px, generous reserve) so the slide reads as a
+  // centred card on a dark stage rather than a wall of whitespace.
+  const reserve = showNotes && notes ? 300 : 200;
+  const slideWidth = `min(900px, 82vw, calc((100vh - ${reserve}px) * 16 / 9))`;
   return createPortal(
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(9,11,20,.93)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 24px',
+      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(9,11,20,.94)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '20px 24px',
     }}>
-      <div style={{ width: 'min(1080px, 94vw)' }} onClick={e => e.stopPropagation()}>
-        <SlideCard s={slides[idx]} index={idx} total={slides.length} />
+      <div style={{ width: slideWidth, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <SlideCard s={slides[idx]} index={idx} total={slides.length} present />
       </div>
-      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18 }}>
+
+      {showNotes && notes && (
+        <div onClick={e => e.stopPropagation()} style={{
+          width: slideWidth, maxHeight: 132, overflowY: 'auto', flexShrink: 0,
+          background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 10,
+          padding: '11px 15px', color: 'rgba(255,255,255,.82)', fontSize: 12.5, lineHeight: 1.6,
+        }}>
+          <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', marginBottom: 5 }}>Speaker notes</div>
+          <RichText text={notes} />
+        </div>
+      )}
+
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button style={{ ...navBtn, opacity: idx === 0 ? 0.35 : 1 }} disabled={idx === 0} onClick={() => go(-1)}>‹</button>
         <span style={{ color: 'rgba(255,255,255,.8)', fontSize: 13, fontVariantNumeric: 'tabular-nums', fontFamily: W.fontDisplay, fontWeight: 600 }}>
           {idx + 1} / {slides.length}
         </span>
         <button style={{ ...navBtn, opacity: idx === slides.length - 1 ? 0.35 : 1 }} disabled={idx === slides.length - 1} onClick={() => go(1)}>›</button>
-        <span style={{ color: 'rgba(255,255,255,.45)', fontSize: 11.5, marginLeft: 10 }}>← → to navigate · Esc to exit</span>
-        <button onClick={onClose} style={{ ...navBtn, width: 'auto', padding: '0 16px', fontSize: 12.5, fontFamily: W.fontDisplay, fontWeight: 600 }}>Exit</button>
+        <button
+          onClick={() => setShowNotes(v => !v)}
+          style={{ ...pillBtn, opacity: notes ? 1 : 0.35, background: showNotes ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.08)' }}
+          disabled={!notes}
+          title={notes ? 'Toggle speaker notes (N)' : 'No speaker notes for this slide'}
+        >Notes</button>
+        <span className="max-md:hidden" style={{ color: 'rgba(255,255,255,.45)', fontSize: 11.5, marginLeft: 4 }}>← → navigate · N notes · Esc exit</span>
+        <button onClick={onClose} style={pillBtn}>Exit</button>
       </div>
     </div>,
     document.body,
@@ -1450,20 +1584,33 @@ function SlidesArticle({ content, autoPresent }: { content: any; autoPresent?: b
 }
 
 function QuizArticle({ content, onScore }: { content: any; onScore?: (score: number, total: number) => void }) {
+  // New schema: questions[] (mcq/maq/true_false). Legacy artifacts still in the
+  // DB carry mcq[] + short_answer[] — both render until those are regenerated.
+  const questions: any[] = content?.questions ?? [];
   const mcq: any[] = content?.mcq ?? [];
   const sa: any[] = content?.short_answer ?? [];
+  const gradedTotal = questions.length || mcq.length;
   const answersRef = useRef<Record<number, boolean>>({});
   const reportedRef = useRef(false);
   useEffect(() => { answersRef.current = {}; reportedRef.current = false; }, [content]);
   const handleAnswer = (i: number, correct: boolean) => {
     answersRef.current[i] = correct;
-    if (!reportedRef.current && onScore && Object.keys(answersRef.current).length === mcq.length) {
+    if (!reportedRef.current && onScore && Object.keys(answersRef.current).length === gradedTotal) {
       reportedRef.current = true;
-      onScore(Object.values(answersRef.current).filter(Boolean).length, mcq.length);
+      onScore(Object.values(answersRef.current).filter(Boolean).length, gradedTotal);
     }
   };
-  if (!mcq.length && !sa.length) return null;
+  if (!questions.length && !mcq.length && !sa.length) return null;
   let n = 0;
+  if (questions.length > 0) {
+    return (
+      <Section n={1} title="Questions">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {questions.map((q: any, i: number) => <QuizQuestion key={i} q={q} i={i} onAnswer={c => handleAnswer(i, c)} />)}
+        </div>
+      </Section>
+    );
+  }
   return (
     <>
       {mcq.length > 0 && (

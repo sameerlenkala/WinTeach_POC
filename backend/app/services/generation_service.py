@@ -2191,8 +2191,10 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
             content["validation"] = {"all_pass": dv.all_pass,
                                      "failures": [c.model_dump() for c in dv.failures]}
         else:
+            from app.schemas import notes_json_schemas as njs  # lazy
             content = _chat_json(client, *p.build_concept_quiz_prompt(unit, ctx, notes),
-                                 temperature=0.4)
+                                 temperature=0.4, schema=njs.CONCEPT_QUIZ_SCHEMA,
+                                 schema_name="concept_quiz")
 
     p_tok, c_tok, cost = meter_read()
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
@@ -2350,15 +2352,27 @@ def generate_topic_artifact(db, job_id, topic_id, artifact_type) -> None:
     course_id = _course_id_for_topic(db, topic_id)
     ctx = _load_topic_context(db, course_id, topic_id)
 
-    # Assemble the approved (else ready) concept notes as the single source.
-    recs = []
-    for c in plan.get("concept_inventory", []) or []:
+    # Topic-level artifacts distill the WHOLE topic — every subtopic's Notes must
+    # be ready, else the artifact silently omits the missing subtopics. Hard-gate:
+    # collect ready notes and the concepts still missing them in one pass.
+    concepts = plan.get("concept_inventory", []) or []
+    if not concepts:
+        _upsert_artifact(db, job_id, topic_id, artifact_type,
+                         {"error": "Generate the Topic Plan and concept Notes first."},
+                         review_status="error")
+        return
+    recs, missing = [], []
+    for c in concepts:
         row = _concept_row(db, topic_id, c.get("concept_id"), "student_notes")
         if row.get("content") and row.get("status") == "ready":
             recs.append({"unit_ref": c.get("concept_id"), **row["content"]})
-    if not recs:
+        else:
+            missing.append(c.get("concept_name") or c.get("concept_id") or "?")
+    if missing:
+        detail = (f"{len(missing)} of {len(concepts)} subtopics still need Notes: "
+                  + ", ".join(missing))
         _upsert_artifact(db, job_id, topic_id, artifact_type,
-                         {"error": "Generate concept Notes first."}, review_status="error")
+                         {"error": detail}, review_status="error")
         return
     notes = assemble_notes(recs, plan, ctx)
 
@@ -2367,7 +2381,16 @@ def generate_topic_artifact(db, job_id, topic_id, artifact_type) -> None:
                 "faculty_diagnostic": p.build_faculty_diagnostic_prompt,
                 "flashcards": p.build_flashcards_prompt}
     meter_reset()
-    content = _chat_json(client, *builders[artifact_type](ctx, plan, notes), temperature=0.5)
+    # Every topic artifact has a strict schema — the summary's tagged panel
+    # union especially, but also the assignment/diagnostic/interview shapes the
+    # renderers rely on.
+    from app.schemas import notes_json_schemas as njs  # lazy
+    schemas = {"summary": njs.CHEATSHEET_SCHEMA, "assignment": njs.ASSIGNMENT_SCHEMA,
+               "faculty_diagnostic": njs.FACULTY_DIAGNOSTIC_SCHEMA,
+               "flashcards": njs.FLASHCARDS_SCHEMA}
+    content = _chat_json(client, *builders[artifact_type](ctx, plan, notes),
+                         temperature=0.5, schema=schemas.get(artifact_type),
+                         schema_name=f"topic_{artifact_type}")
     p_tok, c_tok, cost = meter_read()
     _upsert_artifact(db, job_id, topic_id, artifact_type, content,
                      gate_type="review", review_status="ready",

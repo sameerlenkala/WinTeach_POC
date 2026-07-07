@@ -220,3 +220,105 @@ CRITIC_SCHEMA = _obj({
         "path": _STR, "problem": _STR, "instruction": _STR,
     })),
 })
+
+# ── Topic cheat sheet (summary artifact) ──────────────────────────────────────
+# Panels are a tagged union — one object shape per panel type, discriminated by
+# the single-value "type" enum. "subtopic" is "" for topic-wide panels.
+
+
+def _panel(ptype: str, extra: dict) -> dict:
+    return _obj({"type": _enum(ptype), "subtopic": _STR, "title": _STR, **extra})
+
+
+CHEATSHEET_SCHEMA = _obj({
+    "topic_title": _STR,
+    "panels": _arr({"anyOf": [
+        _panel("definition", {"body": _STR}),
+        _panel("keyterms", {"terms": _arr(_obj({"term": _STR, "def": _STR}))}),
+        _panel("bullets", {"items": _STR_ARR}),
+        _panel("code", {"language": _STR, "code": _STR}),
+        _panel("formula", {"formulas": _arr(_obj({"formula": _STR, "meaning": _STR}))}),
+        _panel("table", {"headers": _STR_ARR, "rows": _arr(_STR_ARR)}),
+        _panel("mistakes", {"items": _arr(_obj({"wrong": _STR, "right": _STR}))}),
+        _panel("steps", {"items": _STR_ARR}),
+    ]}),
+})
+
+# ── Topic assignment (scenario tasks + criterion rubric) ──────────────────────
+
+_INT = {"type": "integer"}
+
+ASSIGNMENT_SCHEMA = _obj({
+    "title": _STR,
+    "total_marks": _INT,
+    "estimated_time_minutes": _INT,
+    "tasks": _arr(_obj({
+        "id": _INT,
+        "title": _STR,
+        "scenario": _STR,
+        "prompt": _STR,
+        "marks": _INT,
+        "bloom_level": _BLOOM,
+        "subtopics": _STR_ARR,
+        "deliverable": _STR,
+        "model_answer_outline": _STR_ARR,
+    })),
+    "rubric": _arr(_obj({"criterion": _STR, "points": _INT, "descriptor": _STR})),
+    "integrity_policy": _STR,
+})
+
+# ── Faculty diagnostic (private pre-teaching self-check) ──────────────────────
+
+FACULTY_DIAGNOSTIC_SCHEMA = _obj({
+    "dimensions": _arr(_obj({
+        "name": _enum("content_mastery", "misconception_awareness",
+                      "pedagogical_readiness", "connection_depth"),
+        "items": _arr(_obj({
+            "probe": _STR,
+            "what_good_looks_like": _STR,
+            "red_flags": _STR,
+            "remediation": _STR,
+            "subtopic": _STR,
+        })),
+    })),
+    "gap_map": _arr(_obj({
+        "subtopic": _STR,
+        "likely_student_struggle": _STR,
+        "classroom_countermeasure": _STR,
+    })),
+})
+
+# ── Topic flashcards (interview Q&A deck) ─────────────────────────────────────
+
+FLASHCARDS_SCHEMA = _obj({
+    "cards": _arr(_obj({
+        "id": _INT,
+        "question": _STR,
+        "answer": _STR,
+        "key_points": _STR_ARR,
+        "difficulty": _enum("basic", "intermediate", "advanced"),
+        "subtopic": _STR,
+        "follow_up": _STR,
+    })),
+})
+
+# ── Concept quiz (mcq / maq / true_false) ─────────────────────────────────────
+# `options` is null for true_false; `answer` is a single letter for mcq, an
+# alphabetically sorted letter array for maq, "True"/"False" for true_false —
+# the anyOf covers both shapes (strict mode forbids optional fields).
+
+CONCEPT_QUIZ_SCHEMA = _obj({
+    "concept_id": _STR,
+    "questions": _arr(_obj({
+        "id": {"type": "integer"},
+        "type": _enum("mcq", "maq", "true_false"),
+        "difficulty": _enum("easy", "medium", "hard"),
+        "bloom_level": _BLOOM,
+        "question": _STR,
+        "options": {"type": ["array", "null"], "items": _STR},
+        "answer": {"anyOf": [_STR, _STR_ARR]},
+        "explanation": _STR,
+        "hint": _STR,
+        "source_ref": _STR,
+    })),
+})

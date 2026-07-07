@@ -137,7 +137,11 @@ def _job_detail(db: Client, job: dict) -> dict:
     topic_id = job["topic_id"]
     artifacts = (
         db.table("artifacts")
-        .select("id,type,review_status,is_stale,artifact_version,cost_usd")
+        # error pulled out of the content JSON so the studio can show WHY a
+        # topic artifact failed (e.g. the notes-completeness gate) without
+        # shipping the whole content blob in the list.
+        .select("id,type,review_status,is_stale,artifact_version,cost_usd,"
+                "error:content->>error")
         .eq("topic_id", topic_id).execute().data or []
     )
     concept_artifacts = (

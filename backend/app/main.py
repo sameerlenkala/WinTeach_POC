@@ -24,7 +24,16 @@ app.add_middleware(
         "http://localhost:5199",
         "http://127.0.0.1:5199",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app|http://10\.128\.\d+\.\d+:\d+",
+    # Vercel previews (https) + any private-LAN IP on any port (http) so phones
+    # and tablets on the same Wi-Fi can reach the dev server. Covers the three
+    # RFC-1918 ranges — 10.x, 172.16–31.x, 192.168.x — plus loopback.
+    allow_origin_regex=(
+        r"https://.*\.vercel\.app"
+        r"|http://(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+        r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+        r"|192\.168\.\d{1,3}\.\d{1,3}"
+        r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d+"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

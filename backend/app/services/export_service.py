@@ -180,8 +180,30 @@ def _quiz_docx(content: dict, name: str) -> bytes:
     doc = Document()
     doc.add_heading(f"{name} — Quiz", level=0)
     letters = "ABCDEF"
+    questions = (content or {}).get("questions") or []
     mcq = (content or {}).get("mcq") or []
     sa = (content or {}).get("short_answer") or []
+
+    if questions:
+        # New schema: questions[] with type mcq/maq/true_false. Options already
+        # carry their "A) " labels; answer is a letter, letter array, or True/False.
+        doc.add_heading("Questions", level=1)
+        for i, q in enumerate(questions, 1):
+            suffix = " (True/False)" if q.get("type") == "true_false" else ""
+            doc.add_paragraph(f"Q{i}. {q.get('question', '')}{suffix}")
+            for o in q.get("options") or []:
+                doc.add_paragraph(f"    {o}")
+        doc.add_page_break()
+        doc.add_heading("Answer key", level=1)
+        for i, q in enumerate(questions, 1):
+            ans = q.get("answer")
+            line = f"Q{i}: {', '.join(map(str, ans)) if isinstance(ans, list) else ans}"
+            if q.get("explanation"):
+                line += f" — {q['explanation']}"
+            doc.add_paragraph(line)
+        buf = io.BytesIO()
+        doc.save(buf)
+        return buf.getvalue()
 
     if mcq:
         doc.add_heading("Multiple choice", level=1)
