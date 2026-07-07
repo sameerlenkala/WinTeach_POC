@@ -296,6 +296,8 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
@@ -329,6 +331,12 @@ input:focus, textarea:focus, select:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Mobile: sidebar hidden — bottom tab bar takes over. (Unlayered rule needed:
+   .ws-shell's display:flex outranks Tailwind's layered max-md:hidden.) */
+@media (max-width: 767px) {
+  .ws-shell { display: none; }
 }
 
 /* Nav scrolls if too many items, logo stays pinned at bottom */

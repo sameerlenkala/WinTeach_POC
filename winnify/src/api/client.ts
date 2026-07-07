@@ -1,4 +1,20 @@
-const BASE = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+// When the app is opened from another device on the LAN (e.g. a phone),
+// a localhost backend URL would point at that device — rewrite it to the
+// host that is serving the frontend (the dev machine).
+export const BACKEND_URL = (() => {
+  const raw = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+  try {
+    const u = new URL(raw);
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    const pageRemote = !['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (local && pageRemote) u.hostname = window.location.hostname;
+    return u.origin;
+  } catch {
+    return raw;
+  }
+})();
+
+const BASE = BACKEND_URL;
 
 function getToken(): string | null {
   return localStorage.getItem('winnify_token');

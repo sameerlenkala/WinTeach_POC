@@ -2,7 +2,7 @@
 // Routes: /winteach/courses/:id/topic/:topicId/{notes|slides|quiz}/:conceptId
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Btn, Badge, Modal } from './WinTeachUI';
@@ -94,7 +94,7 @@ function Section({ n, title, children }: { n?: number; title: string; children: 
         {title}
         {n != null && <span style={{ marginLeft: 'auto', fontFamily: W.fontDisplay, fontSize: 11, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums' }}>{String(n).padStart(2, '0')}</span>}
       </h2>
-      <div style={{ fontSize: 15.5, lineHeight: 1.8, color: W.text2 }}>{children}</div>
+      <div style={{ fontSize: 15.5, lineHeight: 1.8, color: W.text }}>{children}</div>
     </section>
   );
 }
@@ -188,7 +188,7 @@ function splitMath(text: string): MathSeg[] {
 // (including content generated before the LaTeX prompt rule) passes through as
 // plain text, and invalid LaTeX falls back to the raw delimited source.
 function MathText({ text }: { text: any }) {
-  const str = typeof text === 'string' ? text : text == null ? '' : String(text);
+  const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
   const hasMath = /\$[^$]/.test(str);
   const [nodes, setNodes] = useState<React.ReactNode[] | null>(null);
   useEffect(() => {
@@ -268,8 +268,12 @@ const CALLOUT_RE = /^>\s*(tip|warning|key idea|recall|exam tip|note)\s*[:—-]\s
 
 // Block prose: splits on blank lines into paragraphs. `inline` renders a single
 // run (for bullets, titles, one-liners).
+// Models sometimes double-escape newlines inside JSON strings; render them as
+// real breaks instead of literal "\n" glyphs.
+const unescapeNL = (s: string) => s.replace(/\\n/g, '\n');
+
 function RichText({ text, inline }: { text: any; inline?: boolean }) {
-  const str = typeof text === 'string' ? text : text == null ? '' : String(text);
+  const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
   const katex = useKatex(/\$[^$]/.test(str));
   if (!str) return null;
   if (inline) return <>{renderInline(str, katex, 'i')}</>;
@@ -352,8 +356,21 @@ const stepGhostBtn: React.CSSProperties = {
 };
 
 // Long worked examples reveal one step at a time — predict, then advance.
+// Recover step structure from run-on prose: models sometimes squash
+// "Step 1: … Step 2: … Edge Case: …" into a single line. Insert paragraph
+// breaks before inline step markers so the stepped reveal still works.
+function splitInlineSteps(s: string): string {
+  if (/\n\s*\n/.test(s)) return s; // already paragraph-separated
+  return s.replace(
+    /(?!^)\s+(?=(?:\*\*)?(?:Step\s+\d+|Edge\s+Cases?|Diverse\s+Scenario|Observation|Result|Key\s+insight)\s*(?:\*\*)?:)/gi,
+    '\n\n',
+  );
+}
+
 function SteppedParagraphs({ text }: { text: any }) {
-  const str = typeof text === 'string' ? text : text == null ? '' : String(text);
+  // Structured notes emit step arrays; legacy notes emit prose paragraphs.
+  const str = splitInlineSteps(unescapeNL(Array.isArray(text) ? text.filter(Boolean).map(String).join('\n\n')
+    : typeof text === 'string' ? text : text == null ? '' : String(text)));
   const paras = str.split(/\n\s*\n/).filter(p => p.trim());
   const [shown, setShown] = useState(1);
   useEffect(() => { setShown(1); }, [str]);
@@ -373,8 +390,12 @@ function SteppedParagraphs({ text }: { text: any }) {
 }
 
 // Dry-run traces reveal line by line inside the mono block.
-function SteppedTrace({ text }: { text: string }) {
-  const lines = (text ?? '').split('\n');
+function SteppedTrace({ text: raw }: { text: any }) {
+  // Structured notes emit step arrays; legacy notes emit newline-joined prose.
+  // Run-on single-line traces get their inline step markers recovered too.
+  const joined = unescapeNL(Array.isArray(raw) ? raw.filter(Boolean).map(String).join('\n') : (raw ?? ''));
+  const text = joined.includes('\n') ? joined : splitInlineSteps(joined).replace(/\n\n/g, '\n');
+  const lines = text.split('\n');
   const [shown, setShown] = useState(2);
   useEffect(() => { setShown(2); }, [text]);
   const pre = (body: string) => (
@@ -466,10 +487,32 @@ function QuizMCQ({ q, i, onAnswer }: { q: any; i: number; onAnswer?: (correct: b
   );
 }
 
-// Flashcards built from the glossary, key definitions, and recall prompts.
+// Notes fields arrive as prose (legacy), arrays of points, or {core, elaboration}
+// objects (structured schema). PointList renders arrays as clean point lists and
+// falls back to RichText for prose.
+function PointList({ value, ordered }: { value: any; ordered?: boolean }) {
+  if (value == null) return null;
+  if (!Array.isArray(value)) return <RichText text={value} />;
+  const items = value.filter((v: any) => v != null && String(v).trim());
+  if (!items.length) return null;
+  const Tag = (ordered ? 'ol' : 'ul') as 'ol' | 'ul';
+  return (
+    // listStyle set explicitly — Tailwind preflight strips list markers.
+    <Tag style={{ margin: 0, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 7, listStyle: ordered ? 'decimal' : 'disc' }}>
+      {items.map((it: any, i: number) => (
+        <li key={i} style={{ lineHeight: 1.7, display: 'list-item' }}><RichText inline text={String(it)} /></li>
+      ))}
+    </Tag>
+  );
+}
+
+// Flashcards: generated cards first, then glossary/definitions/recall fallbacks.
 function buildFlashcards(content: any): { front: string; back: string }[] {
   const cs = content?.closing?.sections ?? {};
   const cards: { front: string; back: string }[] = [];
+  for (const c of cs.flashcard_section?.cards ?? []) {
+    if (c?.front) cards.push({ front: c.front, back: c.back || '' });
+  }
   for (const t of cs.glossary_section?.terms ?? []) {
     if (t?.term) cards.push({ front: t.term, back: t.simple_explanation || t.formal_definition || '' });
   }
@@ -513,6 +556,29 @@ function FlashcardDeck({ cards }: { cards: { front: string; back: string }[] }) 
       </div>
     </div>
   );
+}
+
+// Fraction of an element scrolled past — drives the outcome checklist ticks.
+function useReadFraction(ref: React.RefObject<HTMLDivElement | null>): number {
+  const [f, setF] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = ref.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const total = rect.height - window.innerHeight;
+        const done = Math.min(Math.max(-rect.top + 80, 0), Math.max(total, 1));
+        setF(total > 60 ? done / total : 0);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => { window.removeEventListener('scroll', onScroll, { capture: true } as any); cancelAnimationFrame(raf); };
+  }, [ref]);
+  return f;
 }
 
 // Thin reading-progress bar pinned to the top of the article surface.
@@ -574,8 +640,8 @@ function SectionNav({ bodyRef, depsKey, extra }: { bodyRef: React.RefObject<HTML
     return extra ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>{extra}</div> : null;
   }
   return (
-    <div style={{
-      position: 'sticky', top: 10, zIndex: 5, display: 'flex', alignItems: 'center', gap: 6,
+    <div className="no-scrollbar" style={{
+      position: 'sticky', top: 58, zIndex: 5, display: 'flex', alignItems: 'center', gap: 6,
       overflowX: 'auto', padding: '8px 10px', marginBottom: 18,
       background: 'color-mix(in oklab, var(--card) 90%, transparent)', backdropFilter: 'blur(8px)',
       border: `1px solid ${W.border}`, borderRadius: 10,
@@ -623,6 +689,8 @@ function VisualBlock({ v }: { v: any }) {
 }
 
 function NotesArticle({ content }: { content: any }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const readFraction = useReadFraction(rootRef);
   const core = content?.core ?? {};
   const opening = content?.opening ?? {};
   const closing = content?.closing ?? {};
@@ -685,7 +753,7 @@ function NotesArticle({ content }: { content: any }) {
   let n = 0;
 
   return (
-    <>
+    <div ref={rootRef}>
       {(metaInfo?.difficulty || metaInfo?.reading_time_minutes || metaInfo?.placement_relevance || metaInfo?.university_importance) && (
         <div style={{ marginBottom: 26 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -735,14 +803,28 @@ function NotesArticle({ content }: { content: any }) {
       )}
       {outcomes.length > 0 && (
         <Section n={++n} title="Learning outcomes">
-          <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>
-            {outcomes.map((o: any, i: number) => (
-              <li key={i} style={{ marginBottom: 6 }}>
-                {o.statement}
-                {o.bloom_level && <span style={{ marginLeft: 8, fontSize: 11, color: W.text3 }}>{o.bloom_level}</span>}
-              </li>
-            ))}
-          </ul>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {outcomes.map((o: any, i: number) => {
+              // Ticks as the reader scrolls past this outcome's share of the note.
+              const done = readFraction >= (i + 1) / (outcomes.length + 1);
+              return (
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{
+                    width: 20, height: 20, borderRadius: 99, flexShrink: 0, marginTop: 1,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, transition: 'background .3s, color .3s',
+                    background: done ? 'var(--tint-teal-bg)' : W.surfaceMuted,
+                    color: done ? 'var(--tint-teal-fg)' : W.text3,
+                    border: `1.5px solid ${done ? 'var(--tint-teal-fg)' : W.border}`,
+                  }}>{done ? '✓' : i + 1}</span>
+                  <span style={{ lineHeight: 1.55, color: done ? W.text2 : W.text }}>
+                    {o.statement}
+                    {o.bloom_level && <span style={{ marginLeft: 8, fontSize: 11, color: W.text3 }}>{o.bloom_level}</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </Section>
       )}
       {def && (
@@ -752,22 +834,37 @@ function NotesArticle({ content }: { content: any }) {
             background: 'color-mix(in oklab, var(--tint-brand-bg) 55%, var(--card))',
             padding: '16px 20px', fontFamily: "Georgia, 'Times New Roman', serif",
             fontSize: 16.5, lineHeight: 1.7, color: W.text,
-          }}><RichText text={def} /></div>
-          {intuition && <div style={{ marginTop: 14 }}><RichText text={intuition} /></div>}
+          }}><RichText text={typeof def === 'object' && !Array.isArray(def) ? def.core : def} /></div>
+          {typeof def === 'object' && !Array.isArray(def) && (def.elaboration?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 12 }}><PointList value={def.elaboration} /></div>
+          )}
+          {intuition && <div style={{ marginTop: 14 }}><PointList value={intuition} /></div>}
         </Section>
       )}
       {(mech || archVisuals.length > 0) && (
         <Section n={++n} title="Architecture & mechanism">
           {vBefore.map((v: any, i: number) => <VisualBlock key={`b${i}`} v={v} />)}
-          {mech && <div style={{ marginTop: vBefore.length ? 14 : 0 }}><RichText text={mech} /></div>}
+          {mech && <div style={{ marginTop: vBefore.length ? 14 : 0 }}><PointList value={mech} /></div>}
           {vAfterMech.map((v: any, i: number) => <VisualBlock key={i} v={v} />)}
           {!worked && vAfterWorkedRaw.map((v: any, i: number) => <VisualBlock key={`w${i}`} v={v} />)}
         </Section>
       )}
       {code?.applicable && code?.content && (
-        <Section n={++n} title={`Code${code.language_or_system ? ` — ${code.language_or_system}` : ''}`}>
+        <Section n={++n} title={`${code.type === 'formal_math' ? 'Formalization' : code.type === 'pseudocode' ? 'Pseudocode' : 'Code'}${code.language_or_system ? ` — ${code.language_or_system}` : ''}`}>
           <CodeBlock code={code.content} language={code.language_or_system} />
-          {code.explanation && <div style={{ marginTop: 12 }}><RichText text={code.explanation} /></div>}
+          {code.sample_output && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontFamily: W.fontDisplay, fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>
+                Output
+              </div>
+              <pre style={{
+                margin: 0, padding: '12px 16px', borderRadius: 8, overflow: 'auto',
+                background: '#0f1117', border: '1px solid #262b3d', color: '#9fe8b8',
+                fontFamily: MONO, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+              }}>{typeof code.sample_output === 'string' ? code.sample_output : JSON.stringify(code.sample_output, null, 1)}</pre>
+            </div>
+          )}
+          {code.explanation && <div style={{ marginTop: 12 }}><PointList value={code.explanation} /></div>}
           {hasGrid && (
             <div style={{ marginTop: 12 }}>
               <DataTable columns={['Best case', 'Average case', 'Worst case', 'Space']}
@@ -818,16 +915,16 @@ function NotesArticle({ content }: { content: any }) {
             {advantages.length > 0 && (
               <div style={{ border: `1px solid ${W.border}`, borderLeft: '3px solid var(--status-green)', borderRadius: 8, padding: '12px 16px', background: W.card }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.greenFg, marginBottom: 6 }}>Advantages</div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
-                  {advantages.map((a: any, i: number) => <li key={i} style={{ marginBottom: 4 }}>{typeof a === 'string' ? a : JSON.stringify(a)}</li>)}
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, listStyle: 'disc' }}>
+                  {advantages.map((a: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof a === 'string' ? a : JSON.stringify(a)}</li>)}
                 </ul>
               </div>
             )}
             {disadvantages.length > 0 && (
               <div style={{ border: `1px solid ${W.border}`, borderLeft: `3px solid ${W.orangeFg}`, borderRadius: 8, padding: '12px 16px', background: W.card }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.orangeFg, marginBottom: 6 }}>Trade-offs</div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
-                  {disadvantages.map((d: any, i: number) => <li key={i} style={{ marginBottom: 4 }}>{typeof d === 'string' ? d : JSON.stringify(d)}</li>)}
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, listStyle: 'disc' }}>
+                  {disadvantages.map((d: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof d === 'string' ? d : JSON.stringify(d)}</li>)}
                 </ul>
               </div>
             )}
@@ -888,6 +985,26 @@ function NotesArticle({ content }: { content: any }) {
                 </div>
               );
             })}
+          </div>
+        </Section>
+      )}
+      {hasPractice && (
+        <Section n={++n} title="Practice questions">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {practiceGroups.map(([label, variant, qs]) => qs.map((q: any, i: number) => (
+              <div key={`${label}${i}`} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                  <Badge variant={variant}>{label}</Badge>
+                  {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5 }}><MathText text={q.question} /></div>
+                {q.answer_explanation && (
+                  <Reveal label="Show answer">
+                    <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text2 }}><MathText text={q.answer_explanation} /></div>
+                  </Reveal>
+                )}
+              </div>
+            )))}
           </div>
         </Section>
       )}
@@ -961,26 +1078,6 @@ function NotesArticle({ content }: { content: any }) {
           </div>
         </Section>
       )}
-      {hasPractice && (
-        <Section n={++n} title="Practice questions">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {practiceGroups.map(([label, variant, qs]) => qs.map((q: any, i: number) => (
-              <div key={`${label}${i}`} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '14px 18px', background: W.card }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-                  <Badge variant={variant}>{label}</Badge>
-                  {q.bloom_level && <Badge variant="muted">{q.bloom_level}</Badge>}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: W.text, lineHeight: 1.5 }}><MathText text={q.question} /></div>
-                {q.answer_explanation && (
-                  <Reveal label="Show answer">
-                    <div style={{ fontSize: 13, lineHeight: 1.65, color: W.text2 }}><MathText text={q.answer_explanation} /></div>
-                  </Reveal>
-                )}
-              </div>
-            )))}
-          </div>
-        </Section>
-      )}
       {hasRelated && (
         <Section n={++n} title="Related topics">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, lineHeight: 1.65 }}>
@@ -991,7 +1088,7 @@ function NotesArticle({ content }: { content: any }) {
           </div>
         </Section>
       )}
-    </>
+    </div>
   );
 }
 
@@ -1010,10 +1107,32 @@ function SlideVisual({ v }: { v: any }) {
 
 function SlideBullets({ items, small, light }: { items: string[]; small?: boolean; light?: boolean }) {
   if (!items.length) return null;
+  // Consecutive "A) … D) …" bullets are MCQ options — render them as a compact
+  // 2-column grid so quiz slides fit their 16:9 face.
+  const groups: Array<{ options: boolean; items: string[] }> = [];
+  for (const b of items) {
+    const isOpt = /^[A-D]\)\s/.test(b.trim());
+    const last = groups[groups.length - 1];
+    if (last && last.options === isOpt) last.items.push(b);
+    else groups.push({ options: isOpt, items: [b] });
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: small ? 6 : 10 }}>
-      {items.map((b, i) => (
-        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+      {groups.map((g, gi) => g.options ? (
+        <div key={gi} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px 14px', paddingLeft: 16 }}>
+          {g.items.map((b, i) => (
+            <div key={i} style={{
+              fontSize: small ? 12 : 13.5, lineHeight: 1.45, padding: '6px 12px', borderRadius: 8,
+              border: `1px solid ${light ? 'rgba(255,255,255,.3)' : W.border}`,
+              background: light ? 'rgba(255,255,255,.08)' : W.surfaceMuted,
+              color: light ? 'rgba(255,255,255,.92)' : W.text2,
+            }}>
+              <RichText inline text={b} />
+            </div>
+          ))}
+        </div>
+      ) : g.items.map((b, i) => (
+        <div key={`${gi}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
           <span style={{
             width: 6, height: 6, borderRadius: 2, flexShrink: 0, transform: 'translateY(-2px)',
             background: light ? 'rgba(255,255,255,.75)' : 'var(--brand)',
@@ -1022,7 +1141,7 @@ function SlideBullets({ items, small, light }: { items: string[]; small?: boolea
             <RichText inline text={b} />
           </span>
         </div>
-      ))}
+      )))}
     </div>
   );
 }
@@ -1101,6 +1220,42 @@ function SlideCard({ s, index, total }: { s: any; index: number; total: number }
                 ) : layout === 'visual' && hasVisual ? (
                   <>
                     <SlideVisual v={s.visual} />
+                    <SlideBullets items={bullets} small />
+                  </>
+                ) : layout === 'two_column' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, flex: 1 }}>
+                    <div style={{ borderRadius: 10, padding: '13px 16px', background: W.greenBg, borderTop: '3px solid var(--status-green)' }}>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: W.greenFg, marginBottom: 6 }}>{s.left_heading ?? 'Advantages'}</div>
+                      <SlideBullets items={s.left_bullets ?? []} small />
+                    </div>
+                    <div style={{ borderRadius: 10, padding: '13px 16px', background: W.redBg, borderTop: '3px solid var(--status-red)' }}>
+                      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: W.redFg, marginBottom: 6 }}>{s.right_heading ?? 'Limitations'}</div>
+                      <SlideBullets items={s.right_bullets ?? []} small />
+                    </div>
+                  </div>
+                ) : layout === 'headed_bullets' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(s.sections ?? []).map((sec: any, si: number) => (
+                      <div key={si}>
+                        <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 6 }}>{sec.heading}</div>
+                        <SlideBullets items={sec.bullets ?? []} small />
+                      </div>
+                    ))}
+                  </div>
+                ) : layout === 'terminology' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 8 }}>
+                    {(s.terms ?? []).map((t: any, ti: number) => (
+                      <div key={ti} style={{ borderRadius: 8, padding: '8px 12px', background: W.surfaceMuted, border: `1px solid ${W.border}` }}>
+                        <span style={{ fontWeight: 700, fontSize: 12.5, color: W.text }}><RichText inline text={t.term} /></span>
+                        <div style={{ fontSize: 12, color: W.text2, lineHeight: 1.5, marginTop: 2 }}><RichText inline text={t.definition} /></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : layout === 'definition' && s.definition_core ? (
+                  <>
+                    <div style={{ borderRadius: 10, padding: '14px 18px', background: 'var(--tint-brand-bg)', borderLeft: '4px solid var(--brand)' }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--tint-brand-fg)', lineHeight: 1.5 }}><RichText inline text={s.definition_core} /></div>
+                    </div>
                     <SlideBullets items={bullets} small />
                   </>
                 ) : (
@@ -1192,9 +1347,72 @@ function SlideShow({ slides, onClose }: { slides: any[]; onClose: () => void }) 
   );
 }
 
-function SlidesArticle({ content }: { content: any }) {
+// Student lesson flow: after the notes, the study rail — slide pack (present
+// mode), the untimed quiz, and lesson completion (auto on quiz finish, or
+// marked manually). Progression metrics only; no gamification.
+function StudentNextUp({ slidesReady, quizReady, quizScore, completed, onMark, onSlides, onPresent, onQuiz }: {
+  slidesReady: boolean; quizReady: boolean;
+  quizScore: { score: number; total: number } | null;
+  completed: boolean; onMark: () => void;
+  onSlides: () => void; onPresent: () => void; onQuiz: () => void;
+}) {
+  const card: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+    border: `1px solid ${W.border}`, borderRadius: 12, padding: '14px 18px', background: W.card,
+  };
+  const iconTile = (bg: string, glyph: string) => (
+    <span style={{ width: 38, height: 38, borderRadius: 10, background: bg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{glyph}</span>
+  );
+  return (
+    <div style={{ borderTop: `1px solid ${W.border}`, marginTop: 12, paddingTop: 22, display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 26 }}>
+      <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11.5, letterSpacing: '.07em', textTransform: 'uppercase', color: W.text3 }}>
+        Continue this lesson
+      </div>
+      {slidesReady && (
+        <div style={card}>
+          {iconTile('var(--tint-brand-bg)', '🖥️')}
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text }}>Slide pack</div>
+            <div style={{ fontSize: 12.5, color: W.text3 }}>Quick visual run-through of this lesson</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn sm onClick={onSlides}>View slides</Btn>
+            <Btn sm variant="primary" onClick={onPresent}>▶ Present</Btn>
+          </div>
+        </div>
+      )}
+      {quizReady && (
+        <div style={card}>
+          {iconTile('var(--tint-teal-bg)', '❓')}
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text }}>Quiz</div>
+            <div style={{ fontSize: 12.5, color: W.text3 }}>No timer — attempt when you feel ready</div>
+          </div>
+          {quizScore ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--tint-teal-bg)', color: 'var(--tint-teal-fg)', fontSize: 12.5, fontWeight: 600 }}>
+              ✓ Completed · {quizScore.score}/{quizScore.total}
+            </span>
+          ) : (
+            <Btn sm variant="primary" onClick={onQuiz}>Take quiz</Btn>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
+        {completed ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 16px', borderRadius: 99, background: 'var(--tint-teal-bg)', color: 'var(--tint-teal-fg)', fontSize: 13, fontWeight: 600 }}>
+            ✓ Lesson completed
+          </span>
+        ) : (
+          <Btn sm onClick={onMark}>Mark as completed</Btn>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SlidesArticle({ content, autoPresent }: { content: any; autoPresent?: boolean }) {
   const slides: any[] = content?.slides ?? [];
-  const [presenting, setPresenting] = useState(false);
+  const [presenting, setPresenting] = useState(!!autoPresent);
   if (!slides.length) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22, paddingBottom: 24 }}>
@@ -1261,9 +1479,23 @@ const CT_LABEL: Record<string, string> = { P1: 'Conceptual', P2: 'Code', P3: 'Pr
 export default function WinTeachConceptReader({ type, student }: { type: ConceptArtType; student?: boolean }) {
   const navigate = useNavigate();
   const { id: courseId, topicId, conceptId } = useParams();
-  const { data: course } = useCourse(courseId ?? '');
-  const { data: topic } = useTopic(courseId ?? '', topicId ?? '');
+  // Faculty endpoints 403 for students — student mode reads the published-
+  // content course endpoint instead (fetched below).
+  const { data: course } = useCourse(student ? '' : courseId ?? '');
+  const { data: topic } = useTopic(student ? '' : courseId ?? '', topicId ?? '');
+  const [studentCourse, setStudentCourse] = useState<Awaited<ReturnType<typeof studentApi.course>> | null>(null);
+  useEffect(() => {
+    if (!student || !courseId) return;
+    studentApi.course(courseId).then(setStudentCourse).catch(() => {});
+  }, [student, courseId]);
   const meta = READER_META[type];
+  const location = useLocation();
+  const autoPresent = new URLSearchParams(location.search).get('present') === '1';
+  // Lesson completion state — seeded from stored progress, overridden locally
+  // the moment the student completes the quiz or marks the lesson done.
+  const [markedDone, setMarkedDone] = useState(false);
+  const [localQuiz, setLocalQuiz] = useState<{ score: number; total: number } | null>(null);
+  useEffect(() => { setMarkedDone(false); setLocalQuiz(null); }, [conceptId]);
 
   const [job, setJob] = useState<GenJob | null>(null);
   const [plan, setPlan] = useState<any>(null);
@@ -1290,16 +1522,51 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
     if (!root || !content) return;
     const secs = Array.from(root.querySelectorAll('section')) as HTMLElement[];
     if (!secs.length) return;
+    // threshold 0: reveal on the first visible pixel. A ratio threshold hides
+    // tall sections whose visible sliver stays under the ratio — the top
+    // section could sit invisible at page load.
     const io = new IntersectionObserver(entries => {
       entries.forEach(e => { if (e.isIntersecting) (e.target as HTMLElement).classList.add('wt-in'); });
-    }, { threshold: 0.06 });
-    secs.forEach(s => { s.classList.add('wt-reveal'); io.observe(s); });
-    return () => io.disconnect();
+    }, { threshold: 0 });
+    secs.forEach(s => {
+      s.classList.add('wt-reveal');
+      // Already read past (above the viewport): reveal immediately — an
+      // effect re-run must never hide content the reader has seen.
+      if (s.getBoundingClientRect().bottom < 120) s.classList.add('wt-in');
+      io.observe(s);
+    });
+    // Fail-open: if the observer provably never fired (embedded webviews,
+    // jump-scrolls), reveal everything rather than leave sections invisible.
+    // A working observer marks at least the first visible section within ms,
+    // so this is a no-op in healthy browsers and the fade-up is preserved.
+    const failOpen = window.setTimeout(() => {
+      if (!secs.some(s => s.classList.contains('wt-in'))) {
+        secs.forEach(s => s.classList.add('wt-in'));
+      }
+    }, 2500);
+    return () => { io.disconnect(); window.clearTimeout(failOpen); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conceptId, content, type]);
 
-  const courseCode = (course as any)?.code ?? courseId ?? '';
-  const topicTitle = (topic as any)?.title ?? 'Topic';
+  const studentTopic = student
+    ? studentCourse?.units.flatMap(u => u.topics).find(t => t.id === topicId)
+    : undefined;
+  // This student's stored progress for the open concept.
+  const myProgress = student
+    ? (studentCourse?.progress ?? []).filter(p => p.topic_id === topicId && p.concept_id === conceptId)
+    : [];
+  const storedQuiz = myProgress.find(p => p.artifact_type === 'quiz' && p.quiz_score != null);
+  const quizScoreInfo = localQuiz
+    ?? (storedQuiz ? { score: storedQuiz.quiz_score!, total: storedQuiz.quiz_total ?? 0 } : null);
+  const lessonCompleted = markedDone
+    || !!quizScoreInfo
+    || myProgress.some(p => p.artifact_type === 'student_notes' && p.status === 'completed');
+  const courseCode = student
+    ? (studentCourse?.code ?? studentCourse?.name ?? '')
+    : ((course as any)?.code ?? courseId ?? '');
+  const topicTitle = student
+    ? (studentTopic?.title ?? studentCourse?.name ?? 'Topic')
+    : ((topic as any)?.title ?? 'Topic');
   const concepts: any[] = plan?.concept_inventory ?? [];
   const idx = concepts.findIndex(c => c.concept_id === conceptId);
   const concept = idx >= 0 ? concepts[idx] : null;
@@ -1360,6 +1627,23 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
       course_id: courseId, topic_id: topicId, concept_id: conceptId,
       artifact_type: 'quiz', quiz_score: score, quiz_total: total,
     }).catch(() => {});
+    // Finishing the quiz completes the lesson.
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: 'student_notes', status: 'completed',
+    }).catch(() => {});
+    setLocalQuiz({ score, total });
+    setMarkedDone(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student, topicId, conceptId, courseId]);
+
+  const markComplete = useCallback(() => {
+    if (!student || !topicId || !conceptId) return;
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: 'student_notes', status: 'completed',
+    }).catch(() => {});
+    setMarkedDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student, topicId, conceptId, courseId]);
 
@@ -1505,40 +1789,24 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
           }}>
             <ReadProgress targetRef={bodyRef} />
             {/* article header */}
-            <header style={{
-              padding: '28px 40px 20px', borderBottom: `1px solid ${W.border}`,
+            <header className="px-5 pt-5 pb-4 md:px-10 md:pt-7 md:pb-5" style={{
+              borderBottom: `1px solid ${W.border}`,
               background: 'linear-gradient(180deg, color-mix(in oklab, var(--tint-brand-bg) 45%, var(--card)) 0%, var(--card) 100%)',
               borderRadius: '12px 12px 0 0',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: W.text3, marginBottom: 10 }}>
-                <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(`/winteach/courses/${courseId}`)}>{courseCode}</span>
+              {/* Breadcrumb — single truncated line so it never wraps on mobile */}
+              <div style={{
+                fontSize: 11, fontWeight: 600, letterSpacing: '.07em', textTransform: 'uppercase', color: W.text3,
+                marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(student ? `/home/courses/${courseId}` : `/winteach/courses/${courseId}`)}>{courseCode}</span>
                 {' / '}
                 <span style={{ cursor: 'pointer', color: W.text2 }} onClick={() => navigate(studioPath)}>{topicTitle}</span>
                 {' / '}{meta.label}
               </div>
 
-              {/* Mobile concept nav — the Contents rail is hidden below lg, so
-                  small screens get a dropdown to move between subtopics. */}
-              {concepts.length > 1 && (
-                <select
-                  className="lg:hidden"
-                  value={conceptId}
-                  onChange={e => goto(e.target.value)}
-                  aria-label="Jump to subtopic"
-                  style={{
-                    width: '100%', marginBottom: 12, padding: '8px 10px', borderRadius: 8,
-                    border: `1px solid ${W.border}`, background: W.card, color: W.text,
-                    fontFamily: W.fontSans, fontSize: 13,
-                  }}
-                >
-                  {concepts.map((c, i) => (
-                    <option key={c.concept_id} value={c.concept_id}>{i + 1}. {c.concept_name}</option>
-                  ))}
-                </select>
-              )}
-
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                <h1 style={{ flex: '1 1 300px', minWidth: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 27, letterSpacing: '-0.025em', color: W.text, margin: 0, lineHeight: 1.22 }}>
+                <h1 style={{ flex: '1 1 300px', minWidth: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 'clamp(20px, 5.5vw, 27px)', letterSpacing: '-0.025em', color: W.text, margin: 0, lineHeight: 1.25 }}>
                   {concept?.concept_name ?? meta.tab}
                 </h1>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
@@ -1568,21 +1836,31 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                   {approved && <Badge variant="green" dot>{student ? 'Published' : 'Approved'}</Badge>}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                {concept?.primary_content_type && <Badge variant="blue">{concept.primary_content_type} · {CT_LABEL[concept.primary_content_type] ?? ''}</Badge>}
-                {concept?.complexity_tier && <Badge variant="muted">{concept.complexity_tier}</Badge>}
-                {idx >= 0 && <Badge variant="muted">Lesson {idx + 1} of {concepts.length}</Badge>}
-              </div>
+              {/* One quiet meta line instead of a row of pills */}
+              {(concept?.primary_content_type || concept?.complexity_tier || idx >= 0) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {concept?.primary_content_type && <Badge variant="blue">{concept.primary_content_type} · {CT_LABEL[concept.primary_content_type] ?? ''}</Badge>}
+                  <span style={{ fontSize: 12, color: W.text3, fontWeight: 500 }}>
+                    {[
+                      concept?.complexity_tier ? concept.complexity_tier[0].toUpperCase() + concept.complexity_tier.slice(1) : null,
+                      idx >= 0 ? `Lesson ${idx + 1} of ${concepts.length}` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              )}
               {(concept?.concepts_covered?.length ?? 0) > 1 && (
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-                  <span style={{ fontSize: 11.5, color: W.text3 }}>Covers:</span>
+                <div className="no-scrollbar" style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 10, overflowX: 'auto' }}>
+                  <span style={{ fontSize: 11.5, color: W.text3, flexShrink: 0 }}>Covers:</span>
                   {concept.concepts_covered.map((c: string) => (
-                    <span key={c} style={{ fontSize: 11.5, padding: '2px 9px', borderRadius: 99, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', fontWeight: 500 }}>{c}</span>
+                    <span key={c} style={{ flexShrink: 0, whiteSpace: 'nowrap', fontSize: 11.5, padding: '2px 9px', borderRadius: 99, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', fontWeight: 500 }}>{c}</span>
                   ))}
                 </div>
               )}
-              {/* artifact tabs: same concept, other generations */}
-              <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+              {/* artifact tabs: segmented control — full-width thirds on mobile */}
+              <div style={{
+                display: 'flex', gap: 4, marginTop: 14, padding: 3, borderRadius: 10,
+                background: 'var(--surface-muted, var(--border))',
+              }}>
                 {CONCEPT_TYPES.map(t => {
                   const active = t === type;
                   const s = job && conceptId ? artState(job, conceptId, t) : undefined;
@@ -1591,12 +1869,14 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                     <button key={t} disabled={active}
                       onClick={() => conceptId && navigate(readerPath(t, conceptId))}
                       style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7,
-                        border: `1px solid ${active ? 'transparent' : W.border}`,
-                        background: active ? 'var(--tint-brand-bg)' : 'transparent',
+                        flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '7px 12px', borderRadius: 8, border: 'none', minHeight: 34,
+                        background: active ? W.card : 'transparent',
                         color: active ? 'var(--tint-brand-fg)' : W.text2,
+                        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                         fontFamily: W.fontDisplay, fontSize: 12.5, fontWeight: 600,
                         cursor: active ? 'default' : 'pointer',
+                        transition: 'background .15s, color .15s',
                       }}>
                       {READER_META[t].tab}
                       {done && <span style={{ fontSize: 10 }}>✓</span>}
@@ -1604,15 +1884,15 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                   );
                 })}
               </div>
-              {/* concept switcher for small screens — the contents rail is lg-only */}
-              {concepts.length > 0 && (
-                <div className="lg:hidden" style={{ marginTop: 12 }}>
-                  <select value={conceptId ?? ''} onChange={e => goto(e.target.value)} style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 7, border: `1px solid ${W.borderStrong}`,
-                    background: W.card, color: W.text, fontFamily: W.fontSans, fontSize: 13.5,
+              {/* Lesson picker for small screens — the contents rail is lg-only */}
+              {concepts.length > 1 && (
+                <div className="lg:hidden" style={{ marginTop: 10 }}>
+                  <select value={conceptId ?? ''} onChange={e => goto(e.target.value)} aria-label="Jump to lesson" style={{
+                    width: '100%', height: 42, padding: '0 12px', borderRadius: 10, border: `1px solid ${W.borderStrong}`,
+                    background: W.card, color: W.text, fontFamily: W.fontSans, fontSize: 13.5, fontWeight: 500,
                   }}>
                     {concepts.map((c, i) => (
-                      <option key={c.concept_id} value={c.concept_id}>{i + 1}. {c.concept_name}</option>
+                      <option key={c.concept_id} value={c.concept_id}>Lesson {i + 1} · {c.concept_name}</option>
                     ))}
                   </select>
                 </div>
@@ -1620,7 +1900,7 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
             </header>
 
             {/* article body */}
-            <div ref={bodyRef} style={{ padding: '30px 40px 8px', maxWidth: 760 }}>
+            <div ref={bodyRef} className="px-5 pt-6 pb-2 md:px-10 md:pt-8" style={{ maxWidth: 760 }}>
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: W.text2, fontSize: 13.5, padding: '30px 0 60px' }}>
                   <span className="wt-spin" style={{ width: 14, height: 14, border: `2px solid ${W.border}`, borderTopColor: W.brand, borderRadius: '50%', display: 'inline-block' }} />
@@ -1631,9 +1911,21 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                   <>
                     <SectionNav bodyRef={bodyRef} depsKey={`${conceptId}`} />
                     <NotesArticle content={content} />
+                    {student && conceptId && (
+                      <StudentNextUp
+                        slidesReady={!!(job && artState(job, conceptId, 'slides')?.approval_status === 'approved')}
+                        quizReady={!!(job && artState(job, conceptId, 'quiz')?.approval_status === 'approved')}
+                        quizScore={quizScoreInfo}
+                        completed={lessonCompleted}
+                        onMark={markComplete}
+                        onSlides={() => navigate(readerPath('slides', conceptId))}
+                        onPresent={() => navigate(`${readerPath('slides', conceptId)}?present=1`)}
+                        onQuiz={() => navigate(readerPath('quiz', conceptId))}
+                      />
+                    )}
                   </>
                 )
-                  : type === 'slides' ? <SlidesArticle content={content} />
+                  : type === 'slides' ? <SlidesArticle content={content} autoPresent={autoPresent} />
                     : <QuizArticle content={content} onScore={student ? recordQuizScore : undefined} />
               ) : student ? (
                 <div style={{ textAlign: 'center', padding: '48px 0 72px', color: W.text2 }}>
@@ -1709,7 +2001,7 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
                   <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{next.concept_name}</div>
                 </button>
               ) : (
-                <Btn variant="primary" sm onClick={() => navigate(studioPath)}>Finish — back to studio</Btn>
+                <Btn variant="primary" sm onClick={() => navigate(studioPath)}>{student ? 'Back to topic' : 'Finish — back to studio'}</Btn>
               )}
             </footer>
           </article>

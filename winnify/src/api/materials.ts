@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, BACKEND_URL } from './client';
 
 // Reference materials (Phase 1 grounding): faculty-uploaded PDFs/DOCX that
 // generation grounds its prompts in. Attached to a topic explicitly, or to
@@ -64,7 +64,7 @@ export const materialsApi = {
       return api.download(`/materials/${materialId}/download`, filename);
     }
     const token = localStorage.getItem('winnify_token');
-    const base = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+    const base = BACKEND_URL;
     const res = await fetch(`${base}/api/v1/materials/${materialId}/download`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });

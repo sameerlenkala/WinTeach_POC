@@ -5,7 +5,9 @@ import {
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+import { BACKEND_URL } from '@/api/client';
+
+const BACKEND = BACKEND_URL;
 
 export type UserRole = 'student' | 'superadmin' | 'admin' | 'faculty';
 
@@ -54,16 +56,16 @@ async function callBackend(path: string, body: object, token?: string) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [user,    setUser]    = useState<User | null>(null);
+  // Hydrate synchronously so a hard reload on a protected route doesn't
+  // bounce to /signin before the stored session is read.
+  const [user, setUser] = useState<User | null>(() => {
+    try { return JSON.parse(localStorage.getItem('winnify_user') ?? 'null'); }
+    catch { return null; }
+  });
   const [isLoading, setLoading] = useState(true);
 
   // Hydrate on mount
   useEffect(() => {
-    const stored = localStorage.getItem('winnify_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch {}
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setSession(session);
       setLoading(false);

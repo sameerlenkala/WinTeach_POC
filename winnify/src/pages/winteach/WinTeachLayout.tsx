@@ -167,10 +167,10 @@ export function WinTopbar({ title: _title, actions }: { title: string; actions?:
   // page actions stay reachable no matter how far the user has scrolled.
   if (!actions) return null;
   return (
-    <div style={{
+    <div className="px-4 md:px-9" style={{
       position: 'sticky', top: 0, zIndex: 30,
       display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-      gap: 10, padding: '0 36px', height: 52,
+      gap: 10, height: 52,
       borderBottom: '1px solid var(--border)',
       background: 'color-mix(in srgb, var(--app-bg) 88%, transparent)',
       backdropFilter: 'saturate(180%) blur(8px)',
@@ -183,7 +183,7 @@ export function WinTopbar({ title: _title, actions }: { title: string; actions?:
 
 export function WinContent({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: '18px 36px 48px', flex: 1 }}>
+    <div className="px-3 md:px-9" style={{ paddingTop: 18, paddingBottom: 48, flex: 1 }}>
       {children}
     </div>
   );
