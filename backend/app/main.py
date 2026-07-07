@@ -19,6 +19,10 @@ app.add_middleware(
         "http://10.128.22.69:5173",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        # Secondary dev/preview instance (Claude Code preview) — 5173 stays
+        # the primary dev port.
+        "http://localhost:5199",
+        "http://127.0.0.1:5199",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app|http://10\.128\.\d+\.\d+:\d+",
     allow_credentials=True,

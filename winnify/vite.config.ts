@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true, // listen on LAN so phones on the same Wi-Fi can connect
     proxy: {
       // Forward /api/daily/* → https://api.daily.co/v1/*
       // e.g. POST /api/daily/rooms → POST https://api.daily.co/v1/rooms
