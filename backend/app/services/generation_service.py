@@ -38,7 +38,7 @@ from app.schemas.generation import (
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-4o"   # all node calls use response_format = json_schema (strict)
+MODEL = "gpt-4o"   # notes nodes use strict json_schema; other nodes json_object
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -503,21 +503,39 @@ def meter_read() -> tuple[int, int, float]:
     return p, c, ct.usd_cost(p, c)
 
 
-def _chat_json(client: Any, system: str, user: str, temperature: float = 0.4) -> dict:
-    """One JSON-mode chat call. (Target: json_schema strict; POC uses json_object,
-    with all semantics checked by the code validators — §7.) Token usage is
-    accumulated into the thread-local meter for cost tracking."""
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
-        temperature=temperature,
-        response_format={"type": "json_object"},
-    )
-    u = getattr(resp, "usage", None)
-    if u is not None:
-        _meter_add(getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
-    return json.loads(resp.choices[0].message.content or "{}")
+def _chat_json(client: Any, system: str, user: str, temperature: float = 0.4,
+               schema: dict | None = None, schema_name: str = "output") -> dict:
+    """One JSON-mode chat call. When `schema` is given, strict json_schema mode
+    enforces the output shape mechanically (json_object mode demonstrably lets
+    the model drop structured shapes, e.g. prose formal_definition); otherwise
+    json_object with semantics checked by the code validators — §7. Token usage
+    is accumulated into the thread-local meter for cost tracking."""
+    if schema is not None:
+        response_format: dict = {"type": "json_schema", "json_schema": {
+            "name": schema_name, "strict": True, "schema": schema}}
+    else:
+        response_format = {"type": "json_object"}
+    last_err: Exception | None = None
+    for attempt in range(2):
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}],
+            temperature=temperature,
+            max_tokens=16000,  # gpt-4o output ceiling; the default cap truncates large polish/core payloads mid-string
+            response_format=response_format,
+        )
+        u = getattr(resp, "usage", None)
+        if u is not None:
+            _meter_add(getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+        choice = resp.choices[0]
+        try:
+            return json.loads(choice.message.content or "{}")
+        except json.JSONDecodeError as e:
+            last_err = e
+            logger.warning("_chat_json invalid JSON (attempt %d, finish_reason=%s): %s",
+                           attempt + 1, getattr(choice, "finish_reason", "?"), e)
+    raise last_err  # both attempts unparseable
 
 
 def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list[dict]:
@@ -827,8 +845,22 @@ def _set_path(obj: dict, path: tuple, value) -> None:
     cur[path[-1]] = value
 
 
+def _flatten_text(value) -> str:
+    """Notes fields may be prose (legacy), arrays of points, or {core, elaboration}
+    objects (structured schema) — flatten any shape to plain text."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(_flatten_text(v) for v in value if v)
+    if isinstance(value, dict):
+        return "\n".join(_flatten_text(v) for v in value.values() if v)
+    return str(value)
+
+
 def _word_count(text) -> int:
-    return len(str(text).split()) if text else 0
+    return len(_flatten_text(text).split()) if text else 0
 
 
 def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
@@ -839,14 +871,18 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
     echoed verbatim from the concept. `grounding` (optional) carries retrieved
     reference-material chunks into the Opening and Core prompts."""
     from app.services import generation_prompts as p  # lazy
+    from app.schemas import notes_json_schemas as njs  # lazy
     opening = _chat_json(client, *p.build_opening_prompt(unit, ctx, plan,
                          prev_title=prev_title, next_title=next_title,
-                         grounding=grounding), temperature=0.6)
+                         grounding=grounding), temperature=0.6,
+                         schema=njs.OPENING_SCHEMA, schema_name="notes_opening")
     core = _chat_json(client, *p.build_core_prompt(unit, ctx, plan,
-                     prior_terms=prior_terms, grounding=grounding), temperature=0.7)
+                     prior_terms=prior_terms, grounding=grounding), temperature=0.7,
+                     schema=njs.CORE_SCHEMA, schema_name="notes_core")
     closing = _chat_json(client, *p.build_closing_prompt(unit, ctx,
                         prev_title=prev_title, next_title=next_title,
-                        condensed_core=_condense_core(core)), temperature=0.5)
+                        condensed_core=_condense_core(core)), temperature=0.5,
+                        schema=njs.CLOSING_SCHEMA, schema_name="notes_closing")
 
     cid = unit.get("concept_id")
     for part in (opening, core, closing):
@@ -859,7 +895,7 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
 def _condense_core(core: dict) -> dict:
     """A bounded summary of the Core output for the Closing prompt (consistency,
     not the limit of what the model knows)."""
-    fd = _get_path(core, ("core_concept", "formal_definition")) or ""
+    fd = _flatten_text(_get_path(core, ("core_concept", "formal_definition")))
     return {
         "formal_definition": fd[:400],
         "new_terms_introduced": core.get("new_terms_introduced", []),
@@ -904,12 +940,36 @@ def validate_notes_unit(unit_output: dict, unit: dict, ctx: dict) -> ValidationR
         checks.append(CheckResult(name=f"word_minimum:{name}", passed=wc >= minimum,
                                   detail=f"{wc}/{minimum} words"))
 
+    # Structured-shape conformance (advisory) — the schema asks for
+    # {core, elaboration} definitions and point/step arrays; the renderer
+    # tolerates legacy prose, but telemetry should count the drift.
+    drift = []
+    fd = _get_path(core, ("core_concept", "formal_definition"))
+    if fd is not None and not (isinstance(fd, dict) and fd.get("core")):
+        drift.append("formal_definition")
+    for label, path in (("mental_model_analogy", ("core_concept", "mental_model_analogy")),
+                        ("architecture_explanation", ("deep_dive", "architecture_and_mechanism", "explanation")),
+                        ("worked_example", ("practical_understanding", "worked_example"))):
+        val = _get_path(core, path)
+        if isinstance(val, str) and val.strip():
+            drift.append(label)
+    checks.append(CheckResult(name="shape:structured", passed=not drift,
+                              detail=f"legacy prose in {drift}" if drift else "",
+                              blocking=False))
+
     # Flag conformance — required blocks present per the unit's flags.
     code_needed = flags.get("requires_code") or ct.is_coding_subject(ctx.get("subject_type_label"))
     cof = _get_path(core, ("deep_dive", "code_or_formalization")) or {}
     checks.append(CheckResult(name="flag:code_block",
                               passed=(not code_needed) or bool(cof.get("content")),
                               detail="code content required but missing" if code_needed and not cof.get("content") else ""))
+    # SHOW THE OUTPUT (advisory) — running code must be paired with its result;
+    # the observed failure mode is code blocks shipping with sample_output null.
+    has_code = bool(cof.get("content")) and cof.get("type") in ("code", "pseudocode")
+    checks.append(CheckResult(name="output:sample_shown",
+                              passed=(not has_code) or bool(cof.get("sample_output")),
+                              detail="code present but sample_output missing" if has_code and not cof.get("sample_output") else "",
+                              blocking=False))
     et = _get_path(core, ("deep_dive", "execution_trace")) or {}
     checks.append(CheckResult(name="flag:execution_trace",
                               passed=(not flags.get("needs_execution_trace")) or bool(et.get("dry_run_trace")),
@@ -975,14 +1035,261 @@ def _check_diagram_compile(core: dict) -> CheckResult:
                        detail="" if not bad else f"malformed visuals: {bad}")
 
 
-def expand_field(client: Any, subtopic_title: str, field_name: str, current_text: str,
-                 min_words: int, subject_context: str) -> str:
-    """Validator-fired expansion (§10.3): rewrite one short field to its minimum.
-    Counts as a repair attempt."""
+def expand_field(client: Any, subtopic_title: str, field_name: str, original,
+                 min_words: int, subject_context: str):
+    """Validator-fired expansion (§10.3): rewrite one short field to its minimum,
+    RETURNING THE FIELD'S ORIGINAL JSON SHAPE — a flat-string rewrite of a
+    structured field would undo the strict generation schema. Counts as a
+    repair attempt."""
     from app.services.generation_prompts import build_expansion_prompt  # lazy
-    prompt = build_expansion_prompt(subtopic_title, field_name, current_text, min_words, subject_context)
-    data = _chat_json(client, "You expand a single notes field. Output only JSON.", prompt, temperature=0.6)
+    from app.schemas import notes_json_schemas as njs  # lazy
+    current_text = _flatten_text(original)
+    if isinstance(original, dict) and "core" in original:
+        shape, schema = "definition", njs.EXPANSION_DEFINITION_SCHEMA
+    elif isinstance(original, list):
+        shape, schema = "points", njs.EXPANSION_POINTS_SCHEMA
+    else:
+        shape, schema = "text", njs.EXPANSION_SCHEMA
+    prompt = build_expansion_prompt(subtopic_title, field_name, current_text,
+                                    min_words, subject_context, shape=shape)
+    data = _chat_json(client, "You expand a single notes field. Output only JSON.", prompt,
+                      temperature=0.6, schema=schema, schema_name=f"notes_expansion_{shape}")
+    if shape == "definition":
+        return data if data.get("core") else original
+    if shape == "points":
+        return data.get("expanded_points") or original
     return data.get("expanded_text", current_text)
+
+
+def _get_dotted(obj: dict, path: str):
+    cur: Any = obj
+    for key in path.split("."):
+        if not isinstance(cur, dict) or key not in cur:
+            return None, False
+        cur = cur[key]
+    return cur, True
+
+
+def _set_dotted(obj: dict, path: str, value) -> bool:
+    keys = path.split(".")
+    cur: Any = obj
+    for key in keys[:-1]:
+        if not isinstance(cur, dict) or key not in cur:
+            return False
+        cur = cur[key]
+    if not isinstance(cur, dict):
+        return False
+    cur[keys[-1]] = value
+    return True
+
+
+def critique_and_polish_unit(client: Any, unit_output: dict, unit: dict, ctx: dict) -> dict:
+    """LLM quality gate: rubric-score the assembled note; one polish round rewrites
+    the flagged sections in place. Returns the critique record stored on the
+    artifact (scores + what was patched)."""
+    from app.services import generation_prompts as p  # lazy
+    from app.schemas import notes_json_schemas as njs  # lazy
+    note = {k: unit_output.get(k) for k in ("opening", "core", "closing")}
+    try:
+        review = _chat_json(client, *p.build_notes_critic_prompt(unit, ctx, note),
+                            temperature=0.2, schema=njs.CRITIC_SCHEMA,
+                            schema_name="notes_critique")
+    except Exception:
+        logger.warning("notes critic failed", exc_info=True)
+        return {"scores": None, "polished": False, "error": "critic_failed"}
+
+    scores = review.get("scores") or {}
+    fixes = [f for f in (review.get("fixes") or [])
+             if isinstance(f, dict) and f.get("path") and f.get("instruction")]
+    record: dict = {"scores": scores, "polished": False, "patched_paths": []}
+    total = sum(v for v in scores.values() if isinstance(v, (int, float)))
+    has_zero = any(v == 0 for v in scores.values())
+    # Polish only when genuinely below the bar — every dimension ≥1 and a strong
+    # total passes without a second call.
+    if fixes and (has_zero or total < 15):
+        try:
+            result = _chat_json(client, *p.build_notes_polish_prompt(unit, ctx, note, fixes),
+                                temperature=0.5)
+            for patch in result.get("patches") or []:
+                path, value = patch.get("path"), patch.get("new_value")
+                if not path or value in (None, "", []):
+                    continue
+                old, existed = _get_dotted(note, path)
+                # Only rewrite fields that already exist — a hallucinated path
+                # would plant junk the renderer never reads. Shape guard: a
+                # patch never changes a field's JSON shape.
+                if not existed:
+                    continue
+                if old is not None and type(old) is not type(value):
+                    continue
+                if _set_dotted(note, path, value):
+                    record["patched_paths"].append(path)
+            record["polished"] = bool(record["patched_paths"])
+        except Exception:
+            logger.warning("notes polish failed", exc_info=True)
+            record["error"] = "polish_failed"
+    # Re-score after a polish so the stored scores describe the content that
+    # actually ships — pre-polish scores misreport patched notes to faculty.
+    if record["polished"]:
+        try:
+            rescore = _chat_json(client, *p.build_notes_critic_prompt(unit, ctx, note),
+                                 temperature=0.2, schema=njs.CRITIC_SCHEMA,
+                                 schema_name="notes_critique")
+            record["scores_after"] = rescore.get("scores") or {}
+        except Exception:
+            logger.warning("notes re-critique failed", exc_info=True)
+    return record
+
+
+# ── Slides deck: chunked generation + deterministic gate + critic ────────────
+
+_MERMAID_STARTS = ("graph", "flowchart", "sequenceDiagram", "stateDiagram",
+                   "erDiagram", "classDiagram")
+
+
+def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict) -> dict:
+    """Generate one concept's deck in phase chunks (1–3, 4–6, 7–8): long single
+    outputs decay toward the tail. Each chunk sees prior titles and the running
+    example thread; slide_no is renumbered after assembly."""
+    from app.services import generation_prompts as p  # lazy
+    slides: list[dict] = []
+    running_example: str | None = None
+    prior_titles: list[str] = []
+    for lo, hi in p.SLIDE_PHASE_CHUNKS:
+        data = _chat_json(client, *p.build_concept_slides_chunk_prompt(
+            unit, ctx, notes, phase_lo=lo, phase_hi=hi,
+            running_example=running_example, prior_titles=prior_titles),
+            temperature=0.5)
+        chunk = [s for s in (data.get("slides") or []) if isinstance(s, dict)]
+        slides.extend(chunk)
+        running_example = running_example or data.get("running_example")
+        prior_titles += [str(s.get("title") or "") for s in chunk]
+    for i, s in enumerate(slides):
+        s["slide_no"] = i + 1
+    return {"concept_id": unit.get("concept_id", ""),
+            "inherited_content_type": unit.get("primary_content_type", "P1"),
+            "running_example": running_example, "slides": slides}
+
+
+def _mermaid_lint(code: str) -> bool:
+    """Cheap structural lint — full compile needs a JS runtime, but the failure
+    modes we see are empty code, wrong header, or unbalanced brackets."""
+    c = (code or "").strip()
+    if not c.startswith(_MERMAID_STARTS):
+        return False
+    return all(c.count(a) == c.count(b) for a, b in (("[", "]"), ("(", ")"), ("{", "}")))
+
+
+def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
+    """Mechanical deck gate: count, phase order, arc endpoints, misconception
+    slide, Mermaid lint, face limits, quiz MCQ format."""
+    slides: list[dict] = [s for s in (content.get("slides") or []) if isinstance(s, dict)]
+    checks: list[CheckResult] = []
+    n = len(slides)
+    checks.append(CheckResult(name="deck:count", passed=14 <= n <= 30, detail=f"{n} slides"))
+
+    phases = [s.get("phase") for s in slides if isinstance(s.get("phase"), int)]
+    checks.append(CheckResult(name="deck:phase_order",
+                              passed=bool(phases) and phases == sorted(phases),
+                              detail=f"phases {phases}" if phases != sorted(phases) else ""))
+    checks.append(CheckResult(name="deck:opens_with_title",
+                              passed=bool(slides) and slides[0].get("layout") == "statement",
+                              detail="" if slides and slides[0].get("layout") == "statement"
+                              else f"first layout={slides[0].get('layout') if slides else None}"))
+    checks.append(CheckResult(name="deck:ends_with_assignment",
+                              passed=bool(slides) and slides[-1].get("role") == "assignment",
+                              detail="" if slides and slides[-1].get("role") == "assignment"
+                              else f"last role={slides[-1].get('role') if slides else None}"))
+    checks.append(CheckResult(name="deck:myth_reality",
+                              passed=any(s.get("layout") == "myth_reality" for s in slides),
+                              detail="no misconception slide" if not any(
+                                  s.get("layout") == "myth_reality" for s in slides) else ""))
+
+    bad_mermaid = [s.get("slide_no") for s in slides
+                   if str((s.get("visual") or {}).get("type") or "").startswith("mermaid")
+                   and not _mermaid_lint((s.get("visual") or {}).get("mermaid_code") or "")]
+    checks.append(CheckResult(name="deck:mermaid_lint", passed=not bad_mermaid,
+                              detail=f"slides {bad_mermaid}" if bad_mermaid else ""))
+
+    # Face limits — 20-word tolerance over the prompt's 16-word rule. Quiz,
+    # practice and assignment slides legitimately need more bullets (question +
+    # option format); they get a higher cap.
+    def _cap(s: dict) -> int:
+        return 12 if s.get("role") in ("quiz", "practice", "assignment") else 7
+    over = [s.get("slide_no") for s in slides
+            if len([b for b in (s.get("body_blocks") or []) if isinstance(b, str)]) > _cap(s)
+            or any(len(str(b).split()) > 20 for b in (s.get("body_blocks") or []))]
+    checks.append(CheckResult(name="deck:face_limits", passed=not over,
+                              detail=f"slides {over}" if over else "", blocking=False))
+
+    # Role coverage — the arc's required slides must exist; code concepts (P2/P5)
+    # must carry an implementation slide. Placeholder leaks fail hard.
+    roles = {s.get("role") for s in slides}
+    required = {"definition", "terminology", "practice", "quiz", "summary", "assignment"}
+    missing = sorted(required - roles)
+    checks.append(CheckResult(name="deck:role_coverage", passed=not missing,
+                              detail=f"missing {missing}" if missing else ""))
+    if unit.get("primary_content_type") in ("P2", "P5"):
+        checks.append(CheckResult(name="deck:code_slides",
+                                  passed="code" in roles or "syntax" in roles,
+                                  detail="" if ("code" in roles or "syntax" in roles)
+                                  else "P2/P5 concept without a code slide"))
+    leaked = [s.get("slide_no") for s in slides
+              if "program ·" in str(s.get("takeaway") or "").lower()]
+    checks.append(CheckResult(name="deck:placeholder_leak", passed=not leaked,
+                              detail=f"slides {leaked}" if leaked else ""))
+
+    # Quiz slide (7.3): MCQ options must be their own "A)".."D)" bullets.
+    quiz = [s for s in slides if s.get("role") == "quiz"
+            and "answer" not in str(s.get("title") or "").lower()]
+    quiz_ok = True
+    for s in quiz:
+        bullets = [str(b).strip() for b in (s.get("body_blocks") or [])]
+        has_mcq = any(re.match(r"^Q\d+\.", b) and b.rstrip().endswith("?") for b in bullets)
+        options = [b for b in bullets if re.match(r"^[A-D]\)", b)]
+        if has_mcq and len(options) < 4:
+            quiz_ok = False
+    checks.append(CheckResult(name="deck:quiz_mcq_format", passed=quiz_ok,
+                              detail="MCQ options must be separate A)–D) bullets" if not quiz_ok else ""))
+    return ValidationResult(all_pass=all(c.passed for c in checks if c.blocking), checks=checks)
+
+
+def critique_and_polish_deck(client: Any, content: dict, unit: dict, ctx: dict) -> dict:
+    """LLM deck gate mirroring the notes critic: rubric scores + one polish round
+    replacing flagged slides in place."""
+    from app.services import generation_prompts as p  # lazy
+    try:
+        review = _chat_json(client, *p.build_deck_critic_prompt(unit, ctx, content),
+                            temperature=0.2)
+    except Exception:
+        logger.warning("deck critic failed", exc_info=True)
+        return {"scores": None, "polished": False, "error": "critic_failed"}
+
+    scores = review.get("scores") or {}
+    fixes = [f for f in (review.get("fixes") or [])
+             if isinstance(f, dict) and f.get("slide_no") and f.get("instruction")]
+    record: dict = {"scores": scores, "polished": False, "patched_slides": []}
+    total = sum(v for v in scores.values() if isinstance(v, (int, float)))
+    has_zero = any(v == 0 for v in scores.values())
+    if fixes and (has_zero or total < 15):
+        try:
+            result = _chat_json(client, *p.build_deck_polish_prompt(unit, ctx, content, fixes),
+                                temperature=0.5)
+            by_no = {s.get("slide_no"): i for i, s in enumerate(content.get("slides") or [])}
+            for patch in result.get("patches") or []:
+                no, new_slide = patch.get("slide_no"), patch.get("new_slide")
+                # Shape guard: replacement must be a real slide for an existing slot.
+                if no not in by_no or not isinstance(new_slide, dict) \
+                        or not new_slide.get("title") or not new_slide.get("layout"):
+                    continue
+                new_slide["slide_no"] = no
+                content["slides"][by_no[no]] = new_slide
+                record["patched_slides"].append(no)
+            record["polished"] = bool(record["patched_slides"])
+        except Exception:
+            logger.warning("deck polish failed", exc_info=True)
+            record["error"] = "polish_failed"
+    return record
 
 
 def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: dict) -> ValidationResult:
@@ -998,9 +1305,8 @@ def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: di
             path = _NOTES_FIELD_PATHS.get(field)
             if not path:
                 continue
-            current = _get_path(core, path) or ""
-            expanded = expand_field(client, unit.get("concept_name", ""), field, current,
-                                    mins[field], subject_context)
+            expanded = expand_field(client, unit.get("concept_name", ""), field,
+                                    _get_path(core, path), mins[field], subject_context)
             _set_path(core, path, expanded)
         attempts += 1
         result = validate_notes_unit(unit_output, unit, ctx)
@@ -1033,7 +1339,7 @@ def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: di
         if missing:
             try:
                 from app.services.generation_prompts import build_concept_coverage_prompt
-                current = str(_get_path(core, _NOTES_FIELD_PATHS["architecture_and_mechanism"]) or "")
+                current = _flatten_text(_get_path(core, _NOTES_FIELD_PATHS["architecture_and_mechanism"]))
                 r = _chat_json(client, "You are an expert educator. Output ONLY valid JSON.",
                                build_concept_coverage_prompt(unit.get("concept_name", ""), missing, current),
                                temperature=0.4)
@@ -1333,9 +1639,17 @@ def _run_notes_phase(db, client, job_id: str, topic_id: str, ctx: dict, plan: di
             continue
         v = validate_and_expand_unit(client, out, unit, ctx)
         log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}", v)
+        critique = critique_and_polish_unit(client, out, unit, ctx)
+        if critique.get("polished"):
+            # Polish rewrites fields freely and can shrink them below the word
+            # minimums — re-run the mechanical gate so validation describes the
+            # note that ships, and expansion repairs any shrunk field.
+            v = validate_and_expand_unit(client, out, unit, ctx)
+            log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}:post_polish", v)
         prior_terms = prior_terms + list((out.get("core", {}) or {}).get("new_terms_introduced", []) or [])
         unit_records.append({
             "unit_ref": unit.get("concept_id"), **out, "unit_hash": canonical_hash(out),
+            "critique": critique,
             "approval": {"status": "pending" if v.all_pass else "error", "reviewer": None},
             "validation": {"all_pass": v.all_pass, "failures": [c.model_dump() for c in v.failures]},
         })
@@ -1718,6 +2032,47 @@ def _concept_row(db, topic_id: str, concept_id: str, artifact_type: str) -> dict
     return r.data[0] if r.data else {}
 
 
+# Concept generation runs in an in-process daemon thread (enqueue_concept_artifact).
+# If that process dies mid-run — a crash, a deploy, or a uvicorn --reload restart in
+# dev — the row is orphaned in status="generating" with no worker left to finish it,
+# and the studio polls it forever. A healthy per-concept run finishes in ~2-4 min, so
+# any "generating" row untouched for longer than this is unrecoverable and is flipped
+# to "error" so the UI stops looping and offers a retry.
+_GENERATION_STALE_AFTER_SEC = 600
+
+
+def reconcile_stale_generations(db, concept_artifacts: list[dict]) -> list[dict]:
+    """Flip orphaned 'generating' rows (no live worker) to 'error' in place and
+    best-effort in the DB. Idempotent: already-errored rows are untouched. Rows
+    must carry `updated_at`; rows without it are left alone."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    for row in concept_artifacts:
+        if row.get("status") != "generating":
+            continue
+        ts = row.get("updated_at")
+        if not ts:
+            continue
+        try:
+            updated = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if (now - updated).total_seconds() < _GENERATION_STALE_AFTER_SEC:
+            continue
+        msg = "Generation was interrupted (server restart or crash). Please regenerate."
+        row["status"] = "error"
+        row["error"] = msg
+        try:
+            (db.table("concept_artifacts").update({"status": "error", "error": msg})
+             .eq("topic_id", row.get("topic_id")).eq("concept_id", row.get("concept_id"))
+             .eq("artifact_type", row.get("artifact_type")).eq("status", "generating")
+             .execute())
+        except Exception:  # pragma: no cover - reconciliation must never break a read
+            logger.warning("stale-generation reconcile persist failed for %s/%s",
+                           row.get("concept_id"), row.get("artifact_type"), exc_info=True)
+    return concept_artifacts
+
+
 def _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, **fields) -> None:
     existing = _concept_row(db, topic_id, concept_id, artifact_type)
     fields["updated_at"] = "now()"
@@ -1798,7 +2153,13 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
                              prior_terms=_prior_terms(db, topic_id, plan, concept_id),
                              grounding=grounding or None)
         v = validate_and_expand_unit(client, out, unit, ctx)
+        critique = critique_and_polish_unit(client, out, unit, ctx)
+        if critique.get("polished"):
+            # Polish can shrink fields below the word minimums — re-gate and
+            # re-expand so the stored validation matches the shipped note.
+            v = validate_and_expand_unit(client, out, unit, ctx)
         content = {**out, "unit_hash": canonical_hash(out),
+                   "critique": critique,
                    "validation": {"all_pass": v.all_pass,
                                   "failures": [c.model_dump() for c in v.failures]}}
         if grounding:
@@ -1814,8 +2175,16 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
                             status="error", error="Generate this concept's Notes first.")
             return
         from app.services import generation_prompts as p
-        builder = p.build_concept_slides_prompt if artifact_type == "slides" else p.build_concept_quiz_prompt
-        content = _chat_json(client, *builder(unit, ctx, notes), temperature=0.4)
+        if artifact_type == "slides":
+            content = gen_concept_slides(client, unit, ctx, notes)
+            dv = validate_slides_deck(content, unit)
+            log_check_outcomes(job_id, f"slides:{concept_id}", dv)
+            content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
+            content["validation"] = {"all_pass": dv.all_pass,
+                                     "failures": [c.model_dump() for c in dv.failures]}
+        else:
+            content = _chat_json(client, *p.build_concept_quiz_prompt(unit, ctx, notes),
+                                 temperature=0.4)
 
     p_tok, c_tok, cost = meter_read()
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,

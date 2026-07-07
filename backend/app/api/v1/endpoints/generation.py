@@ -144,10 +144,15 @@ def _job_detail(db: Client, job: dict) -> dict:
         db.table("concept_artifacts")
         # grounded_in: provenance stamp pulled out of the content JSON so the
         # studio can show which concepts were grounded without shipping content.
-        .select("concept_id,artifact_type,status,approval_status,cost_usd,token_count,error,"
-                "grounded_in:content->grounded_in")
+        # topic_id + updated_at drive stale-generation reconciliation below.
+        .select("topic_id,concept_id,artifact_type,status,approval_status,updated_at,"
+                "cost_usd,token_count,error,grounded_in:content->grounded_in")
         .eq("topic_id", topic_id).execute().data or []
     )
+    # Orphaned 'generating' rows (worker died with its process) would otherwise
+    # keep the studio polling forever — surface them as errors so it can retry.
+    from app.services import generation_service as gen
+    concept_artifacts = gen.reconcile_stale_generations(db, concept_artifacts)
     return {**job, "artifacts": artifacts, "concept_artifacts": concept_artifacts}
 
 

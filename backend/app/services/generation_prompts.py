@@ -423,9 +423,9 @@ def build_opening_prompt(unit: dict, ctx: dict, plan: dict, *, prev_title: str |
 # ── Core Content (Tier B) — conditional blocks selected by the unit's flags ────
 
 _CORE_EXEC_TRACE_ON = """EXECUTION TRACE (REQUIRED): execution_trace.applicable = true. Use a DIFFERENT
-scenario and data from the code block. Provide a step-by-step dry-run showing every
-intermediate state, plus an edge-case/failure-mode matrix. Minimum {trace_min} words for
-the trace narrative. NUMERICAL ACCURACY: state the formula first, apply it per entity
+scenario and data from the code block. dry_run_trace is an ARRAY of steps showing every
+intermediate state ("Step 1: …", "Observation: …", "Result: …"), plus an
+edge-case/failure-mode matrix. Minimum {trace_min} words total across the steps. NUMERICAL ACCURACY: state the formula first, apply it per entity
 before aggregating, and re-check your arithmetic — internally inconsistent numbers = a
 failed trace."""
 
@@ -450,7 +450,8 @@ language_or_system to null, explanation to null, complexity_grid fields to "N/A"
 write any code, pseudocode, or formal notation anywhere. Use that space to make
 architecture_and_mechanism and the worked example more thorough in prose."""
 
-_CORE_WORKED_ON = """worked_example: a full worked example, minimum {worked_min} words, every step shown per
+_CORE_WORKED_ON = """worked_example: a full worked example as an ARRAY of steps ("Step 1: …", "Step 2: …",
+ending with "Key insight: …"), minimum {worked_min} words total, every step shown per
 the numerical-accuracy requirement. Use a THIRD DISTINCT scenario — different from both the
 code block and the execution trace — covering a scope_in item or edge case not already
 covered. Never jump to the final answer."""
@@ -536,6 +537,28 @@ the student has ever read, written directly to them:
   an exam angle, a prerequisite reminder). Use 1–3 per subtopic where genuinely
   warranted; never stack two in a row.
 
+GOLD-STANDARD FRAGMENTS — match this quality bar, not just the rules. These show the
+REGISTER expected; your content must be about THIS subtopic, never these topics:
+- Scenario (named actor, numbers, consequence): "Priya runs the billing service at a
+  food-delivery startup. At 6 pm on a cricket-final Sunday, 40,000 orders hit in an
+  hour — and her nightly report starts double-counting refunds because two workers
+  update the same row. Her fix depends on exactly one idea: isolation levels."
+  NOT: "Imagine a company that needs to manage its data."
+- Analogy (every part mapped): "A hash table is a coat-check counter: your coat (value)
+  goes on a numbered hook (bucket), the ticket (key) is hashed to that hook number, and
+  two coats on one hook (collision) means the attendant chains them together."
+  NOT: "A hash table is like a well-organized closet."
+- Takeaway (compressed insight, not restatement): "UPDATE and DELETE without WHERE touch
+  EVERY row — the #1 cause of production data loss." NOT: "UPDATE modifies records."
+- Callout usage: "> Warning: `DELETE FROM Orders` with no WHERE clause silently removes
+  every order — there is no undo without a backup." Use 1–3 such callouts (Tip/Warning/
+  Key idea/Exam tip) where a reader genuinely needs the aside.
+
+SHOW THE OUTPUT: whenever code runs, students must SEE the result. Fill
+code_or_formalization.sample_output with the actual output — the result table (as
+compact text), printed lines, or the error message a failing variant produces. A student
+who never sees the effect has not been taught the effect. null only when nothing runs.
+
 PAUSE AND THINK: after teaching the mechanism, write 1–2 self-check questions a careful
 reader should NOW be able to answer (not trivia), each with a 30–60 word answer that
 teaches the reader who got it wrong. Put them in deep_dive.pause_and_think.
@@ -555,13 +578,19 @@ concrete example. Never use banned verbs: understand, learn, know, appreciate, b
 CONTENT ORDER: introduce the idea → why it exists → intuition → formal theory → internal
 working → worked example (if applicable) → common mistakes → applications → limitations.
 
-CORE CONCEPT (always): formal_definition (rigorous, minimum {formal_min} words) +
-mental_model_analogy (real-world analogy building intuition before restating the definition
-in plain language).
+CORE CONCEPT (always): formal_definition is an OBJECT with two keys — "core": the single
+most precise one-sentence definition that stands alone as the definitive answer to
+"what is X?"; "elaboration": 3–5 distinct points, each a separate meaningful property,
+constraint, or characteristic — NOT restatements of the core. Total across core +
+elaboration: minimum {formal_min} words. mental_model_analogy is an ARRAY of 3–4 points,
+each one aspect of the real-world analogy mapped structurally to the concept
+("each tab in the phone book = an index key").
 
-DEEP DIVE: architecture_and_mechanism (always; minimum {arch_min} words) — how this maps to
-the machine/formal system, respecting scope_in/scope_out exactly, with a visuals array per
-the DIAGRAM RULES.
+DEEP DIVE: architecture_and_mechanism.explanation is an ARRAY of 3–5 meaningful points —
+each describes one component, mechanism, relationship, or behaviour; logically ordered;
+each self-contained. NOT one prose paragraph. Minimum {arch_min} words total across the
+points. How this maps to the machine/formal system, respecting scope_in/scope_out
+exactly, with a visuals array per the DIAGRAM RULES.
 
 {code_block}
 
@@ -616,27 +645,35 @@ Output ONLY this JSON — no explanation, no markdown:
   "complexity_tier": "{complexity_tier}",
   "traceability_tag": null,
   "new_terms_introduced": ["term 1", "term 2"],
-  "core_concept": {{"formal_definition": "text", "mental_model_analogy": "text"}},
+  "core_concept": {{
+    "formal_definition": {{
+      "core": "the single definitive one-sentence definition",
+      "elaboration": ["distinct property/constraint 1", "point 2", "point 3"]
+    }},
+    "mental_model_analogy": ["analogy aspect 1 mapped to the concept", "aspect 2", "aspect 3"]
+  }},
   "deep_dive": {{
     "architecture_and_mechanism": {{
-      "explanation": "text",
+      "explanation": ["component/mechanism 1: role", "component 2", "how they interact", "key invariant"],
       "visuals": [{{"visual_id": "V1", "type": "table|flowchart|hierarchy_diagram|memory_diagram|syntax_diagram|execution_trace_table|mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class", "title": "title", "description": "one-sentence caption", "mermaid_code": "valid Mermaid syntax, or null for non-Mermaid types", "columns": ["col1"], "rows": [["val1"]], "placement": "before_explanation|after_explanation|after_worked_example"}}]
     }},
     "code_or_formalization": {{
       "applicable": true, "type": "code|pseudocode|formal_math|na_conceptual",
       "language_or_system": "e.g. Python 3.11 or null", "content": "code/pseudocode/proof or null",
-      "explanation": "text or null",
+      "explanation": ["key insight about the code/formula", "point 2", "point 3"],
+      "sample_output": "the actual output/result table/error the code produces, or null",
       "complexity_grid": {{"best_case_time": "O(..) or N/A", "worst_case_time": "O(..) or N/A", "average_case_time": "O(..) or N/A", "space_complexity": "O(..) or N/A", "justification": "text or N/A"}}
     }},
     "execution_trace": {{
-      "applicable": true, "dry_run_trace": "text or null",
+      "applicable": true, "dry_run_trace": ["Step 1: what happens", "Step 2: ...", "Observation: ...", "Result: ..."],
       "edge_case_matrix": [{{"edge_input": "e.g. empty input", "expected_behavior": "text"}}],
       "visuals": [{{"visual_id": "V2", "type": "execution_trace_table|mermaid_flowchart", "title": "title", "description": "description", "mermaid_code": "Mermaid syntax or null", "columns": ["Step"], "rows": [["1"]], "placement": "after_worked_example"}}]
     }},
     "pause_and_think": [{{"question": "self-check a careful reader can now answer", "answer": "30-60 word teaching answer"}}]
   }},
   "practical_understanding": {{
-    "worked_example": "text or null", "advantages": [], "disadvantages": [], "applications": [],
+    "worked_example": ["Step 1: set up the scenario", "Step 2: apply the concept", "Step 3: observe the result", "Key insight from this example"],
+    "advantages": [], "disadvantages": [], "applications": [],
     "common_mistakes": [{{"mistake": "text", "why_it_happens": "text", "correct_approach": "text", "exam_tip": "text"}}]
   }},
   "analysis": {{"applicable": true, "discussion": "text or null", "complexity_note": "text or null"}},
@@ -725,6 +762,12 @@ applied + 100+ word explanations; hard 1–2 + 150+ word explanations.
 RELATED TOPICS: previous_connection, next_connection, builds_toward (1–2), industry_relevance
 (one paragraph specific to "{subtopic_title}" naming concrete systems/roles).
 
+FLASHCARDS: 6–8 cards for active recall on "{subtopic_title}". Each card: "front" (a clear
+question) and "back" (a precise 1–2 sentence answer). Mix: 2–3 definition cards ("What is
+X?"), 2–3 concept cards ("What does X ensure / how does X work?"), 1–2 application/trap
+cards ("When would you use X?" / "What happens if …?"). No trivial cards, no yes/no cards;
+every card independently useful for exam revision; do NOT repeat active_recall_prompts.
+
 MATH NOTATION: wrap all mathematical notation (formulas, Big-O, expressions) in LaTeX
 delimiters — $...$ inline, $$...$$ display — including every important_formulas entry.
 VOICE: second person, direct, exam-aware. **Bold** key terms, `inline code` for
@@ -751,6 +794,9 @@ Output ONLY this JSON — no explanation, no markdown:
       "previous_subtopic": "{prev_subtopic}", "previous_connection": "one sentence",
       "next_subtopic": "{next_subtopic}", "next_connection": "one sentence",
       "builds_toward": ["downstream topic or skill"], "industry_relevance": "one paragraph specific to {subtopic_title}"
+    }},
+    "flashcard_section": {{
+      "cards": [{{"front": "clear question", "back": "precise 1-2 sentence answer"}}]
     }}
   }}
 }}"""
@@ -793,16 +839,33 @@ precise terminology, concrete numbers/examples. Cover the concept completely for
 who has ONLY this text. Never use banned verbs: understand, learn, know, appreciate, be
 aware of. Stay strictly within "{field_label}" for this subtopic.
 
-Output ONLY this JSON — no explanation, no markdown:
-{{"expanded_text": "the full rewritten field text, {min_words}+ words, self-contained"}}"""
+{output_spec}"""
+
+# The expansion must hand back the field's ORIGINAL JSON shape — flattening a
+# structured field to prose undoes the strict generation schema.
+_EXPANSION_OUTPUT_SPECS = {
+    "text": """Output ONLY this JSON — no explanation, no markdown:
+{{"expanded_text": "the full rewritten field text, {min_words}+ words, self-contained"}}""",
+    "points": """Output ONLY this JSON — no explanation, no markdown. Return the expanded content as an
+ARRAY of self-contained points/steps (same structure as the original field), totalling
+{min_words}+ words across the items:
+{{"expanded_points": ["point/step 1", "point/step 2", "..."]}}""",
+    "definition": """Output ONLY this JSON — no explanation, no markdown. Keep "core" as the single most
+precise one-sentence definition; expand "elaboration" to 3-5 DISTINCT properties,
+constraints, or characteristics totalling {min_words}+ words across core + elaboration:
+{{"core": "one precise sentence", "elaboration": ["distinct point 1", "point 2", "point 3"]}}""",
+}
 
 
 def build_expansion_prompt(subtopic_title: str, field_label: str, current_text: str,
-                           min_words: int, subject_context: str) -> str:
+                           min_words: int, subject_context: str,
+                           shape: str = "text") -> str:
+    output_spec = _EXPANSION_OUTPUT_SPECS.get(shape, _EXPANSION_OUTPUT_SPECS["text"])
     return _EXPANSION_TEMPLATE.format(
         subtopic_title=subtopic_title, field_label=field_label,
         current_wc=len((current_text or "").split()), current_text=current_text or "",
         subject_context=subject_context, min_words=min_words,
+        output_spec=output_spec.format(min_words=min_words),
     )
 
 
@@ -856,75 +919,241 @@ def build_slides_prompt(ctx: dict, plan: dict, notes: dict) -> tuple[str, str]:
     return system, user
 
 
+# ── Notes critic + polish (quality gate) ─────────────────────────────────────
+
+_CRITIC_TEMPLATE = """You are a merciless reviewer of teaching material. Score ONE subtopic's student
+notes against the rubric below. You are the last gate before students see this — a
+generous score on weak content harms real students.
+
+subtopic: {subtopic_title} (Content complexity: {complexity_tier})
+scope_in: {scope_in}
+scope_out (must NOT be explained in the note): {scope_out}
+
+THE NOTE:
+{note}
+
+RUBRIC — score each dimension 0 (fails), 1 (acceptable), 2 (gold):
+1. scenario_stakes — opening scenario has a named actor, concrete numbers, and a real
+   consequence; not "imagine a company".
+2. definition_precision — core definition is one precise sentence; elaboration points are
+   distinct properties, no scope_out leakage.
+3. analogy_mapping — analogy maps part-to-part to the concept; not decorative cliché.
+4. teaches_not_documents — mechanism explains WHY/failure modes, not just syntax restated.
+5. example_diversity — examples use genuinely different scenarios AND at least one
+   boundary/edge case; different nouns on the same shape = 0.
+6. output_shown — running code is accompanied by its actual output/result/error.
+   Score 2 when the note legitimately has no runnable code
+   (code_or_formalization.applicable = false) — do not punish conceptual notes.
+7. callouts_used — 1–3 genuine Tip/Warning/Key idea/Exam tip callouts where needed.
+8. takeaway_compression — takeaways are compressed insights, not restatements.
+9. no_redundancy — no section restates another in different words.
+10. scope_discipline — nothing from scope_out is explained; all scope_in items covered.
+
+For every dimension scored 0 or 1, name the EXACT section path and what to change.
+Section paths use the note's JSON structure, e.g. "opening.sections.problem_statement.scenario",
+"core.core_concept.mental_model_analogy", "core.practical_understanding.worked_example",
+"closing.sections.revision_section.key_takeaways".
+
+Output ONLY JSON:
+{{"scores": {{"scenario_stakes": 0, "definition_precision": 0, "analogy_mapping": 0,
+"teaches_not_documents": 0, "example_diversity": 0, "output_shown": 0, "callouts_used": 0,
+"takeaway_compression": 0, "no_redundancy": 0, "scope_discipline": 0}},
+"fixes": [{{"path": "dotted.section.path", "problem": "one sentence", "instruction": "one imperative sentence"}}]}}"""
+
+
+def build_notes_critic_prompt(unit: dict, ctx: dict, note: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou review teaching material. Output only JSON."
+    user = _CRITIC_TEMPLATE.format(
+        subtopic_title=unit.get("concept_name", ""),
+        complexity_tier=unit.get("complexity_tier", "moderate"),
+        scope_in=_j(unit.get("scope_in", [])), scope_out=_j(unit.get("scope_out", [])),
+        note=_j(note))
+    return system, user
+
+
+_POLISH_TEMPLATE = """You wrote the student notes below for "{subtopic_title}". A reviewer flagged specific
+sections. Rewrite ONLY the flagged sections to gold standard, applying each instruction.
+Keep every unflagged part of the meaning intact; keep the SAME JSON shape each field had
+(string stays string, array stays array, object stays object). Never use banned verbs:
+understand, learn, know, appreciate, be aware of.
+
+THE NOTE:
+{note}
+
+REVIEWER FIXES:
+{fixes}
+
+Output ONLY JSON — one patch per fix, in the same order:
+{{"patches": [{{"path": "the same dotted path from the fix", "new_value": "the rewritten content in the field's original JSON shape"}}]}}"""
+
+
+def build_notes_polish_prompt(unit: dict, ctx: dict, note: dict, fixes: list[dict]) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou rewrite flagged sections of teaching notes. Output only JSON."
+    user = _POLISH_TEMPLATE.format(subtopic_title=unit.get("concept_name", ""),
+                                   note=_j(note), fixes=_j(fixes))
+    return system, user
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Concept-level fan-out — Slides + Quiz for ONE subtopic (interactive studio)
 # Source of truth: that concept's approved Student Notes. Introduce no content
 # absent from the notes (§7.4 SSOT).
 # ══════════════════════════════════════════════════════════════════════════════
 
-_CONCEPT_SLIDES_SYSTEM = """You are a world-class technical educator converting ONE subtopic's approved
-Student Notes into a classroom slide deck for {subject_domain} at {audience_level}.
-REFORMAT for delivery — introduce NO definition, example, code, or claim absent from the
-notes. Slides are the artifact of SUBTRACTION: the face carries the minimum a student
-must SEE; everything you would SAY goes in speaker_notes.
+_CONCEPT_SLIDES_SYSTEM = """You are a world-class technical educator building a COMPLETE classroom lecture
+deck for ONE subtopic of {subject_domain} at {audience_level} — the deck a professor
+teaches a full session from.
 
-DECK ARC (adapt to Content Type {content_type}; 6–10 slides total):
-1. hook — one big-statement slide: the problem this concept kills, ≤14 words.
-2. definition — the formal claim stated as a takeaway sentence, not a dictionary entry.
-3. 1–3 core build slides — ONE idea each, staged via build_steps.
-4. ≥1 misconception slide — Myth vs Reality (fill the myth/reality fields).
-5. Profile slides by Content Type: P2 code → trace → complexity; P3 proof one step per
-   build; P4 diagram → trade-off; P5 environment → procedure → expected output.
-6. recall — closing slide: the 3 bullets the student must retain.
+SOURCES: the approved Student Notes are your PRIMARY source for definitions, claims,
+code, complexity facts, and mistakes — never contradict them. You MAY additionally
+write your own examples, analogies, practice questions, and explanations relevant to
+the concept; slides built mostly from your own material use source_ref "generated".
+
+8-PHASE LECTURE STRUCTURE (adapt to Content Type {content_type}; 16–28 slides total).
+Every slide must be complete and informative — no shallow filler. If one slide cannot
+hold the content, split into "… — Part 1" / "… — Part 2". Skip a slide ONLY where its
+condition says so.
+
+PHASE 1 — INTRODUCTION
+ 1.1 Title [statement]: title = the subtopic name itself; kicker = course name;
+     takeaway = the ACTUAL program/semester from the course context plus Bloom level
+     and proficiency target (e.g. "B.Tech CSE · Sem 4 · L2 · Describe") — never the
+     literal word "Program". No CO/TLO ids.
+ 1.2 Learning Outcomes & Prerequisites [headed_bullets]: two sections —
+     "Learning Outcomes" (3–5, action verbs) and "Prerequisites" (2–4, or
+     "No specific prerequisites required"). Always both sections.
+ 1.3 Motivation / Problem [bullets]: 4–6 points — the pain this concept solves.
+ 1.4 Real-world Analogy [bullets]: 3–5 points building intuition.
+PHASE 2 — CORE CONCEPT
+ 2.1 Definition [definition]: definition_core = the single most precise one-sentence
+     definition; body_blocks = 3–5 key properties/constraints.
+ 2.2 Key Terminology [terminology]: 5–8 terms, one-sentence definitions.
+ 2.3 Big Picture [bullets]: 3–5 points — where this fits, what it builds toward.
+PHASE 3 — CONCEPT EXPLANATION
+ 3.1 Architecture / Structure [visual]: Mermaid graph LR preferred; ≤2 support
+     bullets. SKIP for purely mathematical concepts with no system structure.
+ 3.2 Working Principle [bullets]: 4–6 stepwise points. SKIP if purely mathematical.
+ 3.3 Flowchart [visual]: graph TD, ≤12 nodes — ONLY if a clear process/decision flow.
+ 3.4 Algorithm / Procedure [bullets]: numbered steps — ONLY if the notes contain an
+     algorithm or stepwise procedure.
+ 3.5 Syntax [code]: syntax + minimal example — ONLY if the concept has a
+     language/tool syntax.
+ 3.6 Formulas [bullets]: each formula in $...$ LaTeX with a one-line meaning —
+     ONLY if formulas exist.
+ 3.7 Dry Run / Trace [code or visual table]: ONLY if the notes have a trace.
+PHASE 4 — WORKED EXAMPLES (may be your own; grade the difficulty)
+ 4.1 Example 1 — Basic; 4.2 Example 2 — Intermediate; 4.3 Example 3 — Advanced.
+     Use [code] when the example is code/SQL/formula (code_notes style bullets:
+     setup → steps → key insight); otherwise [bullets].
+ 4.4 Case Study [bullets]: optional — only with substantive real-world content.
+PHASE 5 — ANALYSIS
+ 5.1 Advantages vs Limitations [two_column]: 4–5 points per column.
+ 5.2 Complexity [visual table]: headers ["Metric","Value","Notes"] — ONLY if 3+
+     measurable values; otherwise append "Time/Space complexity: …" bullets to 5.4.
+ 5.3 Comparison [visual table]: ["Aspect", concept, "Alternative"], 5–7 rows.
+ 5.4 Applications [bullets]: 4–6 real use cases.
+PHASE 6 — PRACTICAL PERSPECTIVE
+ 6.1 Implementation [code]: complete runnable code — ONLY for code-bearing concepts.
+ 6.2 Output / Demo [code]: program output or demonstration — ONLY when 6.1 exists.
+ 6.3 Industry Use [bullets]: 4–6 points, specific companies/domains.
+ 6.4 Common Mistakes: the top mistake as ONE [myth_reality] slide (myth = wrong way,
+     reality = right way, support bullets = why); remaining 3–4 mistakes as one
+     [bullets] slide "More pitfalls" ("Wrong → why it fails → right way" per bullet).
+PHASE 7 — STUDENT ENGAGEMENT
+ 7.1 Practice Questions [bullets]: EXACTLY 6 — 2 easy (L1/L2), 2 medium (L3),
+     2 hard (L4+). Format: "Q1. [Easy] …". Questions only.
+ 7.2 Practice Answers [bullets]: same order. "Ans1. answer — brief explanation".
+ 7.3 Quick Quiz — TWO slides (a single quiz slide overflows the face):
+     "Quick Quiz — Part 1" [bullets]: 2 MCQs. Each question as one bullet
+     "Q1. …?", then EACH option as its own bullet "A) …" / "B) …" / "C) …" / "D) …".
+     "Quick Quiz — Part 2" [bullets]: 2 True/False ("Q3. True/False: …") +
+     2 fill-in-blank ("Q5. _____ is …"). Questions only on both.
+ 7.4 Quiz Answers [bullets]: one slide, all 6 in order. "Ans1. B) — reason",
+     "Ans3. True — reason".
+PHASE 8 — CONCLUSION
+ 8.1 Summary [bullets]: 4–5 point recap of the whole subtopic.
+ 8.2 Key Takeaways [recall]: the 3–6 things to retain forever.
+ 8.3 Assignment [bullets]: ≥4 bullets — task, deliverables, evaluation criteria, hint.
+ Do NOT generate a references slide.
 
 SLIDE RULES
-- title is a CLAIM, never a noun label ("Binary search halves the space each step",
-  not "Binary Search").
-- Face limit: ≤6 bullets, ≤10 words each. NEVER paragraphs on the face. **Bold** the
-  one term that matters per bullet; $...$ LaTeX for math; `code` for identifiers.
+- Content-slide titles are CLAIMS where natural ("Binary search halves the space each
+  step"); structural slides (Practice Questions, Summary…) may use plain titles.
+- Face limit: ≤7 bullets, ≤16 words each, complete sentences. NEVER paragraphs on the
+  face. **Bold** the key term per bullet; $...$ LaTeX for math; `code` for identifiers.
 - layout selects the renderer:
-  "statement"    — one big line (the title), optional kicker + takeaway. For hooks.
-  "bullets"      — title + body_blocks.
-  "code"         — title + code.language + code.content (≤12 lines) + ≤2 bullets.
-  "visual"       — title + one visual (prefer Mermaid) + ≤2 bullets.
-  "myth_reality" — title + myth (one-line wrong belief) + reality (one-line correction)
-                   + up to 2 support bullets each side (first half of body_blocks =
-                   myth side, second half = reality side).
-  "recall"       — title + exactly 3 bullets.
-- visual: prefer Mermaid — {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class",
-  "title": "t", "mermaid_code": "complete valid Mermaid"}} — or a data table
-  {{"type": "table", "title": "t", "columns": [...], "rows": [[...]]}}. ONE visual max
-  per slide; null on slides without one.
-- kicker: a 3–5 word eyebrow label ("The core trade-off"), or null.
-- takeaway: one sentence the student writes down if they remember nothing else; null if
-  the title already is that sentence.
-- speaker_notes: the teaching script for the slide — 60–150 words of what you would
-  actually say, conversational, referencing the face content. NEVER empty, never a
-  restatement of the bullets.
-- build_steps: the reveal order, one short label each."""
+  "statement"      — one big line (the title), optional kicker + takeaway.
+  "bullets"        — title + body_blocks.
+  "headed_bullets" — title + sections:[{{"heading","bullets":[…]}}].
+  "definition"     — title + definition_core (highlighted) + body_blocks elaboration.
+  "terminology"    — title + terms:[{{"term","definition"}}].
+  "two_column"     — title + left_heading/left_bullets + right_heading/right_bullets.
+  "code"           — title + code.language + code.content (≤14 lines) + ≤3 bullets.
+  "visual"         — title + ONE visual (Mermaid or table) + ≤2 bullets.
+  "myth_reality"   — title + myth + reality + ≤2 support bullets each side
+                     (first half of body_blocks = myth side, rest = reality side).
+  "recall"         — title + 3–6 bullets.
+- visual: {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class",
+  "title": "t", "mermaid_code": "valid Mermaid v10, node labels ≤5 words"}} — or
+  {{"type": "table", "title": "t", "columns": [...], "rows": [[...]]}}. ONE per slide.
+- kicker: 3–5 word eyebrow label, or null. takeaway: the one sentence to write down,
+  or null when the title already is it.
+- speaker_notes: the teaching script — 60–150 words of what the professor actually
+  says, conversational, referencing the face. NEVER empty, never a bullet restatement.
+- build_steps: reveal order, one short label each; [] for single-reveal slides.
+
+RUNNING EXAMPLE THREAD: establish ONE concrete scenario on the motivation slide (a named
+actor, real data values) and carry it through the deck — the definition applies to it,
+examples extend it, the trace runs on its data, mistakes break it, quiz questions reuse
+it. Additional scenarios may appear in Phase 4, but the thread scenario must recur in at
+least 4 slides across phases. Disconnected one-off examples on every slide = failed deck.
+
+USE THE NOTES' STRUCTURE: slide 2.1's definition_core comes from the notes'
+formal_definition.core (tightened for a slide face, not re-invented); its body_blocks
+from formal_definition.elaboration. Slide 6.2 (Output/Demo) shows the notes'
+code_or_formalization.sample_output — never invent output that contradicts it.
+Phase 7's quiz must NOT reuse the notes' practice_questions — write fresh items.
+
+GOLD-STANDARD FRAGMENTS — match this register (content must be about THIS concept):
+- Hook title: "One wrong WHERE clause can delete every order you have" — a stake,
+  ≤14 words. NOT "Introduction to DML Operations".
+- Myth/Reality: myth = "DELETE removes the table itself", reality = "DELETE removes
+  rows; the table and its schema survive — DROP removes the table" — both one line,
+  precise, exam-relevant.
+- Speaker note: "Ask the class what they expect this query to return — most will say
+  one row. Run it: three rows come back, because the join duplicates matches. That
+  surprise is the whole point of this slide; let it land before advancing." — direction
+  for teaching, not a bullet echo."""
 
 _CONCEPT_SLIDES_USER = """concept: {concept_name}  (Content Type {content_type})
-approved notes for this concept (the ONLY content source):
+approved notes for this concept (primary source):
 {notes}
 
 Return ONLY JSON:
 {{"concept_id": "{concept_id}", "inherited_content_type": "{content_type}",
 "slides": [{{
   "slide_no": 1,
-  "role": "hook|definition|core|misconception|code|trace|proof|diagram|complexity|recall",
-  "layout": "statement|bullets|code|visual|myth_reality|recall",
-  "title": "a claim, not a generic noun",
+  "phase": 1,
+  "phase_name": "Introduction",
+  "role": "hook|outcomes|motivation|analogy|definition|terminology|core|architecture|flowchart|algorithm|syntax|formula|trace|example|case_study|analysis|comparison|applications|code|output|industry|misconception|practice|quiz|summary|recall|assignment",
+  "layout": "statement|bullets|headed_bullets|definition|terminology|two_column|code|visual|myth_reality|recall",
+  "title": "claim or section title",
   "kicker": "3-5 word eyebrow or null",
-  "body_blocks": ["<=6 bullets, <=10 words each"],
-  "code": {{"language": "e.g. sql", "content": "<=12 lines, or null"}},
+  "body_blocks": ["<=7 bullets, <=16 words each"],
+  "sections": [{{"heading": "h", "bullets": ["..."]}}],
+  "definition_core": "one-sentence definition (definition layout only) or null",
+  "terms": [{{"term": "t", "definition": "one sentence"}}],
+  "left_heading": "or null", "left_bullets": [], "right_heading": "or null", "right_bullets": [],
+  "code": {{"language": "e.g. sql", "content": "<=14 lines, or null"}},
   "visual": {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class|table", "title": "t", "mermaid_code": "Mermaid or null", "columns": [], "rows": []}},
   "myth": "one-line wrong belief or null",
   "reality": "one-line correction or null",
   "takeaway": "one memorable sentence or null",
   "build_steps": ["one reveal each"],
   "speaker_notes": "60-150 word teaching script",
-  "source_ref": "notes section"
-}}]}}. 6–10 slides; hook first, recall last; ≥1 myth_reality slide; code/visual/myth/reality/takeaway are null when unused."""
+  "source_ref": "notes section, or 'generated' for your own material"
+}}]}}. 16–28 slides; phases in order 1→8; title slide first, assignment last; ≥1
+myth_reality slide; unused fields null/[] per slide."""
 
 
 def build_concept_slides_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, str]:
@@ -934,6 +1163,125 @@ def build_concept_slides_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str
         audience_level=ctx.get("audience_level", "UG"), content_type=ct_)
     user = _CONCEPT_SLIDES_USER.format(concept_id=unit.get("concept_id", ""),
         concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes))
+    return system, user
+
+
+# Deck generation runs in phase chunks — long single outputs decay in quality
+# toward the tail and risk JSON truncation. Each chunk sees the full system
+# arc plus what was already generated.
+SLIDE_PHASE_CHUNKS: list[tuple[int, int]] = [(1, 3), (4, 6), (7, 8)]
+
+_CONCEPT_SLIDES_CHUNK_USER = """concept: {concept_name}  (Content Type {content_type})
+approved notes for this concept (primary source):
+{notes}
+
+You are generating the deck in parts. Generate ONLY phases {phase_lo}–{phase_hi} now.
+{thread_block}{prior_block}
+Return ONLY JSON:
+{{"running_example": "one-sentence description of the deck's running example scenario",
+"slides": [{{
+  "slide_no": 1,
+  "phase": {phase_lo},
+  "phase_name": "...",
+  "role": "hook|outcomes|motivation|analogy|definition|terminology|core|architecture|flowchart|algorithm|syntax|formula|trace|example|case_study|analysis|comparison|applications|code|output|industry|misconception|practice|quiz|summary|recall|assignment",
+  "layout": "statement|bullets|headed_bullets|definition|terminology|two_column|code|visual|myth_reality|recall",
+  "title": "claim or section title",
+  "kicker": "3-5 word eyebrow or null",
+  "body_blocks": ["<=7 bullets, <=16 words each"],
+  "sections": [{{"heading": "h", "bullets": ["..."]}}],
+  "definition_core": "one-sentence definition (definition layout only) or null",
+  "terms": [{{"term": "t", "definition": "one sentence"}}],
+  "left_heading": "or null", "left_bullets": [], "right_heading": "or null", "right_bullets": [],
+  "code": {{"language": "e.g. sql", "content": "<=14 lines, or null"}},
+  "visual": {{"type": "mermaid_flowchart|mermaid_sequence|mermaid_state|mermaid_er|mermaid_class|table", "title": "t", "mermaid_code": "Mermaid or null", "columns": [], "rows": []}},
+  "myth": "one-line wrong belief or null",
+  "reality": "one-line correction or null",
+  "takeaway": "one memorable sentence or null",
+  "build_steps": ["one reveal each"],
+  "speaker_notes": "60-150 word teaching script",
+  "source_ref": "notes section, or 'generated' for your own material"
+}}]}}. Only phases {phase_lo}–{phase_hi}; slide_no restarts at 1 (renumbered later);
+unused fields null/[] per slide."""
+
+
+def build_concept_slides_chunk_prompt(unit: dict, ctx: dict, notes: dict, *,
+                                      phase_lo: int, phase_hi: int,
+                                      running_example: str | None,
+                                      prior_titles: list[str]) -> tuple[str, str]:
+    ct_ = unit.get("primary_content_type", "P1")
+    system = preamble(ctx) + "\n\n" + _CONCEPT_SLIDES_SYSTEM.format(
+        subject_domain=ctx.get("subject_domain") or "the discipline",
+        audience_level=ctx.get("audience_level", "UG"), content_type=ct_)
+    thread_block = (f"Running example thread (established earlier — keep using it): {running_example}\n"
+                    if running_example else
+                    "Establish the running example thread in this chunk and describe it in running_example.\n")
+    prior_block = (f"Slides already generated (titles, for continuity — do not repeat them):\n{_j(prior_titles)}\n"
+                   if prior_titles else "")
+    user = _CONCEPT_SLIDES_CHUNK_USER.format(
+        concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes),
+        phase_lo=phase_lo, phase_hi=phase_hi,
+        thread_block=thread_block, prior_block=prior_block)
+    return system, user
+
+
+_DECK_CRITIC_TEMPLATE = """You are a merciless reviewer of lecture decks. Score ONE concept's classroom deck
+against the rubric. You are the last gate before a professor teaches from this.
+
+concept: {concept_name} (Content Type {content_type})
+THE DECK:
+{deck}
+
+RUBRIC — score each dimension 0 (fails), 1 (acceptable), 2 (gold):
+1. claim_titles — content-slide titles state claims, not noun labels.
+2. face_discipline — ≤7 bullets, ≤16 words each; no paragraphs on any face.
+3. speaker_scripts — every script is a 60–150 word teaching direction, never a bullet echo.
+4. running_example — one scenario threads through ≥4 slides across phases.
+5. visual_density — ≥3 substantive visuals (valid Mermaid or real tables) placed where
+   they teach; none are placeholders.
+6. myth_reality_quality — misconception slide names a real, specific wrong belief.
+7. quiz_format — quiz MCQs have the question bullet + four separate "A)".."D)" bullets;
+   answers slide matches order.
+8. phase_completeness — later phases (6–8) are as substantive as early ones; no thin tail.
+9. grounding_balance — definitions/complexity facts trace to the notes; generated
+   examples are marked source_ref "generated".
+10. no_redundancy — no slide restates another; deck quiz doesn't repeat notes questions.
+
+For every dimension scored 0 or 1, cite the exact slide_no(s) and what to change.
+
+Output ONLY JSON:
+{{"scores": {{"claim_titles": 0, "face_discipline": 0, "speaker_scripts": 0,
+"running_example": 0, "visual_density": 0, "myth_reality_quality": 0, "quiz_format": 0,
+"phase_completeness": 0, "grounding_balance": 0, "no_redundancy": 0}},
+"fixes": [{{"slide_no": 1, "problem": "one sentence", "instruction": "one imperative sentence"}}]}}"""
+
+
+def build_deck_critic_prompt(unit: dict, ctx: dict, deck: dict) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou review lecture decks. Output only JSON."
+    user = _DECK_CRITIC_TEMPLATE.format(
+        concept_name=unit.get("concept_name", ""),
+        content_type=unit.get("primary_content_type", "P1"), deck=_j(deck))
+    return system, user
+
+
+_DECK_POLISH_TEMPLATE = """You wrote the lecture deck below for "{concept_name}". A reviewer flagged specific
+slides. Rewrite ONLY the flagged slides to gold standard, applying each instruction.
+Keep each slide's schema exactly (same fields; unused fields null/[]); keep its phase,
+role and position in the arc; keep the deck's running example thread intact.
+
+THE DECK:
+{deck}
+
+REVIEWER FIXES:
+{fixes}
+
+Output ONLY JSON — one replacement per flagged slide:
+{{"patches": [{{"slide_no": 1, "new_slide": {{...the full corrected slide object...}}}}]}}"""
+
+
+def build_deck_polish_prompt(unit: dict, ctx: dict, deck: dict, fixes: list[dict]) -> tuple[str, str]:
+    system = preamble(ctx) + "\n\nYou rewrite flagged lecture slides. Output only JSON."
+    user = _DECK_POLISH_TEMPLATE.format(concept_name=unit.get("concept_name", ""),
+                                        deck=_j(deck), fixes=_j(fixes))
     return system, user
 
 

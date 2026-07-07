@@ -69,7 +69,16 @@ def _notes_docx(content: dict, name: str) -> bytes:
     def h(t): doc.add_heading(t, level=1)
 
     def p(t):
-        if t:
+        # Notes fields may be prose (legacy), arrays of points, or
+        # {core, elaboration} objects (structured schema).
+        if not t:
+            return
+        if isinstance(t, dict):
+            p(t.get("core"))
+            bullets(t.get("elaboration"))
+        elif isinstance(t, list):
+            bullets(t)
+        else:
             doc.add_paragraph(str(t))
 
     def bullets(items):
@@ -139,6 +148,12 @@ def _notes_docx(content: dict, name: str) -> bytes:
             doc.add_paragraph(
                 f"{t.get('term')}: {t.get('formal_definition') or t.get('simple_explanation') or ''}",
                 style="List Bullet")
+
+    cards = (csec.get("flashcard_section") or {}).get("cards") or []
+    if cards:
+        h("Flashcards")
+        for c in cards:
+            doc.add_paragraph(f"Q: {c.get('front')} — A: {c.get('back')}", style="List Bullet")
 
     pq = csec.get("practice_questions") or {}
     groups = [("Easy", pq.get("easy") or []), ("Medium", pq.get("medium") or []),
@@ -213,7 +228,23 @@ def _slides_pptx(content: dict, name: str) -> bytes:
     for s in (content or {}).get("slides") or []:
         sl = prs.slides.add_slide(body_layout)
         sl.shapes.title.text = str(s.get("title") or "")
-        lines: list[str] = [str(b) for b in (s.get("body_blocks") or [])]
+        lines: list[str] = []
+        # Layout-specific fields, flattened in reading order.
+        if s.get("definition_core"):
+            lines.append(str(s["definition_core"]))
+        for sec in s.get("sections") or []:
+            if isinstance(sec, dict):
+                lines.append(f"{sec.get('heading', '')}:")
+                lines.extend(f"  {b}" for b in (sec.get("bullets") or []))
+        for t in s.get("terms") or []:
+            if isinstance(t, dict):
+                lines.append(f"{t.get('term', '')} — {t.get('definition', '')}")
+        if s.get("left_bullets") or s.get("right_bullets"):
+            lines.append(f"{s.get('left_heading') or 'Advantages'}:")
+            lines.extend(f"  {b}" for b in (s.get("left_bullets") or []))
+            lines.append(f"{s.get('right_heading') or 'Limitations'}:")
+            lines.extend(f"  {b}" for b in (s.get("right_bullets") or []))
+        lines.extend(str(b) for b in (s.get("body_blocks") or []))
         if s.get("myth"):
             lines.insert(0, f"Myth: {s['myth']}")
         if s.get("reality"):
