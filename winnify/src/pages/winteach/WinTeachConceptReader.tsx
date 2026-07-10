@@ -1746,7 +1746,9 @@ export default function WinTeachConceptReader({ type, student }: { type: Concept
   const approved = nState?.approval_status === 'approved';
   // Both modes link back to the topic page: the faculty studio for teachers,
   // the student topic landing page (subtopics + study aids) for students.
-  const rootPath = student ? '/home/courses' : '/winteach/courses';
+  // Student-studio mounts (/study/*) keep every internal link inside /study.
+  const inStudioApp = location.pathname.startsWith('/study');
+  const rootPath = inStudioApp ? '/study/courses' : student ? '/home/courses' : '/winteach/courses';
   const studioPath = `${rootPath}/${courseId}/topic/${topicId}`;
   const readerPath = (t: ConceptArtType, cid: string) =>
     `${rootPath}/${courseId}/topic/${topicId}/${READER_META[t].segment}/${cid}`;

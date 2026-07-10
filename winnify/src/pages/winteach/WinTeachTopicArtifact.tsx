@@ -3,7 +3,7 @@
 // cheat sheet has its own richer page (WinTeachCheatSheet); everything else
 // renders here so no artifact opens in a modal.
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Btn, Badge } from './WinTeachUI';
@@ -241,9 +241,13 @@ export default function WinTeachTopicArtifact({ student }: { student?: boolean }
     ? (meta2.topic_title ?? content?.title ?? 'Topic')
     : ((topic as any)?.title ?? content?.title ?? 'Topic');
   const heroTitle = kind === 'assignment' ? (content?.title ?? topicTitle) : topicTitle;
-  const studioPath = student
-    ? `/home/courses/${courseId}/topic/${topicId}`
-    : `/winteach/courses/${courseId}/topic/${topicId}`;
+  // Student-studio mounts (/study/*) keep the back link inside /study.
+  const inStudioApp = useLocation().pathname.startsWith('/study');
+  const studioPath = inStudioApp
+    ? `/study/courses/${courseId}/topic/${topicId}`
+    : student
+      ? `/home/courses/${courseId}/topic/${topicId}`
+      : `/winteach/courses/${courseId}/topic/${topicId}`;
   const backLabel = student ? 'Back to topic' : 'Back to studio';
 
   const count = kind === 'assignment' ? (content?.tasks ?? []).length

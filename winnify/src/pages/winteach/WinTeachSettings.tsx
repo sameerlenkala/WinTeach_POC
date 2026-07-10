@@ -76,7 +76,7 @@ export default function WinTeachSettings() {
               </span>
             </div>
             <InfoRow label="Workspace" value="WinTeach Studio" />
-            <InfoRow label="Organization" value="Winnify · Campx Edutech" />
+            <InfoRow label="Organization" value="Winnify" />
           </SectionCard>
 
           <SectionCard icon={Palette} kicker="Appearance" title="Theme" sub="Switch between light and dark mode" delay={60}>

@@ -3,7 +3,7 @@
 // table/mistakes/steps) as a dense, print-friendly reference card — grouped by
 // subtopic. Falls back to the legacy key_concepts summary shape.
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Btn } from './WinTeachUI';
@@ -259,9 +259,13 @@ export default function WinTeachCheatSheet({ student }: { student?: boolean } = 
     return order.map(st => ({ subtopic: st, panels: by[st] }));
   }, [panels]);
 
-  const studioPath = student
-    ? `/home/courses/${courseId}/topic/${topicId}`
-    : `/winteach/courses/${courseId}/topic/${topicId}`;
+  // Student-studio mounts (/study/*) keep the back link inside /study.
+  const inStudioApp = useLocation().pathname.startsWith('/study');
+  const studioPath = inStudioApp
+    ? `/study/courses/${courseId}/topic/${topicId}`
+    : student
+      ? `/home/courses/${courseId}/topic/${topicId}`
+      : `/winteach/courses/${courseId}/topic/${topicId}`;
   const backLabel = student ? 'Back to topic' : 'Back to studio';
 
   return (
