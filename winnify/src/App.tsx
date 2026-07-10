@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import PublicLayout from './layouts/PublicLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 import NavbarOnlyLayout from './layouts/NavbarOnlyLayout';
@@ -53,7 +53,6 @@ import WinSpeakTips from './pages/WinSpeakTips';
 import WinSpeakPracticeHistory from './pages/WinSpeakPracticeHistory';
 import WinSpeakChallengeDetail from './pages/WinSpeakChallengeDetail';
 import AuthCallback from './pages/AuthCallback';
-import AcademicLogin from './pages/academic/AcademicLogin';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import SuperAdminColleges from './pages/superadmin/SuperAdminColleges';
@@ -72,6 +71,15 @@ import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
 import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
 import WinTeachCheatSheet from './pages/winteach/WinTeachCheatSheet';
 import WinTeachTopicArtifact from './pages/winteach/WinTeachTopicArtifact';
+import StudioLogin from './pages/studio/StudioLogin';
+import StudioSignup from './pages/studio/StudioSignup';
+import StudioShell from './pages/studio/StudioShell';
+import StudioHome from './pages/studio/StudioHome';
+import StudioCourse from './pages/studio/StudioCourse';
+import StudioTopic from './pages/studio/StudioTopic';
+import StudioLesson from './pages/studio/StudioLesson';
+import StudioRevision from './pages/studio/StudioRevision';
+import StudioMastery from './pages/studio/StudioMastery';
 import StudentCourses from './pages/student/StudentCourses';
 import StudentCourseTopics from './pages/student/StudentCourseTopics';
 import StudentTopic from './pages/student/StudentTopic';
@@ -125,6 +133,18 @@ import StitchedResources from './pages/academic/StitchedResources';
 import TopicFlashcards from './pages/academic/TopicFlashcards';
 import ComprehensiveQuizBuilder from './pages/academic/ComprehensiveQuizBuilder';
 
+// Staff consoles (WinTeach / SuperAdmin / CollegeAdmin) are never shown to
+// students or logged-out visitors: students bounce to their studio, everyone
+// else to sign-in. Non-student roles keep free navigation between consoles
+// (useful in dev/demo flows).
+function StaffOnly({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading && !user) return null;
+  if (!isAuthenticated) return <Navigate to="/signin" replace />;
+  if (user?.role === 'student') return <Navigate to="/study" replace />;
+  return <>{children}</>;
+}
+
 function ComingSoon({ title }: { title: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 12, color: 'rgba(26,26,34,0.45)' }}>
@@ -142,11 +162,34 @@ export default function App() {
           {/* OAuth callback — must be public, no layout */}
           <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Academic login — standalone, no navbar */}
-          <Route path="/academic/login" element={<AcademicLogin />} />
+          {/* Marketing landing + auth — standalone, winnify.ai-themed, no app chrome */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="/signup" element={<SignUp />} />
+
+          {/* Legacy academic demo login — orphaned surface, folded into /signin */}
+          <Route path="/academic/login" element={<Navigate to="/signin" replace />} />
+
+          {/* WinTeach Student Studio — mobile-only learning studio (courses).
+              Content pages reuse the shared reader/artifact engines re-skinned
+              by the .studio-content variable scope (see studio.css). */}
+          <Route path="/study/login" element={<StudioLogin />} />
+          <Route path="/study/signup" element={<StudioSignup />} />
+          <Route path="/study" element={<StudioShell />}>
+            <Route index element={<StudioHome />} />
+            <Route path="courses/:id" element={<StudioCourse />} />
+            <Route path="courses/:id/revision" element={<StudioRevision />} />
+            <Route path="courses/:id/mastery" element={<StudioMastery />} />
+            <Route path="courses/:id/topic/:topicId" element={<StudioTopic />} />
+            <Route path="courses/:id/topic/:topicId/cheatsheet" element={<div className="studio-content"><WinTeachCheatSheet student /></div>} />
+            <Route path="courses/:id/topic/:topicId/artifact/:type" element={<div className="studio-content"><WinTeachTopicArtifact student /></div>} />
+            <Route path="courses/:id/topic/:topicId/notes/:conceptId" element={<StudioLesson type="student_notes" />} />
+            <Route path="courses/:id/topic/:topicId/slides/:conceptId" element={<StudioLesson type="slides" />} />
+            <Route path="courses/:id/topic/:topicId/quiz/:conceptId" element={<StudioLesson type="quiz" />} />
+          </Route>
 
           {/* SuperAdmin Console */}
-          <Route path="/superadmin" element={<SuperAdminLayout />}>
+          <Route path="/superadmin" element={<StaffOnly><SuperAdminLayout /></StaffOnly>}>
             <Route index element={<SuperAdminDashboard />} />
             <Route path="colleges" element={<SuperAdminColleges />} />
             <Route path="users" element={<SuperAdminUsers />} />
@@ -156,7 +199,7 @@ export default function App() {
           </Route>
 
           {/* College Admin Console */}
-          <Route path="/admin" element={<CollegeAdminLayout />}>
+          <Route path="/admin" element={<StaffOnly><CollegeAdminLayout /></StaffOnly>}>
             <Route index element={<CollegeAdminDashboard />} />
             <Route path="users" element={<CollegeAdminUsers />} />
             <Route path="courses" element={<CollegeAdminCourses />} />
@@ -165,7 +208,7 @@ export default function App() {
           </Route>
 
           {/* WinTeach Console */}
-          <Route path="/winteach" element={<WinTeachLayout />}>
+          <Route path="/winteach" element={<StaffOnly><WinTeachLayout /></StaffOnly>}>
             <Route index element={<WinTeachDashboard />} />
             <Route path="courses" element={<WinTeachCourses />} />
             <Route path="courses/new" element={<WinTeachCreateCourse />} />
@@ -187,11 +230,8 @@ export default function App() {
             <Route path="settings" element={<WinTeachSettings />} />
           </Route>
 
-          {/* Public routes */}
+          {/* Public routes still using the app shell (navbar/footer) */}
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<Landing />} />
-            <Route path="/signin" element={<SignIn />} />
-            <Route path="/signup" element={<SignUp />} />
             <Route path="/signup/invite" element={<SignUpInvite />} />
           </Route>
 

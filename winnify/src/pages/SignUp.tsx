@@ -1,167 +1,132 @@
+// Create account — the single self-serve signup for faculty and students,
+// themed to winnify.ai. Org-code gated (backend register_open); registration
+// signs in server-side and routes by role. Admin accounts are invite-only
+// (/signup/invite). Replaces the old mock-social signup page.
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
-import WinnifyLogo from '@/components/common/WinnifyLogo';
-import { GoogleIcon, GitHubIcon } from '@/components/common/SocialIcons';
+import { useAuth, ROLE_REDIRECT } from '@/contexts/AuthContext';
+import {
+  ArrowRight, Eye, EyeOff, GraduationCap, KeyRound, Loader2, Lock, Mail, Rocket, User,
+} from 'lucide-react';
+import { WfHero } from './SignIn';
+import './auth/auth.css';
 
 export default function SignUp() {
   const navigate = useNavigate();
   const { signUp, isLoading } = useAuth();
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [role, setRole] = useState<'faculty' | 'student' | null>(null);
+  const [orgCode, setOrgCode] = useState('');
   const [error, setError] = useState('');
-  const [socialLoading, setSocialLoading] = useState<'google' | 'github' | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!name || !email || !password || !confirmPassword) { setError('Please fill in all fields.'); return; }
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
-    try { await signUp(name, email, password); navigate('/home'); }
-    catch { setError('Something went wrong. Please try again.'); }
-  };
-
-  const handleSocialSignUp = async (provider: 'google' | 'github') => {
-    setSocialLoading(provider);
-    setError('');
+    if (!fullName || !email || !password) { setError('Please fill in all fields.'); return; }
+    if (!role) { setError('Choose whether you are joining as Faculty or Student.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (!orgCode.trim()) { setError('Enter your organization code.'); return; }
     try {
-      const mockName = provider === 'google' ? 'Student' : 'Student';
-      const mockEmail = provider === 'google' ? 'student@gmail.com' : 'student@github.com';
-      await signUp(mockName, mockEmail, 'social-auth');
-      navigate('/home');
-    } catch {
-      setError(`Failed to sign up with ${provider}. Please try again.`);
-    } finally {
-      setSocialLoading(null);
+      const resolved = await signUp(fullName, email, password, { role, orgCode: orgCode.trim() });
+      navigate(ROLE_REDIRECT[resolved] ?? '/home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the account. Please try again.');
     }
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--app-bg)' }}>
-      {/* Left panel — decorative */}
-      <div
-        className="hidden lg:flex flex-col items-center justify-center w-[420px] shrink-0 p-12 text-white"
-        style={{ background: 'linear-gradient(160deg, var(--sidebar) 0%, var(--sidebar-active) 100%)' }}
-      >
-        <div className="mb-8">
-          <div
-            className="text-4xl font-bold tracking-wide mb-2"
-            style={{ fontFamily: 'var(--font-heading)', color: 'var(--wordmark)' }}
-          >
-            Winnify
-          </div>
-          <p className="text-sm opacity-70 leading-relaxed">Join thousands of students who got placed</p>
-        </div>
-        <div className="space-y-4 w-full">
-          {['90-day structured roadmap', 'Real company OA practice', 'AI communication coaching', 'Campus drive notifications'].map((f) => (
-            <div key={f} className="flex items-center gap-3 text-sm opacity-80">
-              <div className="h-1.5 w-1.5 rounded-full bg-white/70 shrink-0" />
-              {f}
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="wf-auth">
+      <WfHero />
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          {/* Logo + Header */}
-          <div className="text-center mb-8">
-            <Link to="/" className="inline-block mb-5">
-              <WinnifyLogo size="lg" />
-            </Link>
-            <div className="text-2xl font-bold mb-1" style={{ fontFamily: 'var(--font-heading)', color: 'var(--text)' }}>
-              Create your account
-            </div>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Start your placement journey</p>
+      <div className="wf-panel">
+        <div className="wf-card wf-rise">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 22 }}>
+            <span className="wf-mark" style={{ width: 38, height: 38, borderRadius: 12, fontSize: 19 }}>W</span>
+            <span className="wf-wordmark" style={{ fontSize: 21 }}>Winnify</span>
           </div>
 
-          {/* Social buttons */}
-          <div className="space-y-2.5 mb-6">
-            {[
-              { provider: 'google' as const, Icon: GoogleIcon, label: 'Continue with Google' },
-              { provider: 'github' as const, Icon: GitHubIcon, label: 'Continue with GitHub' },
-            ].map(({ provider, Icon, label }) => (
-              <button
-                key={provider}
-                onClick={() => handleSocialSignUp(provider)}
-                disabled={socialLoading !== null}
-                className="w-full flex items-center justify-center gap-3 h-11 rounded-lg text-sm font-medium transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-muted)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--card)'; }}
-              >
-                {socialLoading === provider ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-[18px] w-[18px]" />}
-                {label}
-              </button>
-            ))}
-          </div>
+          <h1 className="wf-h1">Create your account</h1>
+          <p className="wf-sub">Join with the organization code from your institution.</p>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full" style={{ borderTop: '1px solid var(--border)' }} />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-3 text-xs" style={{ background: 'var(--app-bg)', color: 'var(--text-subtle)' }}>
-                or continue with email
-              </span>
-            </div>
-          </div>
+          {error && <div className="wf-error" role="alert">{error}</div>}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div
-                className="rounded-lg text-sm px-4 py-2.5 font-medium"
-                style={{ background: 'rgba(220,33,51,0.10)', color: '#DC2133' }}
-                role="alert"
-              >
-                {error}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label className="wf-label">I am joining as</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {([
+                  { value: 'faculty' as const, label: 'Faculty', Icon: GraduationCap },
+                  { value: 'student' as const, label: 'Student', Icon: Rocket },
+                ]).map(({ value, label, Icon }) => (
+                  <button key={value} type="button" className="wf-role" aria-pressed={role === value} onClick={() => setRole(value)}>
+                    <Icon size={16} /> {label}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {[
-              { id: 'name', label: 'Full Name', type: 'text', placeholder: 'John Doe', value: name, onChange: setName, autoComplete: 'name' },
-              { id: 'email', label: 'Email', type: 'email', placeholder: 'you@example.com', value: email, onChange: setEmail, autoComplete: 'email' },
-              { id: 'password', label: 'Password', type: 'password', placeholder: 'At least 8 characters', value: password, onChange: setPassword, autoComplete: 'new-password' },
-              { id: 'confirm-password', label: 'Confirm Password', type: 'password', placeholder: 'Repeat your password', value: confirmPassword, onChange: setConfirmPassword, autoComplete: 'new-password' },
-            ].map((field) => (
-              <div key={field.id} className="space-y-1.5">
-                <label htmlFor={field.id} className="text-[13px] font-medium" style={{ color: 'var(--text)' }}>{field.label}</label>
-                <Input
-                  id={field.id}
-                  type={field.type}
-                  placeholder={field.placeholder}
-                  value={field.value}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  autoComplete={field.autoComplete}
-                  required
-                />
+              <div style={{ font: '400 11.5px var(--wf-body)', color: 'var(--wf-faint)', marginTop: 6 }}>
+                Admin accounts are created by invitation only.
               </div>
-            ))}
+            </div>
 
-            <Button type="submit" className="w-full h-11" loading={isLoading}>
-              Create Account
-            </Button>
+            <div>
+              <label className="wf-label" htmlFor="wf-su-name">Full name</label>
+              <div className="wf-field">
+                <User size={16} />
+                <input id="wf-su-name" type="text" placeholder="Your full name" value={fullName}
+                  onChange={e => setFullName(e.target.value)} autoComplete="name" required />
+              </div>
+            </div>
 
-            <p className="text-[11px] text-center leading-relaxed" style={{ color: 'var(--text-subtle)' }}>
-              By signing up, you agree to our{' '}
-              <Link to="#" className="hover:underline" style={{ color: 'var(--brand)' }}>Terms</Link> and{' '}
-              <Link to="#" className="hover:underline" style={{ color: 'var(--brand)' }}>Privacy Policy</Link>.
-            </p>
+            <div>
+              <label className="wf-label" htmlFor="wf-su-email">Email</label>
+              <div className="wf-field">
+                <Mail size={16} />
+                <input id="wf-su-email" type="email" placeholder="you@institution.edu" value={email}
+                  onChange={e => setEmail(e.target.value)} autoComplete="email" required />
+              </div>
+            </div>
+
+            <div>
+              <label className="wf-label" htmlFor="wf-su-password">Password</label>
+              <div className="wf-field">
+                <Lock size={16} />
+                <input id="wf-su-password" type={showPw ? 'text' : 'password'} placeholder="At least 6 characters" value={password}
+                  onChange={e => setPassword(e.target.value)} autoComplete="new-password" required />
+                <button type="button" onClick={() => setShowPw(p => !p)} aria-label={showPw ? 'Hide password' : 'Show password'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wf-faint)', display: 'flex', padding: 0 }}>
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="wf-label" htmlFor="wf-su-org">Organization code</label>
+              <div className="wf-field">
+                <KeyRound size={16} />
+                <input id="wf-su-org" type="text" placeholder="Ask your admin" value={orgCode}
+                  onChange={e => setOrgCode(e.target.value.toUpperCase())} required
+                  style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+              </div>
+              <div style={{ font: '400 11.5px var(--wf-body)', color: 'var(--wf-faint)', marginTop: 6 }}>
+                Provided by your institution.
+              </div>
+            </div>
+
+            <button type="submit" disabled={isLoading} className="wf-cta" style={{ marginTop: 4 }}>
+              {isLoading ? <Loader2 size={17} className="animate-spin" /> : <>Create account <ArrowRight size={17} /></>}
+            </button>
           </form>
 
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>
-            Already have an account?{' '}
-            <Link to="/signin" className="font-semibold hover:underline" style={{ color: 'var(--brand)' }}>Sign in</Link>
-          </p>
+          <div style={{ textAlign: 'center', marginTop: 18, font: '400 13.5px var(--wf-body)', color: 'var(--wf-muted)' }}>
+            Already have an account? <Link to="/signin" className="wf-link" style={{ fontSize: 13.5 }}>Sign in</Link>
+          </div>
+        </div>
+
+        <div className="wf-rise" style={{ width: '100%', maxWidth: 430, marginTop: 16, textAlign: 'center', font: '400 12px var(--wf-body)', color: 'var(--wf-faint)' }}>
+          Student joining for courses only? <Link to="/study/signup" className="wf-link" style={{ fontSize: 12 }}>Use the Course signup</Link>
         </div>
       </div>
     </div>

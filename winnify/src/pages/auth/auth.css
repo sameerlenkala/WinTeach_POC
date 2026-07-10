@@ -1,0 +1,335 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   WF-AUTH — winnify.ai website theme, scoped to the public sign-in/sign-up
+   pages only. Tokens lifted verbatim from winnify.ai's :root — violet family,
+   lavender canvas, amber accents, Fredoka display + Inter body, pill CTAs.
+   Nothing here touches post-login surfaces.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.wf-auth {
+  /* winnify.ai palette (site :root) */
+  --wf-violet: #6b3fe7;
+  --wf-violet-2: #7c4dff;
+  --wf-violet-deep: #21104f;
+  --wf-violet-ink: #170a38;
+  --wf-plum: #120827;
+  --wf-amber: #ffa500;
+  --wf-amber-soft: #ffc24d;
+  --wf-lav: #f0eeff;
+  --wf-lav-2: #e4dfff;
+  --wf-ink: #1b1233;
+  --wf-muted: rgba(27, 18, 51, 0.62);
+  --wf-faint: rgba(27, 18, 51, 0.4);
+  --wf-card-border: rgba(107, 63, 231, 0.12);
+  --wf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --wf-display: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+  --wf-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  background: var(--wf-lav);
+  color: var(--wf-ink);
+  font-family: var(--wf-body);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── left brand hero — winnify.ai dark-violet section with radial glows ── */
+.wf-hero {
+  position: relative;
+  width: 44%;
+  max-width: 560px;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  padding: 48px 52px;
+  color: #fff;
+  background: linear-gradient(150deg, var(--wf-violet-deep), var(--wf-plum));
+}
+@media (min-width: 1024px) { .wf-hero { display: flex; } }
+.wf-hero::before,
+.wf-hero::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.wf-hero::before {
+  width: 480px; height: 480px; top: -180px; right: -140px;
+  background: radial-gradient(closest-side, rgba(124, 77, 255, 0.35), transparent);
+}
+.wf-hero::after {
+  width: 380px; height: 380px; bottom: -140px; left: -120px;
+  background: radial-gradient(closest-side, rgba(255, 165, 0, 0.18), transparent);
+}
+.wf-hero-tagline {
+  font: 600 13px/1.4 var(--wf-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wf-amber-soft);
+}
+.wf-hero h2 {
+  font: 600 clamp(28px, 2.6vw, 36px)/1.18 var(--wf-display);
+  letter-spacing: -0.01em;
+  margin: 12px 0 14px;
+  color: #fff;
+}
+.wf-hero p { font: 400 15px/1.65 var(--wf-body); color: rgba(255, 255, 255, 0.75); max-width: 380px; }
+.wf-hero-item {
+  display: flex; align-items: center; gap: 13px;
+  padding: 12px 15px; margin-bottom: 9px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.wf-hero-item .ic {
+  width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #8e6bff, var(--wf-violet-2));
+  color: #fff;
+}
+.wf-hero-item b { display: block; font: 500 14px var(--wf-display); color: #fff; }
+.wf-hero-item span { font: 400 12px/1.45 var(--wf-body); color: rgba(255, 255, 255, 0.6); }
+
+/* ── W badge / wordmark ── */
+.wf-mark {
+  width: 44px; height: 44px; border-radius: 14px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--wf-violet-2), var(--wf-violet));
+  color: #fff;
+  font: 600 22px var(--wf-display);
+  box-shadow: 0 10px 26px rgba(107, 63, 231, 0.35);
+}
+.wf-wordmark { font: 600 24px var(--wf-display); color: var(--wf-ink); letter-spacing: 0.01em; }
+.wf-hero .wf-wordmark { color: #fff; }
+
+/* ── right panel + card ── */
+.wf-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+.wf-card {
+  width: 100%;
+  max-width: 430px;
+  background: #fff;
+  border: 1px solid var(--wf-card-border);
+  border-radius: 28px;
+  padding: 34px 32px 28px;
+  box-shadow: 0 2px 6px rgba(27, 18, 51, 0.04), 0 24px 60px -24px rgba(107, 63, 231, 0.25);
+}
+@media (max-width: 480px) { .wf-card { padding: 28px 22px 24px; border-radius: 24px; } }
+
+.wf-h1 { font: 600 27px/1.2 var(--wf-display); color: var(--wf-ink); margin: 0 0 6px; }
+.wf-sub { font: 400 14px/1.55 var(--wf-body); color: var(--wf-muted); margin: 0 0 22px; }
+
+/* ── form primitives ── */
+.wf-label { display: block; font: 500 13px var(--wf-display); color: var(--wf-ink); margin: 0 0 6px; }
+.wf-field {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: #f8f7ff;
+  border: 1.5px solid rgba(107, 63, 231, 0.14);
+  transition: border-color 0.18s var(--wf-ease), background 0.18s;
+}
+.wf-field:focus-within { border-color: var(--wf-violet-2); background: #fff; }
+.wf-field > svg { color: var(--wf-faint); flex-shrink: 0; }
+.wf-field:focus-within > svg { color: var(--wf-violet); }
+.wf-field input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font: 400 14.5px var(--wf-body); color: var(--wf-ink);
+  padding: 12px 0;
+}
+.wf-field input::placeholder { color: var(--wf-faint); }
+.wf-field input:focus { box-shadow: none; }
+
+/* pill CTA — site button language (radius 100px, violet gradient, arrow) */
+.wf-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 50px;
+  border: none; border-radius: 100px; cursor: pointer;
+  background: linear-gradient(135deg, var(--wf-violet-2), var(--wf-violet));
+  color: #fff;
+  font: 500 15.5px var(--wf-display);
+  box-shadow: 0 12px 28px -8px rgba(107, 63, 231, 0.5);
+  transition: transform 0.15s var(--wf-ease), box-shadow 0.2s, opacity 0.2s;
+}
+.wf-cta:hover:not(:disabled) { box-shadow: 0 14px 32px -8px rgba(107, 63, 231, 0.62); }
+.wf-cta:active:not(:disabled) { transform: scale(0.98); }
+.wf-cta:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+.wf-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; min-height: 48px;
+  border-radius: 100px; cursor: pointer;
+  background: #fff;
+  border: 1.5px solid rgba(107, 63, 231, 0.22);
+  color: var(--wf-ink);
+  font: 500 14px var(--wf-display);
+  transition: border-color 0.18s, background 0.18s, transform 0.15s var(--wf-ease);
+}
+.wf-ghost:hover:not(:disabled) { border-color: var(--wf-violet-2); background: #faf9ff; }
+.wf-ghost:active:not(:disabled) { transform: scale(0.98); }
+.wf-ghost:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.wf-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: 500 13px var(--wf-body); color: var(--wf-violet);
+  text-decoration: none;
+}
+.wf-link:hover { text-decoration: underline; }
+
+.wf-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+.wf-divider::before, .wf-divider::after { content: ''; flex: 1; height: 1px; background: var(--wf-lav-2); }
+.wf-divider span { font: 400 12px var(--wf-body); color: var(--wf-faint); }
+
+.wf-error {
+  border-radius: 14px;
+  padding: 11px 14px;
+  margin-bottom: 14px;
+  background: rgba(220, 33, 51, 0.07);
+  border: 1px solid rgba(220, 33, 51, 0.2);
+  color: #c01a2e;
+  font: 500 13px/1.5 var(--wf-body);
+}
+
+/* persona picker (sign-in) — who is signing in, chosen before credentials */
+.wf-personas {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.wf-persona {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; cursor: pointer;
+  border-radius: 14px;
+  background: #f8f7ff;
+  border: 1.5px solid rgba(107, 63, 231, 0.14);
+  font: 500 13px var(--wf-display); color: var(--wf-muted);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  text-align: left;
+}
+.wf-persona .ic {
+  width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--wf-lav);
+  color: var(--wf-violet);
+  transition: background 0.15s, color 0.15s;
+}
+.wf-persona[aria-pressed='true'] {
+  border-color: var(--wf-violet-2);
+  background: rgba(124, 77, 255, 0.08);
+  color: var(--wf-ink);
+}
+.wf-persona[aria-pressed='true'] .ic {
+  background: linear-gradient(135deg, var(--wf-violet-2), var(--wf-violet));
+  color: #fff;
+}
+
+/* quiet demo affordance — explicit action, never auto-filled */
+.wf-demo-hint {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 12px;
+  font: 400 12px var(--wf-body); color: var(--wf-faint);
+}
+
+/* role picker chips (signup) */
+.wf-role {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1; padding: 12px 14px; cursor: pointer;
+  border-radius: 16px;
+  background: #f8f7ff;
+  border: 1.5px solid rgba(107, 63, 231, 0.14);
+  font: 500 14px var(--wf-display); color: var(--wf-ink);
+  transition: border-color 0.15s, background 0.15s;
+}
+.wf-role[aria-pressed='true'] {
+  border-color: var(--wf-violet-2);
+  background: rgba(124, 77, 255, 0.08);
+  color: var(--wf-violet);
+}
+
+/* Student — Course login: dark violet feature card (site dark-section style) */
+.wf-course-card {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; margin-top: 18px; padding: 15px 16px;
+  text-align: left; cursor: pointer;
+  border: none; border-radius: 20px;
+  background: linear-gradient(135deg, var(--wf-violet-deep), var(--wf-plum));
+  color: #fff;
+  box-shadow: 0 16px 36px -14px rgba(23, 10, 56, 0.55);
+  transition: transform 0.15s var(--wf-ease), box-shadow 0.2s;
+}
+.wf-course-card:hover { transform: translateY(-1px); box-shadow: 0 20px 42px -14px rgba(23, 10, 56, 0.65); }
+.wf-course-card .ic {
+  width: 40px; height: 40px; border-radius: 13px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--wf-amber-soft), var(--wf-amber));
+  color: var(--wf-violet-ink);
+}
+.wf-course-card b { display: block; font: 500 14.5px var(--wf-display); color: #fff; }
+.wf-course-card span { font: 400 12px/1.45 var(--wf-body); color: rgba(255, 255, 255, 0.62); }
+
+/* staff quick access */
+.wf-staff {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  flex: 1; padding: 12px 6px; cursor: pointer;
+  border-radius: 18px;
+  background: #fff;
+  border: 1.5px solid var(--wf-card-border);
+  font: 500 11.5px var(--wf-display); color: var(--wf-ink);
+  transition: border-color 0.15s, transform 0.15s var(--wf-ease);
+}
+.wf-staff:hover { border-color: rgba(107, 63, 231, 0.35); transform: translateY(-1px); }
+.wf-staff .ic {
+  width: 32px; height: 32px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--wf-lav);
+  color: var(--wf-violet);
+}
+.wf-eyebrow {
+  font: 500 11px var(--wf-display);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--wf-faint);
+}
+
+/* forgot-password modal */
+.wf-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(23, 10, 56, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(4px);
+}
+.wf-modal {
+  width: 100%; max-width: 400px;
+  background: #fff;
+  border: 1px solid var(--wf-card-border);
+  border-radius: 24px;
+  padding: 30px 28px;
+  box-shadow: 0 32px 80px -20px rgba(23, 10, 56, 0.5);
+}
+.wf-code-input {
+  width: 100%; min-height: 58px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(107, 63, 231, 0.2);
+  background: #f8f7ff;
+  text-align: center; outline: none;
+  font: 600 28px var(--wf-display);
+  letter-spacing: 0.4em;
+  color: var(--wf-ink);
+}
+.wf-code-input:focus { border-color: var(--wf-violet-2); background: #fff; }
+
+/* entrance */
+@keyframes wf-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.wf-rise { animation: wf-rise 0.45s var(--wf-ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  .wf-auth *, .wf-auth *::before, .wf-auth *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

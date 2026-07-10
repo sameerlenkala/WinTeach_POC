@@ -119,7 +119,7 @@ export default function AcademicLogin() {
           </div>
 
           <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.45)', marginTop: 32, position: 'relative' }}>
-            Powered by Winnify · campx.in
+            Powered by Winnify · winnify.ai
           </div>
         </div>
 

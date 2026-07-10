@@ -1,59 +1,87 @@
+// Sign in — the single entry point for every role, themed to winnify.ai
+// (violet/lavender, Fredoka + Inter, pill CTAs). Standalone page: no app
+// navbar/footer. Students land on /home (placement portal); the Student —
+// Course login card hands off to the mobile studio (/study/login); staff
+// roles route to their consoles. Account creation lives at /signup.
 import { useState, type FormEvent, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, ROLE_REDIRECT, type UserRole } from '@/contexts/AuthContext';
 import {
-  Loader2, Mail, Lock, Eye, EyeOff, ShieldCheck, Building2, GraduationCap,
-  Mic, Code2, ClipboardList, Rocket, ArrowLeft, KeyRound, CheckCircle2,
+  ArrowLeft, ArrowRight, Building2, CheckCircle2, Eye, EyeOff,
+  GraduationCap, KeyRound, Loader2, Lock, Mail, Rocket, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { GoogleIcon } from '@/components/common/SocialIcons';
 import { authApi } from '@/api/auth';
+import './auth/auth.css';
 
 type ForgotStep = 'email' | 'code' | 'reset' | 'done';
 
 /* Demo accounts seed themselves server-side with this password on first login. */
 const DEMO_PASSWORD = 'demo@123';
 
-const rise = (i: number): React.CSSProperties => ({ animationDelay: `${i * 80}ms` });
-
-/* ── small shared pieces ─────────────────────────────────────────────────── */
-
-function ErrorAlert({ children }: { children: React.ReactNode }) {
+export function WfHero() {
   return (
-    <div role="alert" style={{
-      background: 'var(--tint-red-bg)', color: 'var(--tint-red-fg)',
-      border: '1px solid color-mix(in oklab, var(--tint-red-fg) 25%, transparent)',
-      borderRadius: 'var(--w-r4)', padding: '10px 14px',
-      fontSize: 'var(--fs-small)', fontFamily: 'var(--font-sans)', marginBottom: 14,
-    }}>{children}</div>
+    <aside className="wf-hero">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+        <span className="wf-mark">W</span>
+        <span className="wf-wordmark">Winnify</span>
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative' }}>
+        <div className="wf-hero-tagline">The Career Intelligence Layer for Talent</div>
+        <h2>Where talent gets its bridge to opportunity.</h2>
+        <p>From awareness to readiness to placement — AI-powered courses, communication coaching and mock tests, in one campus platform.</p>
+        <div style={{ marginTop: 26 }}>
+          {([
+            { t: 'WinTeach Courses', s: 'AI lessons, quizzes & revision for every subject' },
+            { t: 'WinSpeak', s: 'AI speech coaching — the skill employers rank first' },
+            { t: 'Mock Tests & Drives', s: 'Company OAs, aptitude practice and live drives' },
+          ] as const).map(({ t, s }) => (
+            <div key={t} className="wf-hero-item">
+              <span className="ic"><Sparkles size={16} /></span>
+              <div><b>{t}</b><span>{s}</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ position: 'relative', font: '400 12px Inter, sans-serif', color: 'rgba(255,255,255,.45)' }}>
+        © 2026 Winnify · winnify.ai
+      </div>
+    </aside>
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <label style={{ fontSize: 'var(--fs-small)', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>
-      {children}
-    </label>
-  );
-}
+/* Personas: who is signing in. Chosen alongside credentials — the account's
+   actual role must match, so nobody drops into the wrong console. */
+const PERSONAS: { role: UserRole; label: string; Icon: React.ElementType; sub: string }[] = [
+  { role: 'student', label: 'Student', Icon: Rocket, sub: 'placement prep' },
+  { role: 'faculty', label: 'Faculty', Icon: GraduationCap, sub: 'WinTeach console' },
+  { role: 'admin', label: 'College Admin', Icon: Building2, sub: 'college console' },
+  { role: 'superadmin', label: 'Super Admin', Icon: ShieldCheck, sub: 'platform console' },
+];
 
-/* ── page ────────────────────────────────────────────────────────────────── */
+const ROLE_LABEL: Record<UserRole, string> = {
+  student: 'Student', faculty: 'Faculty', admin: 'College Admin', superadmin: 'Super Admin',
+};
+
+/* Demo account per persona — filled only on explicit request, never automatically. */
+const DEMO_EMAIL: Record<UserRole, string> = {
+  student: 'student@gmail.com',
+  faculty: 'faculty@ciet.ac.in',
+  admin: 'admin@ciet.ac.in',
+  superadmin: 'superadmin@winnify.ai',
+};
 
 export default function SignIn() {
   const navigate = useNavigate();
-  const { signIn, signUp, signInWithGoogle, isLoading } = useAuth();
-  const [email,    setEmail]    = useState('');
+  const { signIn, signInWithGoogle, signOut, isLoading } = useAuth();
+  const [persona, setPersona] = useState<UserRole>('student');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [showPw,   setShowPw]   = useState(false);
-  const [error,    setError]    = useState('');
+  const [error, setError] = useState('');
 
-  // Create-account state (open signup: faculty/student, org-code gated)
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [fullName, setFullName] = useState('');
-  const [suRole, setSuRole] = useState<'faculty' | 'student' | null>(null);
-  const [orgCode, setOrgCode] = useState('');
-
-  // Forgot password state
+  // Forgot password
   const [forgotStep, setForgotStep] = useState<ForgotStep | null>(null);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotCode, setForgotCode] = useState('');
@@ -102,21 +130,15 @@ export default function SignIn() {
     catch { setError('Failed to sign in with Google.'); setGoogleLoading(false); }
   };
 
-  // Quick-login buttons for non-student roles
-  const PORTAL_ROLES: { role: UserRole; label: string; email: string; Icon: React.ElementType; tone: string }[] = [
-    { role: 'superadmin', label: 'Super Admin',   email: 'superadmin@winnify.ai', Icon: ShieldCheck,   tone: 'pink' },
-    { role: 'admin',      label: 'College Admin', email: 'admin@ciet.ac.in',      Icon: Building2,     tone: 'teal' },
-    { role: 'faculty',    label: 'Faculty',       email: 'faculty@ciet.ac.in',    Icon: GraduationCap, tone: 'orange' },
-  ];
-
-  const handlePortalLogin = async (role: UserRole, demoEmail: string) => {
+  const switchPersona = (role: UserRole) => {
+    setPersona(role);
     setError('');
-    try {
-      const resolvedRole = await signIn(demoEmail, DEMO_PASSWORD);
-      navigate(ROLE_REDIRECT[resolvedRole] ?? ROLE_REDIRECT[role]);
-    } catch {
-      setError(`Failed to sign in as ${role}.`);
-    }
+  };
+
+  const fillDemo = () => {
+    setEmail(DEMO_EMAIL[persona]);
+    setPassword(DEMO_PASSWORD);
+    setError('');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -125,117 +147,42 @@ export default function SignIn() {
     if (!email || !password) { setError('Please fill in all fields.'); return; }
     try {
       const role = await signIn(email, password);
+      // The chosen persona is part of the login: a mismatch never silently
+      // drops the user into a different console.
+      if (role !== persona) {
+        await signOut();
+        setError(`These credentials belong to a ${ROLE_LABEL[role]} account — select the ${ROLE_LABEL[role]} persona above to sign in.`);
+        return;
+      }
       navigate(ROLE_REDIRECT[role] ?? '/home');
     } catch {
       setError('Invalid credentials. Please try again.');
     }
   };
 
-  const handleSignUp = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (!fullName || !email || !password) { setError('Please fill in all fields.'); return; }
-    if (!suRole) { setError('Choose whether you are joining as Faculty or Student.'); return; }
-    if (!orgCode.trim()) { setError('Enter your organization code.'); return; }
-    try {
-      const role = await signUp(fullName, email, password, { role: suRole, orgCode: orgCode.trim() });
-      navigate(ROLE_REDIRECT[role] ?? '/home');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create the account. Please try again.');
-    }
-  };
-
-  const switchMode = (m: 'signin' | 'signup') => { setMode(m); setError(''); };
-
-  const modalHeader = (Icon: React.ElementType, title: string, sub: string) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-      <div style={{ width: 42, height: 42, borderRadius: 'var(--w-r4)', background: 'var(--tint-brand-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={18} color="var(--tint-brand-fg)" />
-      </div>
-      <div>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h3)', color: 'var(--text)' }}>{title}</div>
-        <div style={{ fontSize: 'var(--fs-small)', color: 'var(--text-2)', fontFamily: 'var(--font-sans)' }}>{sub}</div>
-      </div>
-    </div>
-  );
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', fontFamily: 'var(--font-sans)', background: 'var(--card)' }}>
+    <div className="wf-auth">
+      <WfHero />
 
-      {/* ── Left brand panel ── */}
-      <div className="hidden lg:flex flex-col" style={{
-        width: '46%', background: 'var(--app-bg-grad)', padding: '48px 56px',
-        position: 'relative', overflow: 'hidden', color: '#fff',
-      }}>
-        {/* decorative rings */}
-        <div aria-hidden style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.10)', top: -160, right: -120 }} />
-        <div aria-hidden style={{ position: 'absolute', width: 240, height: 240, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.08)', bottom: -90, left: -60 }} />
-
-        {/* wordmark */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: '#F6A623', letterSpacing: '0.02em' }}>Winnify</span>
-          <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.65)', borderLeft: '1px solid rgba(255,255,255,0.25)', paddingLeft: 10 }}>
-            Student Portal
-          </span>
-        </div>
-
-        {/* center copy */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 40, position: 'relative' }}>
-          <h1 className="ds-rise" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(30px, 3vw, 38px)', color: '#fff', lineHeight: 1.15, margin: '0 0 14px', ...rise(0) }}>
-            Your placement journey,<br />all in one place.
-          </h1>
-          <p className="ds-rise" style={{ fontSize: 15, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, margin: '0 0 28px', maxWidth: 380, ...rise(1) }}>
-            AI-powered tools for coding, communication, mock tests, drives and learning — built for CIET College students.
-          </p>
-          {([
-            { Icon: Mic,           label: 'WinSpeak',   sub: 'AI speech coaching & weekly challenges' },
-            { Icon: Code2,         label: 'Code Arena', sub: 'DSA problems with AI tutor' },
-            { Icon: ClipboardList, label: 'Mock Tests', sub: 'Aptitude, technical & company OAs' },
-            { Icon: Rocket,        label: 'Drives',     sub: 'Live placement drives & apply tracker' },
-          ] as const).map(({ Icon, label, sub }, i) => (
-            <div key={label} className="ds-rise" style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '11px 14px', borderRadius: 'var(--w-r4)', marginBottom: 8,
-              background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.14)',
-              ...rise(i + 2),
-            }}>
-              <div style={{ width: 36, height: 36, borderRadius: 'var(--w-r3)', background: 'rgba(255,255,255,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon size={17} color="#fff" />
-              </div>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fff' }}>{label}</div>
-                <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>{sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ fontSize: 'var(--fs-caption)', color: 'rgba(255,255,255,0.45)', position: 'relative' }}>
-          Powered by Winnify · campx.in
-        </div>
-      </div>
-
-      {/* ── Forgot password overlay ── */}
+      {/* Forgot password modal */}
       {forgotStep && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(28,32,48,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div className="ds-pop" style={{ background: 'var(--card)', borderRadius: 'var(--w-r5)', width: '100%', maxWidth: 400, padding: '32px 28px', boxShadow: 'var(--shadow-pop)', border: '1px solid var(--border)' }}>
-
+        <div className="wf-overlay">
+          <div className="wf-modal wf-rise">
             {forgotStep === 'email' && (
               <>
-                {modalHeader(Mail, 'Reset password', 'Enter your registered email')}
-                {forgotError && <ErrorAlert>{forgotError}</ErrorAlert>}
+                <h2 className="wf-h1" style={{ fontSize: 22 }}>Reset password</h2>
+                <p className="wf-sub">Enter your registered email.</p>
+                {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
                 <form onSubmit={handleForgotEmail} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div className="w-field">
-                    <Mail size={15} />
-                    <input type="email" placeholder="you@institution.edu" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required />
+                  <div className="wf-field">
+                    <Mail size={16} />
+                    <input type="email" placeholder="you@institution.edu" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required autoFocus />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button type="button" onClick={cancelForgot} className="w-btn-ghost" style={{ flex: 1, height: 44 }}>
-                      <ArrowLeft size={14} /> Cancel
+                    <button type="button" onClick={cancelForgot} className="wf-ghost" style={{ flex: 1 }}>
+                      <ArrowLeft size={15} /> Cancel
                     </button>
-                    <button type="submit" className="w-btn-primary" style={{ flex: 1, height: 44 }}>
-                      Send Code
-                    </button>
+                    <button type="submit" className="wf-cta" style={{ flex: 1 }}>Send code</button>
                   </div>
                 </form>
               </>
@@ -243,29 +190,19 @@ export default function SignIn() {
 
             {forgotStep === 'code' && (
               <>
-                {modalHeader(KeyRound, 'Enter your code', `Sent to ${forgotEmail}`)}
-                <div style={{ background: 'var(--tint-brand-bg)', borderRadius: 'var(--w-r4)', padding: '10px 14px', fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)', fontWeight: 500, marginBottom: 16 }}>
-                  Use the unique reset code provided by your institution.
-                </div>
-                {forgotError && <ErrorAlert>{forgotError}</ErrorAlert>}
+                <h2 className="wf-h1" style={{ fontSize: 22 }}>Enter your code</h2>
+                <p className="wf-sub">Use the unique reset code provided by your institution.</p>
+                {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
                 <form onSubmit={handleForgotCode} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <input
-                    type="text" placeholder="0000" value={forgotCode}
-                    onChange={e => setForgotCode(e.target.value)} maxLength={4} required
-                    style={{
-                      height: 56, borderRadius: 'var(--w-r4)', border: '1.5px solid var(--border)',
-                      background: 'var(--input-bg)', textAlign: 'center', fontSize: 28,
-                      fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.4em',
-                      color: 'var(--text)', width: '100%', fontVariantNumeric: 'tabular-nums',
-                    }}
+                    className="wf-code-input" type="text" inputMode="numeric" placeholder="0000"
+                    value={forgotCode} onChange={e => setForgotCode(e.target.value)} maxLength={4} required autoFocus
                   />
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button type="button" onClick={() => setForgotStep('email')} className="w-btn-ghost" style={{ flex: 1, height: 44 }}>
-                      <ArrowLeft size={14} /> Back
+                    <button type="button" onClick={() => setForgotStep('email')} className="wf-ghost" style={{ flex: 1 }}>
+                      <ArrowLeft size={15} /> Back
                     </button>
-                    <button type="submit" className="w-btn-primary" style={{ flex: 1, height: 44 }}>
-                      Verify
-                    </button>
+                    <button type="submit" className="wf-cta" style={{ flex: 1 }}><KeyRound size={16} /> Verify</button>
                   </div>
                 </form>
               </>
@@ -273,237 +210,149 @@ export default function SignIn() {
 
             {forgotStep === 'reset' && (
               <>
-                {modalHeader(Lock, 'New password', 'Choose a strong password')}
-                {forgotError && <ErrorAlert>{forgotError}</ErrorAlert>}
+                <h2 className="wf-h1" style={{ fontSize: 22 }}>New password</h2>
+                <p className="wf-sub">At least 6 characters.</p>
+                {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
                 <form onSubmit={handleForgotReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div className="w-field">
-                    <Lock size={15} />
-                    <input type={showNewPw ? 'text' : 'password'} placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
+                  <div className="wf-field">
+                    <Lock size={16} />
+                    <input type={showNewPw ? 'text' : 'password'} placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required autoFocus />
                     <button type="button" onClick={() => setShowNewPw(p => !p)} aria-label={showNewPw ? 'Hide password' : 'Show password'}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
-                      {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wf-faint)', display: 'flex', padding: 0 }}>
+                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  <div className="w-field">
-                    <Lock size={15} />
+                  <div className="wf-field">
+                    <Lock size={16} />
                     <input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
                   </div>
-                  <button type="submit" disabled={resetting} className="w-btn-primary" style={{ height: 44 }}>
-                    {resetting && <Loader2 size={15} className="animate-spin" />}
-                    Set New Password
+                  <button type="submit" disabled={resetting} className="wf-cta">
+                    {resetting && <Loader2 size={16} className="animate-spin" />}
+                    Set new password
                   </button>
                 </form>
               </>
             )}
 
             {forgotStep === 'done' && (
-              <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                <div className="ds-pop" style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--tint-teal-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                  <CheckCircle2 size={32} color="var(--tint-teal-fg)" />
+              <div style={{ textAlign: 'center', padding: '6px 0' }}>
+                <div style={{
+                  width: 62, height: 62, borderRadius: '50%', margin: '0 auto 14px',
+                  background: 'rgba(61,220,132,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <CheckCircle2 size={30} color="#0d8a4b" />
                 </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h2)', color: 'var(--text)', marginBottom: 8 }}>Password updated!</div>
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)', marginBottom: 24 }}>You can now sign in with your new password.</div>
-                <button onClick={() => { cancelForgot(); setPassword(newPassword); }} className="w-btn-primary" style={{ width: '100%', height: 44 }}>
-                  Back to Sign In
+                <h2 className="wf-h1" style={{ fontSize: 22 }}>Password updated!</h2>
+                <p className="wf-sub">You can now sign in with your new password.</p>
+                <button onClick={() => { cancelForgot(); setPassword(newPassword); }} className="wf-cta">
+                  Back to sign in
                 </button>
               </div>
             )}
-
           </div>
         </div>
       )}
 
-      {/* ── Right form panel ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 32px', position: 'relative' }}>
-
-        <div style={{ width: '100%', maxWidth: 384 }}>
-
-          {/* heading */}
-          <div className="ds-rise" style={{ marginBottom: 24, ...rise(0) }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 30, color: '#F6A623', lineHeight: 1 }}>Winnify</span>
-              <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, background: 'var(--tint-brand-bg)', color: 'var(--tint-brand-fg)', borderRadius: 999, padding: '4px 10px', letterSpacing: '0.04em' }}>
-                CIET College
-              </span>
-            </div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h1)', color: 'var(--text)', margin: '0 0 4px', lineHeight: 'var(--lh-h1)' }}>
-              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
-            </h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)', margin: 0 }}>
-              {mode === 'signin' ? 'Sign in to continue your placement prep.' : 'Join with your organization code as faculty or student.'}
-            </p>
+      {/* Right panel */}
+      <div className="wf-panel">
+        <div className="wf-card wf-rise">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 22 }}>
+            <span className="wf-mark" style={{ width: 38, height: 38, borderRadius: 12, fontSize: 19 }}>W</span>
+            <span className="wf-wordmark" style={{ fontSize: 21 }}>Winnify</span>
           </div>
 
-          {error && <ErrorAlert>{error}</ErrorAlert>}
+          <h1 className="wf-h1">Welcome back</h1>
+          <p className="wf-sub">
+            {persona === 'student'
+              ? 'Sign in to continue your placement prep.'
+              : `Sign in to your ${ROLE_LABEL[persona]} console.`}
+          </p>
 
-          {mode === 'signup' && (
-            <form onSubmit={handleSignUp} className="ds-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16, ...rise(1) }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <FieldLabel>I am joining as</FieldLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {([
-                    { value: 'faculty' as const, label: 'Faculty', Icon: GraduationCap, tone: 'orange' },
-                    { value: 'student' as const, label: 'Student', Icon: Rocket, tone: 'teal' },
-                  ]).map(({ value, label, Icon, tone }) => (
-                    <button key={value} type="button" onClick={() => setSuRole(value)} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
-                      borderRadius: 'var(--w-r4)', cursor: 'pointer',
-                      background: suRole === value ? `var(--tint-${tone}-bg)` : 'var(--card)',
-                      border: suRole === value ? `1.5px solid var(--tint-${tone}-fg)` : '1.5px solid var(--border)',
-                    }}>
-                      <Icon size={16} color={`var(--tint-${tone}-fg)`} />
-                      <span style={{ fontSize: 'var(--fs-small)', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>Admin accounts are created by invitation only.</span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <FieldLabel>Full name</FieldLabel>
-                <div className="w-field">
-                  <GraduationCap size={15} />
-                  <input type="text" placeholder="Your full name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" required />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <FieldLabel>Email</FieldLabel>
-                <div className="w-field">
-                  <Mail size={15} />
-                  <input type="email" placeholder="you@institution.edu" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <FieldLabel>Password</FieldLabel>
-                <div className="w-field">
-                  <Lock size={15} />
-                  <input type={showPw ? 'text' : 'password'} placeholder="At least 6 characters" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" required />
-                  <button type="button" onClick={() => setShowPw(p => !p)} aria-label={showPw ? 'Hide password' : 'Show password'}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
-                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <FieldLabel>Organization code</FieldLabel>
-                <div className="w-field">
-                  <KeyRound size={15} />
-                  <input type="text" placeholder="Ask your admin" value={orgCode} onChange={e => setOrgCode(e.target.value.toUpperCase())} required
-                    style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }} />
-                </div>
-                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>Provided by your institution.</span>
-              </div>
-
-              <button type="submit" disabled={isLoading} className="w-btn-primary" style={{ marginTop: 4 }}>
-                {isLoading && <Loader2 size={16} className="animate-spin" />}
-                Create account
+          {/* Persona — part of the login, alongside credentials */}
+          <div className="wf-label" style={{ marginBottom: 8 }}>Sign in as</div>
+          <div className="wf-personas" role="radiogroup" aria-label="Sign in as">
+            {PERSONAS.map(({ role, label, Icon }) => (
+              <button key={role} type="button" className="wf-persona" aria-pressed={persona === role}
+                onClick={() => switchPersona(role)}>
+                <span className="ic"><Icon size={14} /></span>
+                {label}
               </button>
+            ))}
+          </div>
 
-              <div style={{ textAlign: 'center', fontSize: 'var(--fs-small)', color: 'var(--text-2)' }}>
-                Already have an account?{' '}
-                <button type="button" onClick={() => switchMode('signin')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-brand-fg)', fontWeight: 600, padding: 0, fontSize: 'var(--fs-small)', fontFamily: 'var(--font-sans)' }}>
-                  Sign in
-                </button>
-              </div>
-            </form>
-          )}
+          {error && <div className="wf-error" role="alert">{error}</div>}
 
-          {/* form */}
-          {mode === 'signin' && (
-          <form onSubmit={handleSubmit} className="ds-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16, ...rise(1) }}>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <FieldLabel>Email or Username</FieldLabel>
-              <div className="w-field">
-                <Mail size={15} />
-                <input
-                  type="email" placeholder="you@institution.edu"
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  autoComplete="email" required
-                />
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label className="wf-label" htmlFor="wf-email">Email</label>
+              <div className="wf-field">
+                <Mail size={16} />
+                <input id="wf-email" type="email" placeholder="you@institution.edu" value={email}
+                  onChange={e => setEmail(e.target.value)} autoComplete="email" autoFocus required />
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <FieldLabel>Password</FieldLabel>
-                <button type="button" onClick={startForgot} style={{ fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-sans)' }}>
-                  Forgot password?
-                </button>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <label className="wf-label" htmlFor="wf-password">Password</label>
+                <button type="button" onClick={startForgot} className="wf-link">Forgot password?</button>
               </div>
-              <div className="w-field">
-                <Lock size={15} />
-                <input
-                  type={showPw ? 'text' : 'password'} placeholder="••••••••"
-                  value={password} onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password" required
-                />
+              <div className="wf-field">
+                <Lock size={16} />
+                <input id="wf-password" type={showPw ? 'text' : 'password'} placeholder="••••••••" value={password}
+                  onChange={e => setPassword(e.target.value)} autoComplete="current-password" required />
                 <button type="button" onClick={() => setShowPw(p => !p)} aria-label={showPw ? 'Hide password' : 'Show password'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wf-faint)', display: 'flex', padding: 0 }}>
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={isLoading} className="w-btn-primary" style={{ marginTop: 4 }}>
-              {isLoading && <Loader2 size={16} className="animate-spin" />}
-              Sign in
+            <button type="submit" disabled={isLoading} className="wf-cta" style={{ marginTop: 4 }}>
+              {isLoading ? <Loader2 size={17} className="animate-spin" /> : <>Sign in <ArrowRight size={17} /></>}
             </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>or</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            </div>
-
-            <button type="button" onClick={handleGoogleLogin} disabled={googleLoading} className="w-btn-ghost">
-              {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <GoogleIcon className="h-[18px] w-[18px]" />}
-              Continue with Google
-            </button>
-
-            <div style={{ textAlign: 'center', fontSize: 'var(--fs-small)', color: 'var(--text-2)' }}>
-              New here?{' '}
-              <button type="button" onClick={() => switchMode('signup')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-brand-fg)', fontWeight: 600, padding: 0, fontSize: 'var(--fs-small)', fontFamily: 'var(--font-sans)' }}>
-                Create an account
-              </button>
-            </div>
           </form>
+
+          {/* Quiet demo affordance — nothing is ever pre-filled */}
+          <div className="wf-demo-hint">
+            Exploring the {ROLE_LABEL[persona]} demo?
+            <button type="button" className="wf-link" style={{ fontSize: 12 }} onClick={fillDemo}>
+              Fill demo credentials
+            </button>
+          </div>
+
+          {persona === 'student' && (
+            <>
+              <div className="wf-divider"><span>or</span></div>
+
+              <button type="button" onClick={handleGoogleLogin} disabled={googleLoading} className="wf-ghost">
+                {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <GoogleIcon className="h-[17px] w-[17px]" />}
+                Continue with Google
+              </button>
+
+              {/* Student — Course login: the mobile learning studio has its own sign-in */}
+              <button type="button" className="wf-course-card" onClick={() => navigate('/study/login')}>
+                <span className="ic"><Sparkles size={18} /></span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <b>Student — Course login</b>
+                  <span>Course lessons, quizzes & revision in the mobile studio</span>
+                </span>
+                <ArrowRight size={16} color="rgba(255,255,255,.6)" style={{ flexShrink: 0 }} />
+              </button>
+            </>
           )}
 
-          {/* portal access */}
-          {mode === 'signin' && (
-          <div className="ds-rise" style={{ marginTop: 24, ...rise(2) }}>
-            <p style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-caption)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
-              Staff portal access
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-              {PORTAL_ROLES.map(({ role, label, email: demoEmail, Icon, tone }) => (
-                <button key={role} onClick={() => handlePortalLogin(role, demoEmail)} className="lift" style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                  padding: '12px 8px', borderRadius: 'var(--w-r4)',
-                  background: 'var(--card)', border: '1.5px solid var(--border)', cursor: 'pointer',
-                }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 'var(--w-r3)', background: `var(--tint-${tone}-bg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={15} color={`var(--tint-${tone}-fg)`} />
-                  </div>
-                  <span style={{ fontSize: 'var(--fs-caption)', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text)', textAlign: 'center', lineHeight: 1.2 }}>{label}</span>
-                </button>
-              ))}
-            </div>
+          <div style={{ textAlign: 'center', marginTop: 18, font: '400 13.5px var(--wf-body)', color: 'var(--wf-muted)' }}>
+            New here? <Link to="/signup" className="wf-link" style={{ fontSize: 13.5 }}>Create your account</Link>
           </div>
-          )}
+        </div>
 
-          {/* footer */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32 }}>
-            <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)' }}>© 2026 Winnify · Campx Edutech</span>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <Link to="#" style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)', textDecoration: 'none' }}>Privacy</Link>
-              <Link to="#" style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-3)', textDecoration: 'none' }}>Terms</Link>
-            </div>
-          </div>
+        <div className="wf-rise" style={{ width: '100%', maxWidth: 430, marginTop: 16, display: 'flex', justifyContent: 'space-between', font: '400 12px var(--wf-body)', color: 'var(--wf-faint)' }}>
+          <span>© 2026 Winnify · winnify.ai</span>
+          <span style={{ display: 'flex', gap: 14 }}>
+            <Link to="#" className="wf-link" style={{ color: 'var(--wf-faint)', fontSize: 12 }}>Privacy</Link>
+            <Link to="#" className="wf-link" style={{ color: 'var(--wf-faint)', fontSize: 12 }}>Terms</Link>
+          </span>
         </div>
       </div>
     </div>
