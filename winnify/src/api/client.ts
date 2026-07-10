@@ -40,7 +40,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (res.status === 401) {
     localStorage.removeItem('winnify_token');
-    window.location.href = '/signin';
+    // Studio sessions re-enter through the studio's own login, and carry the
+    // interrupted location so sign-in returns the student to where they were.
+    window.location.href = window.location.pathname.startsWith('/study')
+      ? `/study/login?next=${encodeURIComponent(window.location.pathname)}`
+      : '/signin';
     throw new ApiError(401, 'Session expired');
   }
 

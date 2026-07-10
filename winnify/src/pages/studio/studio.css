@@ -1,0 +1,720 @@
+/* WinTeach Student Studio — a self-contained, mobile-only design language.
+   Deliberately distinct from the main app (DS v4): deep-ink dark theme,
+   aurora ambience, Space Grotesk display, electric-lime accent, glass cards.
+   Everything is scoped under .studio so nothing leaks into other modules. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+.studio {
+  /* palette */
+  --st-bg: #07080d;
+  --st-bg-2: #0c0e16;
+  --st-glass: rgba(255, 255, 255, 0.055);
+  --st-glass-2: rgba(255, 255, 255, 0.095);
+  --st-border: rgba(255, 255, 255, 0.1);
+  --st-border-2: rgba(255, 255, 255, 0.16);
+  --st-text: #f4f5f7;
+  --st-text-2: rgba(244, 245, 247, 0.65);
+  --st-text-3: rgba(244, 245, 247, 0.4);
+  --st-lime: #cdf463;
+  --st-lime-deep: #9fdc2e;
+  --st-ink-on-lime: #131a02;
+  --st-violet: #a78bfa;
+  --st-aqua: #5eead4;
+  --st-red: #fb7185;
+  --st-menu: #14161f;
+  /* type */
+  --st-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --st-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+
+  font-family: var(--st-sans);
+  color: var(--st-text);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Light theme — porcelain variant of the same token set. Accent colors
+   darken so lime/aqua/violet stay readable as text on light surfaces; fills
+   keep ink foregrounds. The code surface (.st-code) deliberately stays dark
+   in both themes.
+
+   Theming is JS-driven: studioTheme.ts (and a no-flash inline script in
+   index.html) stamps `data-st-theme="light|dark"` on <html> from the stored
+   System/Light/Dark preference. Dark is the base `.studio` above; these
+   selectors override to light only when the attribute resolves to light. ── */
+html[data-st-theme="light"] .studio {
+  --st-bg: #f5f6fa;
+  --st-bg-2: #eceef6;
+  --st-glass: rgba(255, 255, 255, 0.72);
+  --st-glass-2: rgba(255, 255, 255, 0.95);
+  --st-border: rgba(20, 24, 46, 0.1);
+  --st-border-2: rgba(20, 24, 46, 0.18);
+  --st-text: #16192a;
+  --st-text-2: rgba(22, 25, 42, 0.68);
+  --st-text-3: rgba(22, 25, 42, 0.45);
+  --st-lime: #79a303;
+  --st-lime-deep: #5d8500;
+  --st-ink-on-lime: #f8ffe8;
+  --st-violet: #6d3df0;
+  --st-aqua: #0d9488;
+  --st-red: #e11d48;
+  --st-menu: #ffffff;
+  color-scheme: light;
+}
+html[data-st-theme="light"] .studio-viewport { background: #e7e9f2; }
+@media (min-width: 560px) {
+  html[data-st-theme="light"] .studio-viewport {
+    background:
+      radial-gradient(60% 50% at 50% 0%, rgba(109, 61, 240, 0.08), transparent 70%),
+      #e2e4ee;
+  }
+  html[data-st-theme="light"] .studio-canvas {
+    border-color: rgba(20, 24, 46, 0.12);
+    box-shadow: 0 0 0 10px #f0f1f7, 0 40px 90px rgba(30, 34, 70, 0.28);
+  }
+}
+html[data-st-theme="light"] .studio-aurora::before { background: radial-gradient(circle, rgba(109, 61, 240, 0.1), transparent 65%); }
+html[data-st-theme="light"] .studio-aurora::after { background: radial-gradient(circle, rgba(13, 148, 136, 0.08), transparent 65%); }
+/* class-level dark-glass fills → light equivalents */
+html[data-st-theme="light"] .studio .st-segs > i { background: rgba(20, 24, 46, 0.12); }
+html[data-st-theme="light"] .studio .st-ring-track { stroke: rgba(20, 24, 46, 0.12); }
+html[data-st-theme="light"] .studio .st-bar { background: rgba(20, 24, 46, 0.12); }
+html[data-st-theme="light"] .studio .st-opt .st-opt-letter { background: rgba(20, 24, 46, 0.06); }
+html[data-st-theme="light"] .studio .st-opt.sel { background: rgba(121, 163, 3, 0.1); }
+html[data-st-theme="light"] .studio .st-prose code { background: rgba(20, 24, 46, 0.07); color: #0f766e; }
+html[data-st-theme="light"] .studio .st-flip-back { background: rgba(109, 61, 240, 0.1); border-color: rgba(109, 61, 240, 0.3); }
+html[data-st-theme="light"] .studio .st-tbl th { background: rgba(20, 24, 46, 0.04); }
+html[data-st-theme="light"] .studio .st-cta { box-shadow: 0 10px 30px rgba(93, 133, 0, 0.28); }
+
+/* ---------- viewport: full-bleed on phones, phone-canvas on desktop ---------- */
+
+.studio-viewport {
+  min-height: 100dvh;
+  background: #030308;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.studio-canvas {
+  position: relative;
+  width: 100%;
+  /* Fixed to the viewport: the canvas never grows with content, so the
+     inner <main> is always the one true scroll container. (min-height here
+     would let the canvas grow, leaving main unscrollable while its
+     overscroll-behavior blocked document scroll — dead scroll.) */
+  height: 100dvh;
+  background: var(--st-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 560px) {
+  .studio-viewport {
+    padding: 24px;
+    /* desktop gets a dim stage behind the phone */
+    background:
+      radial-gradient(60% 50% at 50% 0%, rgba(167, 139, 250, 0.1), transparent 70%),
+      #030308;
+  }
+  .studio-canvas {
+    width: 414px;
+    height: min(880px, calc(100dvh - 48px));
+    border-radius: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 0 0 10px #0a0a10,
+      0 40px 90px rgba(0, 0, 0, 0.75);
+  }
+}
+.studio-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0; /* let it shrink below content so it actually scrolls */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+.studio-scroll::-webkit-scrollbar { display: none; }
+/* Player routes own their layout edge-to-edge: no trailing scroll padding,
+   no outer scrolling — the player's body pane scrolls instead. Flex makes
+   the player stretch to exactly the canvas height. */
+.studio-scroll:has(> .st-player) {
+  padding-bottom: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- aurora ambience ---------- */
+.studio-aurora,
+.studio-aurora::before,
+.studio-aurora::after {
+  position: absolute;
+  pointer-events: none;
+  content: '';
+}
+.studio-aurora {
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.studio-aurora::before {
+  width: 420px;
+  height: 420px;
+  left: -140px;
+  top: -160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.28), transparent 65%);
+  filter: blur(40px);
+  animation: st-drift 16s ease-in-out infinite alternate;
+}
+.studio-aurora::after {
+  width: 380px;
+  height: 380px;
+  right: -150px;
+  top: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.16), transparent 65%);
+  filter: blur(46px);
+  animation: st-drift 20s ease-in-out infinite alternate-reverse;
+}
+@keyframes st-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(46px, 34px, 0) scale(1.14); }
+}
+
+/* ---------- motion ---------- */
+@keyframes st-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.st-rise { animation: st-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.st-d1 { animation-delay: 0.05s; }
+.st-d2 { animation-delay: 0.12s; }
+.st-d3 { animation-delay: 0.19s; }
+.st-d4 { animation-delay: 0.26s; }
+
+@keyframes st-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.st-shake { animation: st-shake 0.5s both; }
+
+@keyframes st-shimmer {
+  from { background-position: -320px 0; }
+  to   { background-position: 320px 0; }
+}
+.st-skeleton {
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--st-glass) 25%, var(--st-glass-2) 50%, var(--st-glass) 75%);
+  background-size: 640px 100%;
+  animation: st-shimmer 1.4s linear infinite;
+}
+
+@keyframes st-spin { to { transform: rotate(360deg); } }
+.st-spin { animation: st-spin 0.8s linear infinite; }
+
+/* celebration burst — particles rise then fall past the bottom, fading out */
+@keyframes st-confetti {
+  0%   { opacity: 0; transform: translate3d(0, 30vh, 0) rotate(0deg) scale(0.6); }
+  12%  { opacity: 1; }
+  40%  { transform: translate3d(calc(var(--st-drift) * 0.6), -12vh, 0) rotate(calc(var(--st-spin) * 0.5)) scale(1); }
+  100% { opacity: 0; transform: translate3d(var(--st-drift), 42vh, 0) rotate(var(--st-spin)) scale(0.9); }
+}
+.st-confetti {
+  position: absolute;
+  top: 30%;
+  animation: st-confetti 1.6s cubic-bezier(0.16, 0.8, 0.4, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio *, .studio *::before, .studio *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- primitives ---------- */
+.st-card {
+  background: var(--st-glass);
+  border: 1px solid var(--st-border);
+  border-radius: 24px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.st-press {
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.st-press:active { transform: scale(0.97); }
+
+.st-eyebrow {
+  font: 700 11px/1 var(--st-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--st-text-3);
+}
+
+.st-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--st-border);
+  background: var(--st-glass);
+  font: 600 12px var(--st-sans);
+  color: var(--st-text-2);
+  white-space: nowrap;
+}
+
+/* buttons */
+.st-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--st-lime), var(--st-lime-deep));
+  color: var(--st-ink-on-lime);
+  font: 700 16px var(--st-display);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 10px 34px rgba(205, 244, 99, 0.22);
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s, opacity 0.2s;
+}
+.st-cta:active { transform: scale(0.97); }
+.st-cta:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+
+/* ---------- login fields ---------- */
+.st-field {
+  position: relative;
+  border: 1px solid var(--st-border);
+  border-radius: 18px;
+  background: var(--st-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: border-color 0.2s, background 0.2s;
+}
+.st-field:focus-within {
+  border-color: rgba(205, 244, 99, 0.55);
+  background: var(--st-glass-2);
+}
+.st-field label {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 500 15px var(--st-sans);
+  color: var(--st-text-3);
+  pointer-events: none;
+  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.st-field:focus-within label,
+.st-field.filled label {
+  top: 13px;
+  transform: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--st-text-3);
+}
+.st-field input {
+  width: 100%;
+  min-height: 60px;
+  padding: 22px 52px 8px 18px;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--st-text);
+  font: 500 16px var(--st-sans); /* 16px stops iOS zoom-on-focus */
+  caret-color: var(--st-lime);
+}
+.st-field input:-webkit-autofill {
+  -webkit-text-fill-color: var(--st-text);
+  -webkit-box-shadow: 0 0 0 60px #14161f inset;
+  border-radius: 18px;
+}
+.st-eye {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--st-text-3);
+  cursor: pointer;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STUDIO-CONTENT — DS-variable re-skin for reused content pages (concept
+   reader, cheat sheet, topic artifacts). Same trick as .wt-pro, opposite
+   direction: every W token resolves to these dark studio values, so the
+   shared content engine renders natively inside the studio without forks.
+   ════════════════════════════════════════════════════════════════════════ */
+.studio .studio-content {
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --brand: #a78bfa;
+  --brand-2: #5eead4;
+  --brand-hover: #b7a2fc;
+  --brand-pressed: #9678f0;
+  --brand-fg: #14091f;
+  --app-bg-grad: linear-gradient(135deg, rgba(167, 139, 250, 0.45), rgba(94, 234, 212, 0.3));
+
+  --app-bg: #07080d;
+  --card: #13151e;
+  --sidebar-bg: #13151e;
+  --surface-muted: #1b1e2a;
+  --college-pill: #1b1e2a;
+
+  --text: #f4f5f7;
+  --text-2: rgba(244, 245, 247, 0.68);
+  --text-3: rgba(244, 245, 247, 0.42);
+  --nav-fg: rgba(244, 245, 247, 0.66);
+
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --input-bg: #1b1e2a;
+  --input-fg: #f4f5f7;
+  --nav-hover: rgba(255, 255, 255, 0.06);
+  --row-hover: rgba(255, 255, 255, 0.04);
+  --ring: #cdf463;
+
+  --tint-brand-bg: rgba(167, 139, 250, 0.14);  --tint-brand-fg: #c4b0ff;
+  --tint-violet-bg: rgba(167, 139, 250, 0.16); --tint-violet-fg: #c9b4ff;
+  --tint-teal-bg: rgba(94, 234, 212, 0.12);    --tint-teal-fg: #7df0dc;
+  --tint-blue-bg: rgba(96, 165, 250, 0.13);    --tint-blue-fg: #93c5fd;
+  --tint-red-bg: rgba(251, 113, 133, 0.13);    --tint-red-fg: #fda4af;
+  --tint-orange-bg: rgba(251, 191, 36, 0.12);  --tint-orange-fg: #fcd34d;
+  --tint-pink-bg: rgba(244, 114, 182, 0.13);   --tint-pink-fg: #f9a8d4;
+
+  --status-green: #4ade80;  --status-green-bg: rgba(74, 222, 128, 0.13);
+  --status-orange: #fbbf24; --status-orange-bg: rgba(251, 191, 36, 0.14);
+  --status-info: #60a5fa;   --status-info-bg: rgba(96, 165, 250, 0.14);
+  --status-red: #fb7185;    --status-red-bg: rgba(251, 113, 133, 0.13);
+
+  --score-low: #fda4af; --score-mid: #fcd34d;
+  --score-good: #4ade80; --score-top: #cdf463;
+  --score-track: rgba(255, 255, 255, 0.1);
+
+  --w-r4: 12px;
+  --w-r5: 18px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+
+  color: var(--text);
+  font-family: var(--font-sans);
+  min-height: 100%;
+}
+/* Light variant of the content re-skin — mirrors DS v4's light palette with
+   studio accents, so the shared engines follow the studio's theme. */
+html[data-st-theme="light"] .studio .studio-content {
+    --brand: #6d3df0;
+    --brand-2: #0d9488;
+    --brand-hover: #5c2fd6;
+    --brand-pressed: #4f27bd;
+    --brand-fg: #ffffff;
+    --app-bg-grad: linear-gradient(135deg, rgba(109, 61, 240, 0.18), rgba(13, 148, 136, 0.12));
+
+    --app-bg: #f5f6fa;
+    --card: #ffffff;
+    --sidebar-bg: #ffffff;
+    --surface-muted: #f0f1f7;
+    --college-pill: #eef0fa;
+
+    --text: #16192a;
+    --text-2: rgba(22, 25, 42, 0.68);
+    --text-3: rgba(22, 25, 42, 0.45);
+    --nav-fg: rgba(22, 25, 42, 0.66);
+
+    --border: rgba(20, 24, 46, 0.1);
+    --border-strong: rgba(20, 24, 46, 0.18);
+    --input-bg: #f0f1f7;
+    --input-fg: #16192a;
+    --nav-hover: rgba(20, 24, 46, 0.05);
+    --row-hover: rgba(20, 24, 46, 0.035);
+    --ring: #79a303;
+
+    --tint-brand-bg: rgba(109, 61, 240, 0.1);   --tint-brand-fg: #5c2fd6;
+    --tint-violet-bg: rgba(109, 61, 240, 0.11); --tint-violet-fg: #6d28d9;
+    --tint-teal-bg: rgba(13, 148, 136, 0.1);    --tint-teal-fg: #0f766e;
+    --tint-blue-bg: rgba(37, 99, 235, 0.09);    --tint-blue-fg: #2456c9;
+    --tint-red-bg: rgba(225, 29, 72, 0.08);     --tint-red-fg: #d31c45;
+    --tint-orange-bg: rgba(217, 119, 6, 0.1);   --tint-orange-fg: #b45309;
+    --tint-pink-bg: rgba(219, 39, 119, 0.08);   --tint-pink-fg: #be2d78;
+
+    --status-green: #15803d;  --status-green-bg: rgba(21, 128, 61, 0.1);
+    --status-orange: #b45309; --status-orange-bg: rgba(180, 83, 9, 0.12);
+    --status-info: #2456c9;   --status-info-bg: rgba(36, 86, 201, 0.1);
+    --status-red: #d31c45;    --status-red-bg: rgba(211, 28, 69, 0.09);
+
+    --score-low: #d31c45; --score-mid: #b45309;
+    --score-good: #15803d; --score-top: #79a303;
+    --score-track: rgba(20, 24, 46, 0.1);
+
+    --shadow-card: 0 1px 2px rgba(20, 24, 46, 0.05), 0 10px 26px -14px rgba(20, 24, 46, 0.16);
+    --shadow-pop: 0 14px 34px -8px rgba(20, 24, 46, 0.22);
+}
+
+/* The reader's desktop contents rail is viewport-media-gated (max-lg:hidden),
+   but the studio canvas is always phone-width — hide it unconditionally. */
+.studio .studio-content aside { display: none !important; }
+/* Referenced by the reader's generating indicator; defined nowhere globally. */
+.studio .studio-content .wt-spin { animation: st-spin 0.8s linear infinite; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   LESSON PLAYER — paged, thumb-first reading/quiz/slides chrome.
+   ════════════════════════════════════════════════════════════════════════ */
+.st-player {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.st-player-head {
+  flex-shrink: 0;
+  padding: calc(12px + env(safe-area-inset-top)) 18px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.st-player-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 6px 22px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+.st-player-body::-webkit-scrollbar { display: none; }
+.st-player-foot {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--st-bg) 55%, transparent);
+}
+
+/* segmented progress (top of player) */
+.st-segs { display: flex; gap: 4px; flex: 1; }
+.st-segs > i {
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  position: relative;
+}
+.st-segs > i.on::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--st-aqua), var(--st-lime));
+}
+
+/* page transition */
+@keyframes st-page-in {
+  from { opacity: 0; transform: translateX(26px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes st-page-back {
+  from { opacity: 0; transform: translateX(-26px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.st-page-in   { animation: st-page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.st-page-back { animation: st-page-back 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* lesson typography — a real mobile reading measure */
+.st-prose { font: 400 16px/1.75 var(--st-sans); color: var(--st-text-2); }
+.st-prose p { margin: 0 0 14px; }
+.st-prose p:last-child { margin-bottom: 0; }
+.st-prose strong { color: var(--st-text); font-weight: 700; }
+.st-prose code {
+  font: 500 0.86em ui-monospace, 'SF Mono', Menlo, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--st-border);
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--st-aqua);
+}
+.st-prose ul, .st-prose ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.st-prose li { line-height: 1.65; }
+.st-prose li::marker { color: var(--st-lime); }
+
+.st-h-page {
+  font: 700 24px/1.2 var(--st-display);
+  letter-spacing: -0.02em;
+  color: var(--st-text);
+  margin: 0 0 4px;
+}
+
+/* callout aside */
+.st-callout {
+  border-radius: 16px;
+  padding: 13px 16px;
+  margin: 14px 0;
+  border: 1px solid var(--st-border);
+  background: var(--st-glass);
+}
+.st-callout .st-callout-k {
+  font: 700 10.5px var(--st-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* code block */
+.st-code {
+  background: #0c0e15;
+  border: 1px solid var(--st-border);
+  border-radius: 16px;
+  padding: 16px;
+  overflow-x: auto;
+  font: 450 12.5px/1.65 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: #dbe2f4;
+  margin: 0;
+  white-space: pre;
+}
+
+/* data table */
+.st-tbl-wrap { overflow-x: auto; border: 1px solid var(--st-border); border-radius: 14px; }
+.st-tbl { width: 100%; border-collapse: collapse; font: 500 12.5px/1.5 var(--st-sans); }
+.st-tbl th {
+  text-align: left; padding: 9px 12px; white-space: nowrap;
+  font: 700 10.5px var(--st-display); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--st-text-3); background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--st-border);
+}
+.st-tbl td { padding: 9px 12px; border-bottom: 1px solid var(--st-border); color: var(--st-text-2); vertical-align: top; }
+.st-tbl tr:last-child td { border-bottom: none; }
+
+/* quiz options */
+.st-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 15px 16px;
+  border-radius: 18px;
+  border: 1.5px solid var(--st-border);
+  background: var(--st-glass);
+  color: var(--st-text);
+  font: 500 15px/1.45 var(--st-sans);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.st-opt:active { transform: scale(0.98); }
+.st-opt.sel { border-color: var(--st-lime); background: rgba(205, 244, 99, 0.08); }
+.st-opt.good { border-color: rgba(74, 222, 128, 0.7); background: rgba(74, 222, 128, 0.1); }
+.st-opt.bad { border-color: rgba(251, 113, 133, 0.65); background: rgba(251, 113, 133, 0.09); }
+.st-opt:disabled { cursor: default; }
+.st-opt .st-opt-letter {
+  width: 28px; height: 28px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 700 12.5px var(--st-display);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--st-border);
+  color: var(--st-text-2);
+}
+
+/* feedback sheet (quiz) */
+@keyframes st-sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.st-sheet {
+  animation: st-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  border-radius: 20px;
+  padding: 14px 16px;
+  margin: 0 18px;
+  border: 1px solid;
+}
+
+/* flip card */
+.st-flip { perspective: 1200px; }
+.st-flip-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 200px;
+}
+.st-flip.flipped .st-flip-inner { transform: rotateY(180deg); }
+.st-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 22px;
+  border: 1px solid var(--st-border-2);
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow-y: auto;
+}
+.st-flip-front { background: var(--st-glass-2); }
+.st-flip-back { transform: rotateY(180deg); background: rgba(167, 139, 250, 0.12); border-color: rgba(167, 139, 250, 0.35); }
+
+/* slide deck (horizontal snap) */
+.st-deck {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding: 4px 22px 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.st-deck::-webkit-scrollbar { display: none; }
+.st-slide {
+  scroll-snap-align: center;
+  flex: 0 0 100%;
+  border-radius: 24px;
+  border: 1px solid var(--st-border-2);
+  background: var(--st-glass);
+  backdrop-filter: blur(14px);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* ---------- progress ---------- */
+.st-ring-track { stroke: rgba(255, 255, 255, 0.12); }
+.st-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.st-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--st-aqua), var(--st-lime));
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
