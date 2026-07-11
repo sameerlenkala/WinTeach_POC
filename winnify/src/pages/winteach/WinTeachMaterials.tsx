@@ -41,7 +41,7 @@ export function ReferenceMaterials({ courseId, topicId, mode = 'topic', toast, o
       onReadyCount?.(ms.filter(m => m.status === 'ready').length);
       setCollapsed(prev => prev !== null ? prev
         : Boolean(collapseWhenIdle) && ms.length > 0 && ms.every(m => m.status !== 'processing'));
-    } catch { /* backend not migrated yet */ }
+    } catch (e) { console.warn('materials refresh failed', e); /* backend not migrated yet */ }
   }, [courseId, topicId, mode, onReadyCount, collapseWhenIdle]);
 
   useEffect(() => { refresh(); }, [refresh]);

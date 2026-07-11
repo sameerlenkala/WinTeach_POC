@@ -38,6 +38,12 @@ OUTLINE_BUDGET_TOKENS = 800          # Node A compact outline cap
 
 EMBEDDING_MODEL = "text-embedding-3-small"   # Phase 2 semantic retrieval
 _EMBED_BATCH = 256                           # inputs per embeddings request
+_INSERT_BATCH = 100                          # chunk rows per insert round trip
+
+# Processing runs in an in-process daemon thread with no persistent queue, so a
+# server restart mid-extraction would strand the row in 'processing' forever.
+# Reads sweep those: anything processing for longer than this is marked error.
+STALE_PROCESSING_MINUTES = 10
 
 _HEADING_SIZE_FACTOR = 1.15          # font size ≥ body × this ⇒ heading (PDF)
 
@@ -65,7 +71,9 @@ def _pdf_blocks(content: bytes) -> tuple[list[dict], int]:
 
     lines: list[dict] = []   # {"text", "size", "bold", "page"}
     for page_no, page in enumerate(doc, 1):
-        for block in page.get_text("dict")["blocks"]:
+        # sort=True yields blocks in reading order (top-to-bottom, then
+        # left-to-right) so multi-column layouts don't interleave columns.
+        for block in page.get_text("dict", sort=True)["blocks"]:
             for line in block.get("lines", []):
                 spans = [s for s in line.get("spans", []) if s["text"].strip()]
                 if not spans:
@@ -91,18 +99,35 @@ def _pdf_blocks(content: bytes) -> tuple[list[dict], int]:
 
 
 def _docx_blocks(content: bytes) -> tuple[list[dict], int]:
-    """Paragraph blocks; headings from Word heading styles. DOCX has no stable
-    page numbers, so page is None."""
+    """Paragraph AND table blocks in document order (iter_inner_content —
+    doc.paragraphs alone silently drops tables, and textbook DOCX is
+    table-heavy). Tables render one row per block, cells pipe-joined. DOCX has
+    no stable page numbers, so page is None."""
     from docx import Document
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     doc = Document(io.BytesIO(content))
     blocks = []
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        style = para.style.name if para.style else ""
-        blocks.append({"text": text, "heading": style.startswith("Heading"), "page": None})
+    for item in doc.iter_inner_content():
+        if isinstance(item, Paragraph):
+            text = item.text.strip()
+            if not text:
+                continue
+            style = item.style.name if item.style else ""
+            blocks.append({"text": text, "heading": style.startswith("Heading"), "page": None})
+        elif isinstance(item, Table):
+            for row in item.rows:
+                seen_tc = set()  # merged cells repeat the same underlying tc element
+                cells = []
+                for c in row.cells:
+                    if id(c._tc) in seen_tc:
+                        continue
+                    seen_tc.add(id(c._tc))
+                    cells.append(c.text.strip())
+                text = " | ".join(c for c in cells if c)
+                if text:
+                    blocks.append({"text": text, "heading": False, "page": None})
     return blocks, 0
 
 
@@ -238,14 +263,17 @@ def process_material(db, material_id: str, content: bytes, file_type: str) -> No
 
     vectors = _embed_texts([f"{c['heading'] or ''} {c['text']}".strip() for c in chunks])
     db.table("material_chunks").delete().eq("material_id", material_id).execute()
-    for i, c in enumerate(chunks):
-        db.table("material_chunks").insert({
-            "id": str(uuid.uuid4()), "material_id": material_id,
-            "chunk_index": c["chunk_index"], "heading": c["heading"],
-            "page_start": c["page_start"], "page_end": c["page_end"],
-            "text": c["text"], "token_count": c["token_count"],
-            "embedding": vectors[i] if vectors else None,
-        }).execute()
+    rows = [{
+        "id": str(uuid.uuid4()), "material_id": material_id,
+        "chunk_index": c["chunk_index"], "heading": c["heading"],
+        "page_start": c["page_start"], "page_end": c["page_end"],
+        "text": c["text"], "token_count": c["token_count"],
+        "embedding": vectors[i] if vectors else None,
+    } for i, c in enumerate(chunks)]
+    # Batched inserts — one round trip per _INSERT_BATCH chunks instead of one
+    # per chunk (a textbook is hundreds of chunks).
+    for i in range(0, len(rows), _INSERT_BATCH):
+        db.table("material_chunks").insert(rows[i:i + _INSERT_BATCH]).execute()
 
     _set_material(db, material_id, status="ready", page_count=page_count or None,
                   chunk_count=len(chunks), error_message=None,
@@ -254,6 +282,32 @@ def process_material(db, material_id: str, content: bytes, file_type: str) -> No
 
 def _set_material(db, material_id: str, **fields) -> None:
     db.table("materials").update(fields).eq("id", material_id).execute()
+
+
+_STALE_ERROR = ("Processing was interrupted (server restarted). "
+                "Delete this material and re-upload it.")
+
+
+def sweep_stale_processing(db, rows: list[dict]) -> list[dict]:
+    """Flip rows stuck in 'processing' beyond STALE_PROCESSING_MINUTES to
+    'error', in the DB and in the returned copies. Materials are processed
+    exactly once, at upload, so created_at is the processing start time.
+    Called from the read endpoints — no background sweeper needed."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=STALE_PROCESSING_MINUTES)
+    out = []
+    for r in rows:
+        if r.get("status") == "processing" and r.get("created_at"):
+            try:
+                started = datetime.fromisoformat(str(r["created_at"]).replace("Z", "+00:00"))
+            except ValueError:
+                started = None
+            if started and started < cutoff:
+                r = {**r, "status": "error", "error_message": _STALE_ERROR}
+                _set_material(db, r["id"], status="error", error_message=_STALE_ERROR)
+        out.append(r)
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -340,27 +394,34 @@ def _fill_tier(chunks: list[dict], budget: int, cap_per_material: int | None) ->
 
 def _search_chunks(db, mat_ids: list[str], query_terms: list[str],
                    lim: int = 40) -> list[dict]:
-    """Ranked candidate rows, source-agnostic: semantic (pgvector, Phase 2)
-    when the query embeds and matches; else the Phase-1 FTS RPC. Both RPCs
-    return the same row shape."""
+    """Ranked candidate rows, hybrid: semantic matches (pgvector, Phase 2)
+    first, then FTS matches not already found. FTS always runs — the vector
+    RPC filters `embedding is not null`, so chunks ingested without embeddings
+    (no key / API failure) would otherwise be invisible whenever any sibling
+    material has vectors. Both RPCs return the same row shape."""
     if not query_terms:
         return []
+    rows: list[dict] = []
     vectors = _embed_texts([" ".join(str(t) for t in query_terms)[:4000]])
     if vectors:
         try:
             rows = db.rpc("match_material_chunks", {
                 "mat_ids": mat_ids, "query_embedding": vectors[0], "lim": lim,
             }).execute().data or []
-            if rows:
-                return rows
         except Exception:
-            logger.warning("vector retrieval failed — falling back to FTS", exc_info=True)
+            logger.warning("vector retrieval failed — serving FTS only", exc_info=True)
     query = build_tsquery(query_terms)
-    if not query:
-        return []
-    return db.rpc("search_material_chunks", {
-        "mat_ids": mat_ids, "query": query, "lim": lim,
-    }).execute().data or []
+    if query:
+        try:
+            fts = db.rpc("search_material_chunks", {
+                "mat_ids": mat_ids, "query": query, "lim": lim,
+            }).execute().data or []
+        except Exception:
+            logger.warning("FTS retrieval failed — serving vector only", exc_info=True)
+            fts = []
+        seen = {r["id"] for r in rows}
+        rows += [r for r in fts if r["id"] not in seen]
+    return rows[:lim]
 
 
 def retrieve_chunks(db, tier_map: dict[str, str], query_terms: list[str],

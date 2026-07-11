@@ -55,6 +55,67 @@ def test_empty_blocks():
     assert ms.chunk_blocks([]) == []
 
 
+def test_docx_blocks_include_tables_in_document_order():
+    """doc.paragraphs alone drops tables — iter_inner_content must not."""
+    import io
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading("Complexity", level=1)
+    doc.add_paragraph("Operations and their costs.")
+    table = doc.add_table(rows=2, cols=2)
+    table.rows[0].cells[0].text = "Operation"
+    table.rows[0].cells[1].text = "Cost"
+    table.rows[1].cells[0].text = "Search"
+    table.rows[1].cells[1].text = "O(log n)"
+    doc.add_paragraph("Costs assume a balanced tree.")
+    buf = io.BytesIO()
+    doc.save(buf)
+
+    blocks, _ = ms._docx_blocks(buf.getvalue())
+    texts = [b["text"] for b in blocks]
+    assert texts == ["Complexity", "Operations and their costs.",
+                     "Operation | Cost", "Search | O(log n)",
+                     "Costs assume a balanced tree."]
+    assert blocks[0]["heading"] is True
+
+
+# ── Stale-processing sweep ────────────────────────────────────────────────────
+
+class _SweepDB:
+    def __init__(self):
+        self.updates = []
+
+    def table(self, name):
+        return self
+
+    def update(self, fields):
+        self.updates.append(fields)
+        return self
+
+    def eq(self, *a):
+        return self
+
+    def execute(self):
+        return None
+
+
+def test_sweep_marks_only_stale_processing_rows():
+    from datetime import datetime, timedelta, timezone
+    old = (datetime.now(timezone.utc) - timedelta(minutes=ms.STALE_PROCESSING_MINUTES + 5)).isoformat()
+    fresh = datetime.now(timezone.utc).isoformat()
+    db = _SweepDB()
+    rows = ms.sweep_stale_processing(db, [
+        {"id": "m1", "status": "processing", "created_at": old},
+        {"id": "m2", "status": "processing", "created_at": fresh},
+        {"id": "m3", "status": "ready", "created_at": old},
+    ])
+    assert rows[0]["status"] == "error" and rows[0]["error_message"]
+    assert rows[1]["status"] == "processing"
+    assert rows[2]["status"] == "ready"
+    assert len(db.updates) == 1  # only the stale row was written back
+
+
 # ── tsquery construction ──────────────────────────────────────────────────────
 
 def test_build_tsquery_or_joins_and_filters():
@@ -161,15 +222,21 @@ def test_retrieve_no_materials_or_no_terms():
     assert ms.retrieve_chunks(db, {"m": "topic"}, ["the and"]) == []
 
 
-# ── Phase 2: vector-first retrieval, FTS fallback ─────────────────────────────
+# ── Phase 2: hybrid retrieval — vector first, FTS merged in ──────────────────
 
-class _VectorDB(_FakeDB):
-    """Serves match_material_chunks; fails if FTS is consulted (vector won)."""
+class _HybridDB(_FakeDB):
+    """Serves both RPCs: vector rows from match_material_chunks, FTS rows from
+    search_material_chunks."""
+
+    def __init__(self, vector_rows, fts_rows, materials):
+        super().__init__(fts_rows, materials)
+        self._vector_rows = vector_rows
 
     def rpc(self, name, params):
-        assert name == "match_material_chunks"
-        assert isinstance(params["query_embedding"], list)
-        return _Query(self._rpc_rows)
+        if name == "match_material_chunks":
+            assert isinstance(params["query_embedding"], list)
+            return _Query(self._vector_rows)
+        return super().rpc(name, params)
 
 
 class _BrokenVectorDB(_FakeDB):
@@ -181,11 +248,24 @@ class _BrokenVectorDB(_FakeDB):
         return super().rpc(name, params)
 
 
-def test_retrieve_prefers_vector_when_query_embeds(monkeypatch):
+def test_retrieve_vector_rows_rank_first(monkeypatch):
     monkeypatch.setattr(ms, "_embed_texts", lambda texts: [[0.1] * 8])
-    db = _VectorDB([_rpc_row(1, "mat-a", 100, 0.95)], [{"id": "mat-a", "filename": "a.pdf"}])
+    vec, fts = _rpc_row(1, "mat-a", 100, 0.95), _rpc_row(2, "mat-a", 100, 0.9)
+    db = _HybridDB([vec], [fts, vec], [{"id": "mat-a", "filename": "a.pdf"}])
     got = ms.retrieve_chunks(db, {"mat-a": "topic"}, ["binary trees"])
-    assert len(got) == 1 and got[0]["chunk_id"] == "ch1"
+    assert [c["chunk_id"] for c in got] == ["ch1", "ch2"]  # vector first, FTS deduped
+
+
+def test_retrieve_finds_unembedded_chunks_despite_vector_matches(monkeypatch):
+    """The blind spot: mat-b was ingested without embeddings, so the vector RPC
+    can never return it. FTS must still surface it alongside vector matches."""
+    monkeypatch.setattr(ms, "_embed_texts", lambda texts: [[0.1] * 8])
+    db = _HybridDB([_rpc_row(1, "mat-a", 100, 0.95)],
+                   [_rpc_row(2, "mat-b", 100, 0.9)],
+                   [{"id": "mat-a", "filename": "a.pdf"},
+                    {"id": "mat-b", "filename": "b.pdf"}])
+    got = ms.retrieve_chunks(db, {"mat-a": "topic", "mat-b": "topic"}, ["binary trees"])
+    assert {c["material_id"] for c in got} == {"mat-a", "mat-b"}
 
 
 def test_retrieve_falls_back_to_fts_when_vector_fails(monkeypatch):
