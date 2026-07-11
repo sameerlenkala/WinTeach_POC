@@ -13,7 +13,9 @@ export function getStoredPref(): ThemePref {
     const v = localStorage.getItem(KEY);
     if (v === 'light' || v === 'dark' || v === 'system') return v;
   } catch { /* storage unavailable */ }
-  return 'system';
+  // Default to dark until the student picks otherwise (mirrored by the
+  // no-flash script in index.html).
+  return 'dark';
 }
 
 function systemPrefersDark(): boolean {
