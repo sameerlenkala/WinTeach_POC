@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, Zap, Library, BookMarked, FileText,
+  LayoutDashboard, BookOpen, Zap, BookMarked, FileText,
   Building2, Settings, LogOut, GraduationCap, PanelLeftClose, PanelLeftOpen,
+  Sun, Moon,
 } from 'lucide-react';
-import PageTopbar from '@/components/layout/PageTopbar';
 import { WinTeachProvider, useWinTeach } from './WinTeachContext';
 import { Toast } from './WinTeachUI';
-import { pendingJobs, ADDITIONAL_LIBRARY } from './winteachData';
+import { pendingJobs, industryLibrary } from './winteachData';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const PAGE_TITLES_WT: Record<string, string> = {
   '/winteach':              'Dashboard',
@@ -16,8 +17,7 @@ const PAGE_TITLES_WT: Record<string, string> = {
   '/winteach/courses/new':  'Create New Course',
   '/winteach/generation':   'Content Generation',
   '/winteach/materials':    'Reference Materials',
-  '/winteach/library':      'CO Library',
-  '/winteach/add-library':  'Additional Course Library',
+  '/winteach/add-library':  'Industry topic library',
   '/winteach/institutes':   'Institute PO & PSO',
   '/winteach/settings':     'Settings',
 };
@@ -25,6 +25,7 @@ const PAGE_TITLES_WT: Record<string, string> = {
 function WinTeachSidebar() {
   const { courses, institutes } = useWinTeach();
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const pending = pendingJobs(courses);
 
@@ -40,8 +41,7 @@ function WinTeachSidebar() {
     { to: '/winteach/courses',     label: 'Courses',             icon: BookOpen,   count: courses.length },
     { to: '/winteach/generation',  label: 'Content Generation',  icon: Zap,        count: pending },
     { to: '/winteach/materials',   label: 'Reference Materials', icon: FileText },
-    { to: '/winteach/library',     label: 'IO Library',          icon: Library },
-    { to: '/winteach/add-library', label: 'Add. Course Library', icon: BookMarked, count: ADDITIONAL_LIBRARY.length },
+    { to: '/winteach/add-library', label: 'Industry topic library', icon: BookMarked, count: industryLibrary().length },
     { to: '/winteach/institutes',  label: 'Institute PO & PSO',  icon: Building2,  count: institutes.length },
   ];
 
@@ -59,14 +59,15 @@ function WinTeachSidebar() {
         </div>
       </div>
 
-      {/* Profile */}
-      <div className="ws-user-section">
+      {/* Profile → account page */}
+      <NavLink to="/winteach/account" className="ws-user-section" title="Account settings"
+               style={{ textDecoration: 'none', cursor: 'pointer' }}>
         <div className="ws-avatar">{initials}</div>
         <div className="ws-user-info">
           <span className="ws-user-name">{user?.name ?? '—'}</span>
           <span className="ws-user-email">{user?.email ?? ''}</span>
         </div>
-      </div>
+      </NavLink>
 
       {/* Nav */}
       <nav className="ws-nav">
@@ -86,6 +87,10 @@ function WinTeachSidebar() {
         ))}
 
         <span className="ws-nav-group-label" style={{ marginTop: 8 }}>Account</span>
+        <button onClick={toggleTheme} className="ws-nav-item" style={{ border: 'none', background: 'none', width: '100%', textAlign: 'left', color: 'var(--text-2)', cursor: 'pointer' }}>
+          {theme === 'dark' ? <Sun className="ws-nav-icon" size={20} /> : <Moon className="ws-nav-icon" size={20} />}
+          <span className="ws-nav-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </button>
         <NavLink to="/winteach/settings"
           className={({ isActive }) => isActive ? 'ws-nav-item ws-nav-item--active' : 'ws-nav-item'}
         >
@@ -137,10 +142,10 @@ function LayoutInner() {
         {navHidden ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
       </button>
 
-      {/* Content column */}
+      {/* Content column — no global topbar: the sidebar carries identity/account,
+          and each page provides its own WinTopbar action bar + breadcrumb. */}
       <div className={`flex flex-col flex-1 min-w-0 ${navHidden ? '' : 'md:ml-[252px]'}`} style={{ background: 'var(--app-bg)' }}>
         <PageTitleInjector />
-        <PageTopbar />
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
           <Outlet />
         </main>

@@ -87,10 +87,10 @@ import StudentRevision from './pages/student/StudentRevision';
 import StudentMastery from './pages/student/StudentMastery';
 import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
 import WinTeachMaterialsPage from './pages/winteach/WinTeachMaterialsPage';
-import WinTeachLibrary from './pages/winteach/WinTeachLibrary';
 import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
 import WinTeachInstitutes from './pages/winteach/WinTeachInstitutes';
 import WinTeachSettings from './pages/winteach/WinTeachSettings';
+import StaffAccount from './pages/account/StaffAccount';
 import AcademicPortal from './pages/academic/AcademicPortal';
 import AcademicLayout from './layouts/AcademicLayout';
 import AdminDashboard from './pages/academic/AdminDashboard';
@@ -224,10 +224,10 @@ export default function App() {
             <Route path="courses/:id/topic/:topicId/artifact/:type" element={<WinTeachTopicArtifact />} />
             <Route path="generation" element={<WinTeachGeneration />} />
             <Route path="materials" element={<WinTeachMaterialsPage />} />
-            <Route path="library" element={<WinTeachLibrary />} />
             <Route path="add-library" element={<WinTeachAddLibrary />} />
             <Route path="institutes" element={<WinTeachInstitutes />} />
             <Route path="settings" element={<WinTeachSettings />} />
+            <Route path="account" element={<StaffAccount />} />
           </Route>
 
           {/* Public routes still using the app shell (navbar/footer) */}

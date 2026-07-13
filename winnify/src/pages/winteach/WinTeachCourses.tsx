@@ -4,8 +4,8 @@ import { useWinTeach } from './WinTeachContext';
 import { allTopics } from './winteachData';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { StatusBadge, XpBar, Card, Btn, IconBtn, CoIcon, Modal } from './WinTeachUI';
-import { IBell, IPlus, IEdit, IEmpty, ITrash } from './WinTeachIcons';
+import { StatusBadge, XpBar, Card, Btn, CoIcon, Modal } from './WinTeachUI';
+import { IPlus, IEdit, IEmpty, ITrash } from './WinTeachIcons';
 import { coursesApi } from '@/api/courses';
 import { useCourseProgress } from '@/api/hooks';
 
@@ -60,7 +60,7 @@ export default function WinTeachCourses() {
   if (coursesLoading) {
     return (
       <>
-        <WinTopbar title="Courses" actions={<IconBtn><IBell /></IconBtn>} />
+        <WinTopbar title="Courses" />
         <WinContent>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: W.text3, fontFamily: W.fontDisplay, fontSize: 15 }}>
             Loading courses…
@@ -74,7 +74,6 @@ export default function WinTeachCourses() {
     <>
       <WinTopbar title="Courses" actions={
         <>
-          <IconBtn><IBell /></IconBtn>
           <Btn variant="primary" onClick={() => navigate('/winteach/courses/new')}>
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IPlus /></span>
             Create new course

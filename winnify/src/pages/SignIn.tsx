@@ -16,9 +16,6 @@ import './auth/auth.css';
 
 type ForgotStep = 'email' | 'code' | 'reset' | 'done';
 
-/* Demo accounts seed themselves server-side with this password on first login. */
-const DEMO_PASSWORD = 'demo@123';
-
 export function WfHero() {
   return (
     <aside className="wf-hero">
@@ -61,14 +58,6 @@ const PERSONAS: { role: UserRole; label: string; Icon: React.ElementType; sub: s
 
 const ROLE_LABEL: Record<UserRole, string> = {
   student: 'Student', faculty: 'Faculty', admin: 'College Admin', superadmin: 'Super Admin',
-};
-
-/* Demo account per persona — filled only on explicit request, never automatically. */
-const DEMO_EMAIL: Record<UserRole, string> = {
-  student: 'student@gmail.com',
-  faculty: 'faculty@ciet.ac.in',
-  admin: 'admin@ciet.ac.in',
-  superadmin: 'superadmin@winnify.ai',
 };
 
 export default function SignIn() {
@@ -132,12 +121,6 @@ export default function SignIn() {
 
   const switchPersona = (role: UserRole) => {
     setPersona(role);
-    setError('');
-  };
-
-  const fillDemo = () => {
-    setEmail(DEMO_EMAIL[persona]);
-    setPassword(DEMO_PASSWORD);
     setError('');
   };
 
@@ -312,14 +295,6 @@ export default function SignIn() {
               {isLoading ? <Loader2 size={17} className="animate-spin" /> : <>Sign in <ArrowRight size={17} /></>}
             </button>
           </form>
-
-          {/* Quiet demo affordance — nothing is ever pre-filled */}
-          <div className="wf-demo-hint">
-            Exploring the {ROLE_LABEL[persona]} demo?
-            <button type="button" className="wf-link" style={{ fontSize: 12 }} onClick={fillDemo}>
-              Fill demo credentials
-            </button>
-          </div>
 
           {persona === 'student' && (
             <>

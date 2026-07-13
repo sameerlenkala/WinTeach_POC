@@ -4,8 +4,8 @@ import { useWinTeach } from './WinTeachContext';
 import { useCourses, useUnits } from '@/api/hooks';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { TopicBadge, XpBar, Card, Btn, IconBtn } from './WinTeachUI';
-import { IBell, ISpark, ICheck, INotes } from './WinTeachIcons';
+import { TopicBadge, XpBar, Card, Btn } from './WinTeachUI';
+import { ISpark, ICheck, INotes } from './WinTeachIcons';
 import { allTopics, topicState, topicPct, newArtifacts } from './winteachData';
 import type { Topic } from './winteachData';
 
@@ -94,7 +94,7 @@ export default function WinTeachGeneration() {
     return (
       <>
         {loader}
-        <WinTopbar title="Content Generation" actions={<IconBtn><IBell /></IconBtn>} />
+        <WinTopbar title="Content Generation" />
         <WinContent>
           <Card>
             <div style={{ textAlign: 'center', padding: '60px 20px', color: W.text2 }}>
@@ -130,7 +130,6 @@ export default function WinTeachGeneration() {
     <>
       <WinTopbar title="Content Generation" actions={
         <>
-          <IconBtn><IBell /></IconBtn>
           {pend > 0 && (
             <Btn variant="primary" onClick={generateAll}>
               <span style={{ width: 16, height: 16, display: 'inline-flex' }}><ISpark /></span>

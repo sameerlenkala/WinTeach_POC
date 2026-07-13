@@ -54,15 +54,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/academic/faculty/analytics': 'Analytics',
   '/academic/faculty/doubts': 'Doubts',
   '/academic/faculty/settings': 'Settings',
-  // WinTeach Console
-  '/winteach':              'Dashboard',
-  '/winteach/courses':      'Courses',
-  '/winteach/courses/new':  'Create New Course',
-  '/winteach/generation':   'Content Generation',
-  '/winteach/library':      'CO Library',
-  '/winteach/add-library':  'Additional Course Library',
-  '/winteach/institutes':   'Institute PO & PSO',
-  '/winteach/settings':     'Settings',
 };
 
 /* ── Search items ─────────────────────────────────────────────── */

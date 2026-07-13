@@ -456,16 +456,25 @@ export function Breadcrumb({ items }: { items: Array<{ label: string; onClick?: 
 }
 
 // ---- Stepper ----
-export function Stepper({ steps, current }: { steps: string[]; current: number }) {
+// Completed steps are clickable when `onStepClick` is provided, so users can
+// jump back without hunting for a Back button.
+export function Stepper({ steps, current, onStepClick }: { steps: string[]; current: number; onStepClick?: (n: number) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 28 }}>
       {steps.map((s, i) => {
         const n = i + 1;
         const done = n < current;
         const active = n === current;
+        const clickable = done && !!onStepClick;
         return (
           <React.Fragment key={i}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: active ? W.text : done ? W.text2 : W.text3 }}>
+            <div
+              onClick={clickable ? () => onStepClick!(n) : undefined}
+              title={clickable ? `Back to ${s}` : undefined}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, color: active ? W.text : done ? W.text2 : W.text3, cursor: clickable ? 'pointer' : 'default', borderRadius: 8, padding: '4px 6px', margin: '-4px -6px', transition: 'background var(--dur-fast) var(--ease-out)' }}
+              onMouseEnter={clickable ? e => (e.currentTarget.style.background = 'var(--surface-muted)') : undefined}
+              onMouseLeave={clickable ? e => (e.currentTarget.style.background = 'transparent') : undefined}
+            >
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, flex: '0 0 28px',

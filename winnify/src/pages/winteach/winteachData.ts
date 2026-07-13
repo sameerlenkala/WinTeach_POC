@@ -29,6 +29,7 @@ export interface Topic {
   subs: string[];
   co: { text: string; bloom: string };
   coNumber?: number | null;
+  coKey?: string | null;
   artifacts: Artifacts;
   _unit?: Unit;
 }
@@ -38,13 +39,27 @@ export interface Unit {
   title: string;
   hours?: number;
   topics: Topic[];
+  isElective?: boolean;
 }
 
 export interface CO {
   id: string;
   text: string;
   bloom: string;
+  key?: string;
+  isIndustry?: boolean;
+  /** Bloom level industry expects for this outcome (from pipeline CO evaluation) */
+  industryBloom?: string;
+  /** AI-improved wording suggested by the pipeline (only when it rewrote a weak CO) */
+  aiText?: string;
+  /** One-line rationale behind the evaluation */
+  aiReason?: string;
 }
+
+let coUid = 500;
+export const ckey = () => 'c' + (++coUid);
+
+export const REGULATIONS = ['R25', 'R24', 'R23', 'R22', 'R21', 'R20'];
 
 export interface Course {
   id?: string;
@@ -142,7 +157,15 @@ export const CO_LIBRARY = [
   { text: 'Understand version control workflows for collaborative Python projects.', bloom: 'Understand' },
 ];
 
-export const ADDITIONAL_LIBRARY = [
+export interface IndustryLibItem {
+  cat: string;
+  name: string;
+  subs: string[];
+  co: string;
+  bloom: string;
+}
+
+export const ADDITIONAL_LIBRARY: IndustryLibItem[] = [
   { cat: 'AI', name: 'Generative AI & LLM Foundations', subs: ['What LLMs are', 'Tokens & embeddings', 'Capabilities & limits', 'Responsible AI'], co: 'Understand the foundations and limits of generative AI and LLMs.', bloom: 'Understand' },
   { cat: 'AI', name: 'Prompt Engineering with Python', subs: ['Prompt patterns', 'Few-shot prompting', 'Structured outputs', 'Calling LLM APIs'], co: 'Apply prompt-engineering techniques to build LLM-powered Python apps.', bloom: 'Apply' },
   { cat: 'AI', name: 'Intro to ML with scikit-learn', subs: ['Supervised vs unsupervised', 'Train/test split', 'Model fitting', 'Evaluation metrics'], co: 'Apply scikit-learn to train and evaluate basic ML models.', bloom: 'Apply' },
@@ -152,7 +175,58 @@ export const ADDITIONAL_LIBRARY = [
   { cat: 'Industry', name: 'Testing & Code Quality', subs: ['Unit testing with pytest', 'Fixtures & assertions', 'Linting & formatting', 'Coverage'], co: 'Apply automated testing to ensure code quality.', bloom: 'Apply' },
 ];
 
+// ── Industry topic library ────────────────────────────────────────────────
+// Topics accepted into a course during creation are added here so other
+// courses can reuse them. Custom entries persist in localStorage on top of
+// the curated ADDITIONAL_LIBRARY seed.
+const INDUSTRY_LIB_KEY = 'winteach_industry_library';
+
+export function customIndustryLibrary(): IndustryLibItem[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INDUSTRY_LIB_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
+}
+
+export function industryLibrary(): IndustryLibItem[] {
+  return [...ADDITIONAL_LIBRARY, ...customIndustryLibrary()];
+}
+
+export function addToIndustryLibrary(items: IndustryLibItem[]): number {
+  const known = new Set(industryLibrary().map(i => i.name.toLowerCase().trim()));
+  const fresh = items.filter(i => i.name?.trim() && !known.has(i.name.toLowerCase().trim()));
+  if (fresh.length) {
+    localStorage.setItem(INDUSTRY_LIB_KEY, JSON.stringify([...customIndustryLibrary(), ...fresh]));
+  }
+  return fresh.length;
+}
+
 export const MAJORS = ['CSE', 'ECE', 'EEE', 'Mechanical', 'Civil', 'IT', 'AI & DS'];
+
+// Standard NBA / Washington-Accord graduate attributes — the 12 Program
+// Outcomes every accredited Indian engineering programme declares. Seeded as
+// the default when a new institute is created (editable afterwards).
+export const DEFAULT_ENGINEERING_POS: { code: string; text: string }[] = [
+  { code: 'PO1', text: 'Engineering knowledge: apply mathematics, science, engineering fundamentals and a specialization to solve complex engineering problems.' },
+  { code: 'PO2', text: 'Problem analysis: identify, formulate, review literature and analyze complex engineering problems using first principles.' },
+  { code: 'PO3', text: 'Design/development of solutions: design solutions and system components that meet needs with due regard for health, safety and the environment.' },
+  { code: 'PO4', text: 'Conduct investigations of complex problems using research-based knowledge, experiment design and data analysis to reach valid conclusions.' },
+  { code: 'PO5', text: 'Modern tool usage: create, select and apply appropriate techniques and modern engineering and IT tools, understanding their limitations.' },
+  { code: 'PO6', text: 'The engineer and society: assess societal, health, safety, legal and cultural issues relevant to professional engineering practice.' },
+  { code: 'PO7', text: 'Environment and sustainability: understand the impact of engineering solutions in societal and environmental contexts and the need for sustainable development.' },
+  { code: 'PO8', text: 'Ethics: apply ethical principles and commit to professional ethics, responsibilities and norms of engineering practice.' },
+  { code: 'PO9', text: 'Individual and team work: function effectively as an individual and as a member or leader in diverse and multidisciplinary teams.' },
+  { code: 'PO10', text: 'Communication: communicate effectively on complex engineering activities through reports, documentation and presentations.' },
+  { code: 'PO11', text: 'Project management and finance: apply engineering and management principles to manage projects in multidisciplinary environments.' },
+  { code: 'PO12', text: 'Life-long learning: recognize the need for, and engage in, independent and life-long learning amid technological change.' },
+];
+
+// PSOs are department-specific, so there is no universal standard — these two
+// generic statements are seeded as editable placeholders for a new institute.
+export const DEFAULT_ENGINEERING_PSOS: { code: string; text: string; scope: 'common' | 'major'; major?: string }[] = [
+  { code: 'PSO1', text: 'Apply engineering and computing knowledge to design, implement and evaluate domain-specific solutions.', scope: 'common' },
+  { code: 'PSO2', text: 'Use modern tools, platforms and emerging technologies to build industry-ready solutions.', scope: 'common' },
+];
 
 let iid = 0;
 const niid = () => 'inst' + (++iid);
@@ -301,11 +375,42 @@ UNIT IV Strings & Data Structures; OOP in Python ...
 UNIT V Files; Errors and Exceptions ...`;
 
 export function getElectivesUnit(c: Course): Unit {
-  let u = c.units.find(x => x.n === 'E');
-  if (!u) { u = { n: 'E', title: 'Industry & AI Electives', topics: [] }; c.units.push(u); }
+  let u = c.units.find(x => x.isElective || x.n === 'E');
+  const nextN = () => {
+    const nums = c.units.map(x => parseInt(x.n, 10)).filter(n => !isNaN(n));
+    return String((nums.length ? Math.max(...nums) : c.units.length) + 1);
+  };
+  if (!u) {
+    u = { n: nextN(), title: 'Industry & AI Electives', topics: [], isElective: true };
+    c.units.push(u);
+  } else if (u.n === 'E') {
+    // Migrate the legacy letter label to sequential numbering
+    u.isElective = true;
+    u.n = nextN();
+  }
   return u;
 }
 
+// Regular outcomes number as CO1..COn; Winnify-suggested Industry Outcomes as IO1..IOm.
 export function renumberCos(cos: CO[]): void {
-  cos.forEach((co, i) => co.id = 'CO' + (i + 1));
+  let c = 0, io = 0;
+  cos.forEach(co => co.id = co.isIndustry ? 'IO' + (++io) : 'CO' + (++c));
+}
+
+// Ensure every CO has a stable key, and wire topics' syllabus-declared
+// coNumber to that key so CO↔topic links survive renumbering/deletes.
+export function linkCoKeys(c: Course): void {
+  const cos = c.cos ?? [];
+  cos.forEach(co => { if (!co.key) co.key = ckey(); });
+  const regular = cos.filter(co => !co.isIndustry);
+  c.units.forEach(u => u.topics.forEach(t => {
+    if (!t.coKey && t.coNumber != null && regular[t.coNumber - 1]) {
+      t.coKey = regular[t.coNumber - 1].key;
+    }
+  }));
+}
+
+export function topicsForCo(c: Course, co: CO): Topic[] {
+  if (!co.key) return [];
+  return c.units.flatMap(u => u.topics.filter(t => t.coKey === co.key));
 }

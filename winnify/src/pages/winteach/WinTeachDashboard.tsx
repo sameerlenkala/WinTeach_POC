@@ -2,8 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { useWinTeach } from './WinTeachContext';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Badge, StatusBadge, XpBar, Card, Btn, IconBtn } from './WinTeachUI';
-import { IBell, IPlus, IArrow, ISpark, ICheck, INotes, IFile } from './WinTeachIcons';
+import { Badge, StatusBadge, XpBar, Card, Btn } from './WinTeachUI';
+import { IPlus, IArrow, ISpark, ICheck, INotes, IFile } from './WinTeachIcons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboard } from '@/api/hooks';
 import type { DashboardSummary } from '@/api/generation';
@@ -20,7 +20,7 @@ export default function WinTeachDashboard() {
   if (coursesLoading || (dashLoading && !d)) {
     return (
       <>
-        <WinTopbar title="Dashboard" actions={<IconBtn><IBell /></IconBtn>} />
+        <WinTopbar title="Dashboard" />
         <WinContent>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: W.text3, fontFamily: W.fontDisplay, fontSize: 15 }}>
             Loading…
@@ -35,7 +35,6 @@ export default function WinTeachDashboard() {
       <>
         <WinTopbar title="Dashboard" actions={
           <>
-            <IconBtn><IBell /></IconBtn>
             <Btn variant="primary" onClick={() => navigate('/winteach/courses/new')}>
               <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IPlus /></span>
               Create new course
@@ -147,7 +146,6 @@ export default function WinTeachDashboard() {
     <>
       <WinTopbar title="Dashboard" actions={
         <>
-          <IconBtn><IBell /></IconBtn>
           <Btn variant="primary" onClick={() => navigate('/winteach/courses/new')}>
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}><IPlus /></span>
             Create new course

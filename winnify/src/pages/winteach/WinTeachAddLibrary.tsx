@@ -7,7 +7,7 @@ import { Card, Btn, BloomBadge, SubChip, Field, Select, CoIcon } from './WinTeac
 import { ISpark, IFile, IBack, ICheck, IEdit, ITrash } from './WinTeachIcons';
 import { useCourses } from '@/api/hooks';
 import { uploadsApi } from '@/api/uploads';
-import { renumberCos, BLOOM } from './winteachData';
+import { renumberCos, BLOOM, customIndustryLibrary } from './winteachData';
 import type { CO } from './winteachData';
 
 // ── Curated catalog ──────────────────────────────────────────────────────────
@@ -136,6 +136,20 @@ function BloomPill({ bloom }: { bloom: string }) {
 }
 
 function CatalogView() {
+  // Merge topics accepted during course creation (persisted locally) into the
+  // curated seed catalog, grouped into the matching section by category.
+  const custom = customIndustryLibrary();
+  const catalog: LibSection[] = CATALOG.map(section => ({
+    ...section,
+    topics: [
+      ...section.topics,
+      ...custom
+        .filter(c => (c.cat === 'AI') === (section.tag === 'AI'))
+        .filter(c => !section.topics.some(t => t.title.toLowerCase().trim() === c.name.toLowerCase().trim()))
+        .map(c => ({ title: c.name, bloom: c.bloom, co: c.co, subs: c.subs ?? [] })),
+    ],
+  }));
+
   return (
     <div>
       {/* Info banner */}
@@ -144,11 +158,11 @@ function CatalogView() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         </span>
         <div style={{ fontSize: 13.5, color: W.text, lineHeight: 1.5 }}>
-          A curated catalog of <b>industry-relevant</b> and <b>AI</b> topics institutes can add to any course. While uploading a syllabus, these appear as one-click suggestions under the detected structure.
+          A curated catalog of <b>industry-relevant</b> and <b>AI</b> topics institutes can add to any course — including topics accepted into courses during creation. While uploading a syllabus, these appear as one-click suggestions under the detected structure.
         </div>
       </div>
 
-      {CATALOG.map(section => (
+      {catalog.map(section => (
         <div key={section.category}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 8 }}>
             <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text2 }}>{section.category}</div>
@@ -338,7 +352,7 @@ export default function WinTeachAddLibrary() {
 
   return (
     <>
-      <WinTopbar title="Add. Course Library" />
+      <WinTopbar title="Industry topic library" />
       <WinContent>
 
         {/* ── IDLE: Upload zone + Catalog ── */}

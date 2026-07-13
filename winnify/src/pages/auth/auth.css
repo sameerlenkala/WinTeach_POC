@@ -232,13 +232,6 @@
   color: #fff;
 }
 
-/* quiet demo affordance — explicit action, never auto-filled */
-.wf-demo-hint {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin-top: 12px;
-  font: 400 12px var(--wf-body); color: var(--wf-faint);
-}
-
 /* role picker chips (signup) */
 .wf-role {
   display: flex; align-items: center; gap: 10px;

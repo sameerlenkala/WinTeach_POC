@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWinTeach } from './WinTeachContext';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
-import { Badge, Btn, IconBtn, CoIcon, DeltaBanner, Modal, Field, Input, Select, Textarea } from './WinTeachUI';
-import { IBell, IPlus, IEdit, ITrash, ICheck, IInfo } from './WinTeachIcons';
-import { MAJORS } from './winteachData';
+import { Badge, Btn, CoIcon, DeltaBanner, Modal, Field, Input, Select, Textarea } from './WinTeachUI';
+import { IPlus, IEdit, ITrash, ICheck } from './WinTeachIcons';
+import { MAJORS, DEFAULT_ENGINEERING_POS, DEFAULT_ENGINEERING_PSOS } from './winteachData';
+import { institutesApi } from '@/api/institutes';
 import {
   useInstitute, useCreateInstitute, useUpdateInstitute, useDeleteInstitute,
   usePOs, useAddPO, useDeletePO,
@@ -42,7 +44,6 @@ export default function WinTeachInstitutes() {
     <>
       <WinTopbar title="Institute PO & PSO" actions={
         <>
-          <IconBtn><IBell /></IconBtn>
           <Btn variant="primary" onClick={() => setInstModal({ id: null })}>
             <span style={{ width: 16, height: 16, display: 'inline-flex' }}><IPlus /></span>
             Add institute
@@ -320,6 +321,7 @@ function InstituteDetail({
 // ── Institute modal (create/edit) ─────────────────────────────────────────────
 function InstituteModal({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { institutes } = useWinTeach();
+  const qc = useQueryClient();
   const { mutate: create, isPending: creating } = useCreateInstitute();
   const { mutate: update, isPending: updating } = useUpdateInstitute();
 
@@ -330,8 +332,11 @@ function InstituteModal({ id, onClose }: { id: string | null; onClose: () => voi
   const [location, setLocation] = useState(existing?.location || '');
   const [regulation, setRegulation] = useState(existing?.regulation || '');
   const [affiliation, setAffiliation] = useState((existing as any)?.affiliation || '');
+  // New institutes are seeded with the 12 standard engineering POs by default.
+  const [seedDefaults, setSeedDefaults] = useState(true);
+  const [seeding, setSeeding] = useState(false);
 
-  const isBusy = creating || updating;
+  const isBusy = creating || updating || seeding;
 
   const save = () => {
     if (!name.trim()) return;
@@ -348,7 +353,25 @@ function InstituteModal({ id, onClose }: { id: string | null; onClose: () => voi
     if (id) {
       update({ id, data: payload }, { onSuccess: onClose });
     } else {
-      create(payload, { onSuccess: onClose });
+      create(payload, {
+        onSuccess: async (createdInst: any) => {
+          const newId = createdInst?.id;
+          if (seedDefaults && newId) {
+            setSeeding(true);
+            try {
+              for (const po of DEFAULT_ENGINEERING_POS) await institutesApi.addPO(newId, po);
+              for (const pso of DEFAULT_ENGINEERING_PSOS) {
+                await institutesApi.addPSO(newId, { code: pso.code, text: pso.text, scope: pso.scope, major: pso.major });
+              }
+              qc.invalidateQueries({ queryKey: ['institutes', newId, 'pos'] });
+              qc.invalidateQueries({ queryKey: ['institutes', newId, 'psos'] });
+            } catch {
+              /* Institute is created; a failed seed can be filled in manually. */
+            }
+          }
+          onClose();
+        },
+      });
     }
   };
 
@@ -367,16 +390,22 @@ function InstituteModal({ id, onClose }: { id: string | null; onClose: () => voi
         <Field label="Affiliation"><Input value={affiliation} onChange={setAffiliation} placeholder="JNTUK / Autonomous" /></Field>
       </div>
       {!id && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: W.blueBg, borderRadius: W.r4, padding: '14px 16px', marginTop: 6 }}>
-          <span style={{ width: 20, height: 20, color: W.blueFg, display: 'flex' }}><IInfo /></span>
-          <div style={{ fontSize: 13.5, color: W.text }}>You can add POs and PSOs after creating the institute.</div>
-        </div>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: W.blueBg, borderRadius: W.r4, padding: '14px 16px', marginTop: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={seedDefaults} onChange={e => setSeedDefaults(e.target.checked)}
+            style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--brand)', cursor: 'pointer', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: W.text }}>Seed the standard engineering PO &amp; PSO set</div>
+            <div style={{ fontSize: 12.5, color: W.text2, marginTop: 2 }}>
+              Adds the 12 NBA program outcomes (PO1–PO12) plus 2 placeholder PSOs. All editable afterwards.
+            </div>
+          </div>
+        </label>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
         <Btn variant="primary" onClick={save} disabled={isBusy}>
           <span style={{ width: 16, height: 16, display: 'inline-flex' }}><ICheck /></span>
-          {isBusy ? 'Saving…' : id ? 'Save institute' : 'Create institute'}
+          {seeding ? 'Seeding PO/PSO…' : isBusy ? 'Saving…' : id ? 'Save institute' : 'Create institute'}
         </Btn>
       </div>
     </Modal>
