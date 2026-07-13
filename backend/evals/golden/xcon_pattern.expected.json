@@ -1,0 +1,24 @@
+{
+  "name": "xcon_pattern",
+  "description": "Regression for the duplication bug: a trailing 'list: item' trap ('...MYCIN, DART, XCON: Expert systems shells') where v1 emitted XCON both as a subtopic AND as its own topic. The whole of Unit V is one teaching block (Expert Systems); XCON must appear exactly once, and 'Expert systems shells' stays in the same topic. Hand-built from xcon_pattern.txt, NOT from any model output.",
+  "units": [
+    {
+      "unit_number": 4,
+      "hours": 9,
+      "topics": [
+        {"title": "Uncertain Knowledge and Reasoning",
+         "subtopics": ["Quantifying uncertainty", "Bayesian networks", "Fuzzy logic", "Dempster-Shafer theory"]},
+        {"title": "Learning",
+         "subtopics": ["Forms of learning", "Inductive learning", "Decision trees"]}
+      ]
+    },
+    {
+      "unit_number": 5,
+      "hours": 8,
+      "topics": [
+        {"title": "Expert Systems",
+         "subtopics": ["Architecture of expert systems", "Roles of expert systems", "Knowledge Acquisition", "Meta knowledge", "Heuristics", "Typical expert systems", "MYCIN", "DART", "XCON", "Expert systems shells"]}
+      ]
+    }
+  ]
+}

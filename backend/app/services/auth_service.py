@@ -29,7 +29,8 @@ def update_demo_password(email: str, new_password: str) -> None:
         _DEMO_ACCOUNTS[email]["password"] = new_password
 
 
-def _ensure_demo_user(db: Client, email: str, name: str, role: str) -> None:
+def _ensure_demo_user(db: Client, email: str, name: str, role: str,
+                      password: str = _DEMO_PASSWORD) -> None:
     """
     Create the demo user in Supabase auth + profiles if they don't already exist.
     Uses the service-role key so email confirmation is bypassed.
@@ -46,7 +47,7 @@ def _ensure_demo_user(db: Client, email: str, name: str, role: str) -> None:
     else:
         resp = db.auth.admin.create_user({
             "email": email,
-            "password": _DEMO_PASSWORD,
+            "password": password,
             "email_confirm": True,
             "user_metadata": {"full_name": name, "role": role},
         })
@@ -54,13 +55,15 @@ def _ensure_demo_user(db: Client, email: str, name: str, role: str) -> None:
             raise HTTPException(status_code=500, detail=f"Could not seed demo user {email}")
         user_id = str(resp.user.id)
 
-    # Upsert profile (safe — service key bypasses RLS)
+    # Seed the profile row only if it doesn't exist yet (ignore_duplicates =
+    # ON CONFLICT DO NOTHING). A plain upsert here clobbered self-service
+    # profile edits with the hardcoded demo name on every login.
     db.table("profiles").upsert({
         "id": user_id,
         "email": email,
         "full_name": name,
         "role": role,
-    }, on_conflict="id").execute()
+    }, on_conflict="id", ignore_duplicates=True).execute()
 
 
 _SUPERADMIN_DEMO = {"email": "superadmin@winnify.ai", "name": "Sai Teja",
@@ -74,9 +77,13 @@ def _demo_jwt_login(db: Client, email: str, name: str, role: str) -> LoginRespon
     import jwt as pyjwt
     demo_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"demo:{email}"))
     try:
+        # Insert-only seed: never overwrite a row the user has since edited.
         db.table("profiles").upsert({
             "id": demo_id, "email": email, "full_name": name, "role": role,
-        }, on_conflict="id").execute()
+        }, on_conflict="id", ignore_duplicates=True).execute()
+        row = db.table("profiles").select("full_name").eq("id", demo_id).single().execute()
+        if row.data and row.data.get("full_name"):
+            name = row.data["full_name"]
     except Exception:
         pass
     now = datetime.now(timezone.utc)
@@ -94,7 +101,9 @@ def _demo_jwt_login(db: Client, email: str, name: str, role: str) -> LoginRespon
 def login(db: Client, email: str, password: str) -> LoginResponse:
     # Superadmin demo persona has no Supabase auth user by design — issue the
     # backend-signed demo JWT directly so the normal login form works for it.
-    if (email.lower().strip() == _SUPERADMIN_DEMO["email"]
+    # Both demo paths are dead when DEMO_LOGIN_ENABLED=false (real deployments).
+    if (settings.demo_login_enabled
+            and email.lower().strip() == _SUPERADMIN_DEMO["email"]
             and password == _SUPERADMIN_DEMO["password"]):
         return _demo_jwt_login(db, _SUPERADMIN_DEMO["email"],
                                _SUPERADMIN_DEMO["name"], _SUPERADMIN_DEMO["role"])
@@ -102,10 +111,12 @@ def login(db: Client, email: str, password: str) -> LoginResponse:
     # For known demo accounts (non-superadmin), seed the user in Supabase on first
     # login. Seeding is best-effort: if the admin API is throttled/unavailable and
     # the user already exists, we still let them sign in below.
-    demo = _DEMO_ACCOUNTS.get(email.lower().strip())
-    if demo and password == demo.get("password", _DEMO_PASSWORD):
+    demo = _DEMO_ACCOUNTS.get(email.lower().strip()) if settings.demo_login_enabled else None
+    demo_password_ok = bool(demo) and password == demo.get("password", _DEMO_PASSWORD)
+    if demo_password_ok:
         try:
-            _ensure_demo_user(db, email, demo["name"], demo["role"])
+            _ensure_demo_user(db, email, demo["name"], demo["role"],
+                              demo.get("password", _DEMO_PASSWORD))
         except Exception as e:
             logger.warning("demo user seeding failed for %s (continuing to sign-in): %s", email, e)
 
@@ -114,7 +125,16 @@ def login(db: Client, email: str, password: str) -> LoginResponse:
         # onto the shared service-role data client (which would make later DB
         # writes run as this user and violate RLS).
         from app.db.supabase import get_auth_client
-        auth_resp = get_auth_client().auth.sign_in_with_password({"email": email, "password": password})
+        try:
+            auth_resp = get_auth_client().auth.sign_in_with_password({"email": email, "password": password})
+        except Exception:
+            # Demo accounts whose Supabase user was seeded with a different
+            # password than the demo map (or changed since): the map is the
+            # source of truth, so sync Supabase and retry once.
+            if not demo_password_ok:
+                raise
+            _admin_set_password(db, email, password)
+            auth_resp = get_auth_client().auth.sign_in_with_password({"email": email, "password": password})
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if auth_resp.user is None:
@@ -162,7 +182,105 @@ def get_me(db: Client, profile: dict) -> MeResponse:
         role=profile["role"],
         institute_id=profile.get("institute_id"),
         institute_name=institute_name,
+        designation=profile.get("designation"),
+        phone=profile.get("phone"),
+        avatar_url=profile.get("avatar_url"),
+        skills=profile.get("skills") or [],
     )
+
+
+def update_me(db: Client, profile: dict, payload) -> MeResponse:
+    """Self-service edit of the caller's own profile row. Upserts so demo
+    personas whose row was never seeded still get one; skills lives in a
+    jsonb column added by sql/11_profile_fields.sql — environments that
+    haven't run it degrade gracefully (skills silently dropped)."""
+    updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items()
+               if v is not None}
+    if "full_name" in updates and not updates["full_name"].strip():
+        raise HTTPException(status_code=422, detail="Name cannot be empty")
+    if "full_name" in updates:
+        updates["full_name"] = updates["full_name"].strip()
+
+    if updates:
+        row = {"id": profile["id"], "email": profile["email"],
+               "full_name": profile.get("full_name", ""), "role": profile["role"],
+               **updates}
+        try:
+            try:
+                db.table("profiles").upsert(row, on_conflict="id").execute()
+            except Exception:
+                if "skills" not in row:
+                    raise
+                logger.warning("profile upsert failed — retrying without skills "
+                               "(run sql/11_profile_fields.sql)", exc_info=True)
+                row.pop("skills")
+                db.table("profiles").upsert(row, on_conflict="id").execute()
+        except Exception:
+            # JWT-only demo personas (e.g. superadmin) have no auth.users row,
+            # so the profiles.id FK rejects the insert. Surface that clearly
+            # instead of a 500.
+            has_row = db.table("profiles").select("id").eq("id", profile["id"]).execute()
+            if not (has_row.data or []):
+                raise HTTPException(status_code=400,
+                                    detail="This demo account has no editable profile.")
+            raise
+
+    try:
+        fresh = db.table("profiles").select("*").eq("id", profile["id"]).single().execute().data
+    except Exception:
+        fresh = None  # .single() raises on zero rows (profile-less personas)
+    return get_me(db, fresh or {**profile, **updates})
+
+
+def change_password(db: Client, profile: dict, current_password: str, new_password: str) -> dict:
+    """Authenticated password change: proves knowledge of the current password
+    before setting the new one (unlike the demo-only reset flow)."""
+    if len(new_password) < 8:
+        raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
+    email = (profile.get("email") or "").lower().strip()
+
+    # Demo personas (in-memory / JWT-only, e.g. superadmin) — update the maps.
+    if settings.demo_login_enabled:
+        demo = _DEMO_ACCOUNTS.get(email)
+        if email == _SUPERADMIN_DEMO["email"]:
+            if current_password != _SUPERADMIN_DEMO["password"]:
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
+            _SUPERADMIN_DEMO["password"] = new_password
+            return {"success": True}
+        if demo:
+            if current_password != demo["password"]:
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
+            demo["password"] = new_password
+            # Demo users also exist in Supabase auth (seeded on login) — keep
+            # both in sync so either path accepts the new password.
+            try:
+                _admin_set_password(db, email, new_password)
+            except Exception:
+                logger.warning("supabase password sync failed for demo %s", email, exc_info=True)
+            return {"success": True}
+
+    # Real user: verify the current password via a real sign-in, then update.
+    from app.db.supabase import get_auth_client
+    try:
+        resp = get_auth_client().auth.sign_in_with_password(
+            {"email": email, "password": current_password})
+        if resp.user is None:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    try:
+        db.auth.admin.update_user_by_id(profile["id"], {"password": new_password})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update password: {e}")
+    return {"success": True}
+
+
+def _admin_set_password(db: Client, email: str, new_password: str) -> None:
+    page = db.auth.admin.list_users()
+    ids = {u.email: u.id for u in page}
+    if email in ids:
+        db.auth.admin.update_user_by_id(ids[email], {"password": new_password})
 
 
 def create_invite(db: Client, inviter: dict, email: str, role: str, institute_id: str | None) -> InviteResponse:

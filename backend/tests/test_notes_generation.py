@@ -142,8 +142,9 @@ def test_prompt_builders_assemble():
         system, user = builder()
         assert isinstance(system, str) and "C1" in user
 
-    sys_s, user_s = prompts.build_slides_prompt(ctx, plan, {"units": []})
-    assert "Hash Tables" in user_s
+    # The legacy topic-level slides builder was retired; decks are built per
+    # concept (build_concept_slides_chunk_prompt).
+    assert not hasattr(prompts, "build_slides_prompt")
 
 
 def test_core_prompt_selects_comparison_block():

@@ -36,13 +36,14 @@ export default function CollegeAdminLayout() {
           </div>
         </div>
 
-        <div className="ws-user-section">
+        <NavLink to="/admin/account" className="ws-user-section" title="Account settings"
+                 style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="ws-avatar" style={{ background: 'linear-gradient(135deg, #00B894, #00916e)' }}>{initials}</div>
           <div className="ws-user-info">
             <span className="ws-user-name">{user?.name ?? 'Admin'}</span>
             <span className="ws-user-email">{user?.email}</span>
           </div>
-        </div>
+        </NavLink>
 
         <nav className="ws-nav">
           <span className="ws-nav-group-label">College</span>

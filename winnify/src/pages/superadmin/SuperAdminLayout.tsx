@@ -40,14 +40,15 @@ export default function SuperAdminLayout() {
           </div>
         </div>
 
-        {/* Profile */}
-        <div className="ws-user-section">
+        {/* Profile → account page */}
+        <NavLink to="/superadmin/account" className="ws-user-section" title="Account settings"
+                 style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="ws-avatar" style={{ background: 'linear-gradient(135deg, #E84393, #c0306e)' }}>{initials}</div>
           <div className="ws-user-info">
             <span className="ws-user-name">{user?.name ?? 'Super Admin'}</span>
             <span className="ws-user-email">{user?.email}</span>
           </div>
-        </div>
+        </NavLink>
 
         {/* Nav */}
         <nav className="ws-nav">

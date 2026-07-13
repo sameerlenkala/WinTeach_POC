@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run tests
+        # Dummy values satisfy the required Settings fields at import time; the
+        # unit suite mocks the DB and never makes a real Supabase call. The
+        # `integration` marker (needs a live backend) is excluded.
+        env:
+          SUPABASE_URL: http://localhost
+          SUPABASE_SERVICE_KEY: test
+          SUPABASE_ANON_KEY: test
+        run: python -m pytest tests/ -q -m "not integration"
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: winnify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: winnify/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Audit (production deps)
+        run: npm audit --omit=dev --audit-level=high

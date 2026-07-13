@@ -1,0 +1,14 @@
+ANU B.Tech. R20 Regulations
+II Year I Semester
+THERMAL ENGINEERING
+
+UNIT – I (10 Hours)
+Air Standard Cycles: Otto cycle; Diesel cycle; Dual combustion cycle: Air-standard efficiency, Mean effective pressure.
+Actual Cycles – Deviations from air-standard cycles, Time loss factor, Heat loss factor, Exhaust blowdown.
+
+UNIT – II (8 Hours)
+Fuel Systems: Carburetion, Fuel injection systems – MPFI, TBI, GDI: Injection timing diagrams.
+Ignition Systems – Battery ignition, Magneto ignition, Electronic ignition.
+
+Text Books:
+1. I.C. Engines, V. Ganesan, 4th Edition, McGraw-Hill, 2012.

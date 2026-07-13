@@ -1,0 +1,60 @@
+{
+  "name": "os_syllabus",
+  "description": "CIET R24 Operating Systems — colon-delimited Indian format (the happy path). Expected tree hand-built from evals/golden/os_syllabus.txt, NOT from any model output.",
+  "units": [
+    {
+      "unit_number": 1,
+      "hours": 10,
+      "topics": [
+        {"title": "Operating Systems Overview",
+         "subtopics": ["Introduction", "Operating system functions", "Operating systems operations", "Computing environments", "Free and Open-Source Operating Systems"]},
+        {"title": "System Structures",
+         "subtopics": ["Operating System Services", "User and Operating-System Interface", "system calls", "Types of System Calls", "system programs", "Operating system Design and Implementation", "Operating system structure", "Building and Booting an Operating System", "Operating system debugging"]}
+      ]
+    },
+    {
+      "unit_number": 2,
+      "hours": 9,
+      "topics": [
+        {"title": "Processes",
+         "subtopics": ["Process Concept", "Process scheduling", "Operations on processes", "Inter-process communication"]},
+        {"title": "Threads and Concurrency",
+         "subtopics": ["Multithreading models", "Thread libraries", "threading issues"]},
+        {"title": "CPU Scheduling",
+         "subtopics": ["Basic concepts", "scheduling criteria", "Scheduling algorithms", "Multiple processor scheduling"]}
+      ]
+    },
+    {
+      "unit_number": 3,
+      "hours": 9,
+      "topics": [
+        {"title": "Synchronization Tools",
+         "subtopics": ["The Critical Section Problem", "Peterson's Solution", "Mutex Locks", "Semaphores", "Monitors", "Classic problems of Synchronization"]},
+        {"title": "Deadlocks",
+         "subtopics": ["system Model", "Deadlock characterization", "Methods for handling Deadlocks", "Deadlock prevention", "Deadlock avoidance", "Deadlock detection", "Recovery from Deadlock"]}
+      ]
+    },
+    {
+      "unit_number": 4,
+      "hours": 10,
+      "topics": [
+        {"title": "Memory-Management Strategies",
+         "subtopics": ["Introduction", "Contiguous memory allocation", "Paging", "Structure of the Page Table", "Swapping"]},
+        {"title": "Virtual Memory Management",
+         "subtopics": ["Introduction", "Demand paging", "Copy-on-write", "Page replacement", "Allocation of frames", "Thrashing"]},
+        {"title": "Storage Management",
+         "subtopics": ["Overview of Mass Storage Structure", "HDD Scheduling"]}
+      ]
+    },
+    {
+      "unit_number": 5,
+      "hours": 9,
+      "topics": [
+        {"title": "File System",
+         "subtopics": ["File concept", "Access methods", "Directory Structure", "File-system structure", "File-system Operations", "Directory implementation", "Allocation method", "Free space management", "File-System Mounting", "Partitions and Mounting", "File Sharing"]},
+        {"title": "Protection",
+         "subtopics": ["Goals of protection", "Principles of protection", "Protection Rings", "Domain of Protection", "Access matrix"]}
+      ]
+    }
+  ]
+}

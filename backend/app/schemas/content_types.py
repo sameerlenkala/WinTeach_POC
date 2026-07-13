@@ -204,17 +204,37 @@ def is_coding_subject(subject_type_label: str | None) -> bool:
     return any(marker in label for marker in _CODING_SUBJECT_MARKERS)
 
 
-# ── Cost model (gpt-4o) ───────────────────────────────────────────────────────
+# ── Cost model ────────────────────────────────────────────────────────────────
 #
-# Approximate pricing in USD per 1M tokens; update if OpenAI rates change.
-GPT4O_INPUT_PER_1M = 2.50
-GPT4O_OUTPUT_PER_1M = 10.00
+# Approximate pricing in USD per 1M (input, output) tokens per model; update if
+# provider rates change. Unknown models bill at the default (heavy) rate so a
+# new routing entry can never silently under-bill.
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    # gpt-4o tiers kept for historical cost rows only — API access was revoked
+    # (2026-07); no live call path routes to them.
+    "gpt-4o": (2.50, 10.00),
+    "gpt-4o-mini": (0.15, 0.60),
+    # GPT-5.6 family (GA 2026-07-09) + 5.4 light tiers — third-party-confirmed
+    # rates; re-verify against platform.openai.com/pricing at cutover.
+    "gpt-5.6-sol": (5.00, 30.00),
+    "gpt-5.6-terra": (2.50, 15.00),
+    "gpt-5.6-luna": (1.00, 6.00),
+    "gpt-5.4-mini": (0.75, 4.50),
+    "gpt-5.4-nano": (0.20, 1.25),
+    "gpt-5.4-nano-2026-03-17": (0.20, 1.25),  # dated snapshot, same rates
+}
+_DEFAULT_PRICING = MODEL_PRICING["gpt-5.6-terra"]
+
+# Back-compat aliases for older call sites.
+GPT4O_INPUT_PER_1M = MODEL_PRICING["gpt-4o"][0]
+GPT4O_OUTPUT_PER_1M = MODEL_PRICING["gpt-4o"][1]
 
 
-def usd_cost(prompt_tokens: int, completion_tokens: int) -> float:
-    """USD cost for a token spend at the configured gpt-4o rates."""
-    return round((prompt_tokens or 0) / 1e6 * GPT4O_INPUT_PER_1M
-                 + (completion_tokens or 0) / 1e6 * GPT4O_OUTPUT_PER_1M, 4)
+def usd_cost(prompt_tokens: int, completion_tokens: int, model: str = "gpt-5.6-terra") -> float:
+    """USD cost for a token spend at the given model's rates."""
+    rate_in, rate_out = MODEL_PRICING.get(model, _DEFAULT_PRICING)
+    return round((prompt_tokens or 0) / 1e6 * rate_in
+                 + (completion_tokens or 0) / 1e6 * rate_out, 4)
 
 
 # Rough (input, output) token estimates per generation call — for the upfront

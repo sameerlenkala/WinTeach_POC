@@ -1,0 +1,85 @@
+CIET B.Tech. R24 Regulations
+97
+II Year II Semester
+OPERATING SYSTEMS
+(Common to CAI/CSM/CSE/CDS/CIT/CSC)
+Course Objectives:
+The main objectives of the course is to make student
+
+Understand the basic concepts and principles of operating systems, including process
+management, memory management, file systems, and Protection.
+
+Make use of process scheduling algorithms and synchronization techniques to achieve
+better performance of a computer system.
+
+Illustrate different conditions for deadlock and their possible solutions.
+Course Outcomes :
+
+Understand the structure and functionalities of operating systems.
+
+Apply various concepts to solve problems related to process synchronization, deadlocks and
+make an effective report
+
+Apply different algorithms of CPU scheduling, Page replacement and disk scheduling.
+
+Analyze process, memory and storage management strategies.
+UNIT – I (10 Hours )
+Operating Systems Overview
+: Introduction, Operating system functions, Operating systems
+operations, Computing environments, Free and Open-Source Operating Systems
+System Structures:
+Operating System Services, User and Operating-System Interface, system calls,
+Types of System Calls, system programs, Operating system Design and Implementation, Operating
+system structure, Building and Booting an Operating System, Operating system debugging
+UNIT – II ( 9 Hours )
+Processes:
+Process Concept, Process scheduling, Operations on processes, Inter-process
+communication.
+Threads and Concurrency
+: Multithreading models, Thread libraries, threading issues. CPU
+Scheduling: Basic concepts, scheduling criteria, Scheduling algorithms, Multiple processor scheduling.
+UNIT – III (9 Hours)
+Synchronization Tools:
+The Critical Section Problem, Peterson’s Solution, Mutex Locks,
+Semaphores, Monitors, Classic problems of Synchronization.
+Deadlocks
+: system Model, Deadlock characterization, Methods for handling Deadlocks, Deadlock
+prevention, Deadlock avoidance, Deadlock detection, Recovery from Deadlock.
+UNIT – IV (10 Hours )
+Memory-Management Strategies:
+Introduction, Contiguous memory allocation, Paging, Structure of
+the Page Table, Swapping.
+L T P
+C
+3
+0 0
+3
+CIET B.Tech. R24 Regulations
+98
+Virtual Memory Management:
+Introduction, Demand paging, Copy-on-write, Page replacement,
+Allocation of frames, Thrashing
+Storage Management: Overview of Mass Storage Structure, HDD Scheduling.
+UNIT – V (9 Hours )
+File System
+:
+File System Interface:
+File concept, Access methods, Directory Structure; File system
+Implementation: File-system structure, File-system Operations, Directory implementation, Allocation
+method, Free space management; File-System Internals: File-System Mounting, Partitions and
+Mounting, File Sharing.
+Protection:
+Goals of protection, Principles of protection, Protection Rings, Domain of Protection,
+Access matrix.
+Text Books:
+1. Operating System Concepts, Silberschatz A, Galvin P B, Gagne G, 10th Edition,
+Wiley, 2018.
+2. Modern Operating Systems, Tanenbaum A S, 4th Edition, Pearson , 2016
+Reference Books:
+1. Operating Systems -Internals and Design Principles, Stallings W, 9th edition, Pearson,
+2018
+2. Operating Systems: A Concept Based Approach, D.M Dhamdhere, 3rd Edition,
+McGraw- Hill, 2013
+Online Learning Resources:
+1. https://nptel.ac.in/courses/106/106/106106144/
+2. http://peterindia.net/OperatingSystems.html

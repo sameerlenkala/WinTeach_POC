@@ -20,13 +20,13 @@ def create_source(payload: LibrarySourceCreate, user: dict = Depends(_faculty_ab
 
 
 @router.get("/sources/{source_id}")
-def get_source(source_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
-    return library_service.get_source(db, source_id)
+def get_source(source_id: str, user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    return library_service.get_source(db, user, source_id)
 
 
 @router.get("/sources/{source_id}/references")
-def get_source_references(source_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
-    return library_service.get_source_references(db, source_id)
+def get_source_references(source_id: str, user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    return library_service.get_source_references(db, user, source_id)
 
 
 @router.delete("/sources/{source_id}", status_code=204)

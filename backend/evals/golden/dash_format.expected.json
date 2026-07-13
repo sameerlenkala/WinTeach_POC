@@ -1,0 +1,34 @@
+{
+  "name": "dash_format",
+  "description": "Synthetic no-colon syllabus: dash-separated topics (Unit I, III) and heading-on-its-own-line with a following item list (Unit II). Documents the format-generality gap — the colon grammar does not fire here.",
+  "units": [
+    {
+      "unit_number": 1,
+      "hours": 8,
+      "topics": [
+        {"title": "Data Models",
+         "subtopics": ["Relational model", "ER model", "Object-based data models", "Semi-structured data model"]},
+        {"title": "Database System Architecture",
+         "subtopics": ["Data abstraction", "Data independence", "Database users and administrators"]}
+      ]
+    },
+    {
+      "unit_number": 2,
+      "hours": 10,
+      "topics": [
+        {"title": "Relational Algebra",
+         "subtopics": ["Selection and projection", "Set operations", "Renaming", "Joins", "Division"]},
+        {"title": "SQL Fundamentals",
+         "subtopics": ["DDL commands", "DML commands", "Integrity constraints", "Views", "Nested queries"]}
+      ]
+    },
+    {
+      "unit_number": 3,
+      "hours": 9,
+      "topics": [
+        {"title": "Normalization",
+         "subtopics": ["Functional dependencies", "Armstrong's axioms", "Closure of attribute sets", "Normal forms (1NF, 2NF, 3NF, BCNF)", "Lossless join decomposition", "Dependency preservation"]}
+      ]
+    }
+  ]
+}

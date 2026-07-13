@@ -90,7 +90,7 @@ def test_repair_rejects_invalid_fixes(monkeypatch):
         return {
             "topic_fixes": [
                 {"unit_id": "UNIT-V", "topic_title": "Transaction Concept",
-                 "primary_co": "SUGG1"},  # suggested CO can't be primary
+                 "primary_co": "IO1"},  # industry outcome (IO) can't be primary
                 {"unit_id": "UNIT-V", "topic_title": "Transaction Concept",
                  "primary_co": "CO99"},   # nonexistent CO
                 {"unit_id": "UNIT-X", "topic_title": "Ghost Topic", "primary_co": "CO1"},

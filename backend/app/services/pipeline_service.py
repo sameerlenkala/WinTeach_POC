@@ -4,7 +4,7 @@ WinTeach 5-Prompt Syllabus Pipeline
 Prompt 1 — Extraction          : full structured JSON from PDF text
 Prompt 2 — Bloom Mapping       : CO → Bloom level + quality (only when COs exist)
 Prompt 3 — Industry & AI Skills: relevant skills from course content
-Prompt 4 — CO Evaluation       : score weakness, rewrite ≥0.95, suggest 2-3 new COs
+Prompt 4 — CO Evaluation       : score weakness, rewrite ≥0.95, suggest 2-3 Industry Outcomes (IOs)
 Prompt 4B — CO Generation      : generate COs from scratch when none exist in syllabus
 Prompt 5 — CO–Unit Mapping     : map each final CO to the units that address it
 
@@ -14,11 +14,27 @@ the key "pipeline_result", alongside a compatible ai_extraction for the frontend
 
 import json
 import logging
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-4o"
+MODEL = "gpt-5.6-terra"   # offline fallback only — mirrors the settings.generation_model default
+
+# Input cap for P1 — ~10k tokens. The old 12k-char cap (~3k tokens) silently
+# dropped the later units of long syllabi on a 128k-context model.
+P1_INPUT_CHAR_CAP = 40_000
+
+_TRANSIENT_ERRORS = ("RateLimitError", "APITimeoutError", "APIConnectionError",
+                     "InternalServerError", "APIError")
+
+
+def _model() -> str:
+    try:
+        from app.core.config import settings
+        return settings.generation_model
+    except Exception:  # pragma: no cover
+        return MODEL
 
 VALID_BLOOM = {"Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"}
 
@@ -48,32 +64,80 @@ def _norm_bloom(raw: str) -> str:
     return _BLOOM_NORM.get(raw.strip().lower(), "Understand")
 
 
-def _chat(client: Any, prompt: str, system: str | None = None) -> dict:
-    """Call GPT-4o with JSON mode and return parsed dict."""
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+_BLOOM_RANK = {"Remember": 1, "Understand": 2, "Apply": 3,
+               "Analyze": 4, "Evaluate": 5, "Create": 6}
 
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        temperature=0.2,
-        max_tokens=4096,
-        response_format={"type": "json_object"},
-    )
-    raw = resp.choices[0].message.content or "{}"
-    return json.loads(raw)
+
+def _chat(client: Any, prompt: str, system: str | None = None,
+          max_tokens: int = 16000) -> dict:
+    """One JSON-mode chat call with the same failure handling as the generation
+    service: transient API errors retry with backoff; invalid JSON retries with
+    the parse error fed back; a truncated response (finish_reason=length — the
+    old 4096 cap silently truncated P1's module tree on dense syllabi) is told
+    to compress prose rather than the structure."""
+    base = []
+    if system:
+        base.append({"role": "system", "content": system})
+    base.append({"role": "user", "content": prompt})
+
+    from app.services import llm_compat
+    messages = list(base)
+    last_err: Exception | None = None
+    api_retries = 0
+    for attempt in range(3):
+        try:
+            resp = llm_compat.create_chat_completion(
+                client, model=_model(),
+                messages=messages,
+                temperature=0.2,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+        except Exception as e:
+            if type(e).__name__ in _TRANSIENT_ERRORS and api_retries < 2:
+                api_retries += 1
+                logger.warning("pipeline _chat transient error (%s), retry %d",
+                               type(e).__name__, api_retries)
+                time.sleep(2 * api_retries)
+                continue
+            raise
+        choice = resp.choices[0]
+        raw = choice.message.content or "{}"
+        finish = getattr(choice, "finish_reason", None)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            last_err = e
+            logger.warning("pipeline _chat invalid JSON (attempt %d, finish_reason=%s): %s",
+                           attempt + 1, finish, e)
+            if finish == "length":
+                note = ("Your previous response was cut off before the JSON completed. "
+                        "Re-emit the COMPLETE JSON object, compressing prose fields "
+                        "enough to fit — never truncate the structure itself.")
+            else:
+                note = (f"Your previous response was not valid JSON (parse error: {e}). "
+                        "Re-emit the COMPLETE, corrected JSON object — nothing else.")
+            messages = base + [
+                {"role": "assistant", "content": raw[:6000]},
+                {"role": "user", "content": note},
+            ]
+    raise last_err
 
 
 # ── Prompt 1: Extraction ──────────────────────────────────────────────────────
+#
+# Two focused extractions run in parallel: the module tree comes from the
+# atomize-then-cluster engine in structure_extraction.py (v2 — the model only
+# groups deterministic phrase atoms, so duplicated/dropped/paraphrased content
+# is structurally impossible); P1-META extracts everything else below.
 
 _P1_SYSTEM = (
     "You are extracting structured information from an Indian university syllabus document. "
     "Output ONLY valid JSON — no markdown, no explanation."
 )
 
-_P1_TEMPLATE = """You are extracting structured information from an Indian university syllabus document.
+_P1_META_TEMPLATE = """You are extracting course metadata from an Indian university syllabus document.
+(The unit/topic structure is extracted separately — do NOT output a module tree.)
 
 Syllabus text:
 {syllabus_text}
@@ -85,30 +149,7 @@ Extract the following fields. For each field assign a confidence level:
 
 ━━━ FIELDS TO EXTRACT ━━━
 
-1. module_tree
-Extract all units and their topics and subtopics.
-
-Rules:
-- Each unit has a unit_id, a title, per-unit contact hours if shown in brackets, and a topics list
-- Each topic has a title and a subtopics array (flat list of strings — never nest subtopics inside subtopics)
-- Read the syllabus content carefully and use your understanding to identify what is a major topic
-  and what is a subtopic within it. A topic is a significant concept or area that a lecturer would
-  dedicate a portion of the class to. A subtopic is a more specific concept that falls under and
-  supports a topic.
-- When a syllabus lists sub-sections of the same broad concept (e.g. "File System Interface",
-  "File system Implementation", "File-System Internals"), group them all under ONE topic (e.g.
-  "File System") with each sub-section's items as subtopics. Only create separate topics when the
-  concepts are genuinely distinct enough that a lecturer would teach them in separate sessions.
-- If the syllabus does not provide an explicit name for the unit and only shows "UNIT – I" or "UNIT I"
-  followed directly by topic content, set the unit title to "Unit I" (or Unit II, Unit III etc)
-  — do not use the first topic as the unit title
-- The unit title must NEVER be the same as a topic title inside that unit
-- Every item from the syllabus must appear somewhere in the output — do not drop anything
-- Maximum two levels only — topics and subtopics
-- If per-unit contact hours are shown in brackets next to the unit title (e.g. UNIT – I (8 Hours))
-  extract them as a contact_hours field on that unit
-
-2. contact_hours
+1. contact_hours
 The overall lecture, tutorial, and practical hours for the whole course.
 - Look for L/T/P table or notation like L:3 T:1 P:0 or 3-1-0 first
 - If individual unit contact hours are shown in brackets next to unit titles
@@ -120,7 +161,7 @@ The overall lecture, tutorial, and practical hours for the whole course.
 - source should be "per_unit_sum" when summed from unit hours,
   "explicit_table" when from L/T/P table, "credits_derived" when derived
 
-3. course_outcomes
+2. course_outcomes
 The declared Course Outcomes or Learning Outcomes — not Course Objectives.
 - Look for sections labelled: Course Outcomes, Learning Outcomes, CO, Students will be able to
 - Extract each CO as a separate item with id and text
@@ -132,21 +173,21 @@ The declared Course Outcomes or Learning Outcomes — not Course Objectives.
   "Only Course Objectives found. No Course Outcomes declared. CO generation required for all units."
 - Do NOT extract Course Objectives as Course Outcomes under any circumstances
 
-4. course_objectives
+3. course_objectives
 The declared Course Objectives — not Course Outcomes.
 - Look for sections labelled: Course Objectives, Objectives, Course Aims, Aim of the course
 - Extract each objective as a separate item with id and text
 - If no Course Objectives section exists return empty array with confidence missing
 - Do NOT extract Course Outcomes as Course Objectives
 
-5. textbooks
+4. textbooks
 Books listed under the Textbooks or Text Books section only.
 - Extract only books from sections explicitly labelled Textbooks or Text Books
 - For each book extract: author, title, edition, publisher, year (null if not mentioned)
 - year must be an integer if present, null if not mentioned
 - If no Textbooks section exists return empty array with confidence missing
 
-6. reference_books
+5. reference_books
 Books listed under the Reference Books or References section only.
 - Extract only books from sections explicitly labelled Reference Books or References
 - Do NOT include textbooks here
@@ -154,19 +195,19 @@ Books listed under the Reference Books or References section only.
 - year must be an integer if present, null if not mentioned
 - If no Reference Books section exists return empty array with confidence missing
 
-7. online_resources
+6. online_resources
 Any online learning resources or URLs mentioned in the syllabus.
 - Look for sections labelled: Online Learning Resources, Web Resources, e-Resources, URLs
 - Extract each URL or resource as a separate string
 - If none found return empty array with confidence missing
 
-8. academic_year
+7. academic_year
 The year and semester of study for this course.
 - Look for patterns like "II Year II Semester", "III Year I Semester", "2nd Year", "First Year" in the document header
 - Extract year as an integer (1, 2, 3, or 4) and semester as an integer (1 or 2)
 - If not found return null for both
 
-9. lab_flag
+8. lab_flag
 Whether this course has a laboratory or practical component.
 - Return true only if the words laboratory, practical, lab, or experiment are explicitly present
 - Otherwise return false
@@ -185,22 +226,6 @@ Output ONLY this JSON — no explanation, no markdown:
   "credits": 3,
   "semester": "string",
   "regulation": "string",
-  "module_tree": {{
-    "value": [
-      {{
-        "unit_id": "UNIT-I",
-        "title": "Unit title here",
-        "contact_hours": 9,
-        "topics": [
-          {{
-            "title": "Topic title",
-            "subtopics": ["Subtopic 1", "Subtopic 2"]
-          }}
-        ]
-      }}
-    ],
-    "confidence": "high|low|missing"
-  }},
   "contact_hours": {{
     "value": {{"L": 3, "T": 0, "P": 0, "total": 45, "source": "per_unit_sum|explicit_table|credits_derived|inline_prose"}},
     "confidence": "high|low|missing"
@@ -238,38 +263,72 @@ Output ONLY this JSON — no explanation, no markdown:
 
 
 def _run_p1(client: Any, syllabus_text: str) -> dict:
-    prompt = _P1_TEMPLATE.format(syllabus_text=syllabus_text[:12_000])
-    return _chat(client, prompt, _P1_SYSTEM)
+    """Structure (atomize-then-cluster engine) + metadata (one focused call),
+    run in parallel and merged into the single p1 dict shape every downstream
+    consumer already reads."""
+    from app.services import structure_extraction
+    text = syllabus_text[:P1_INPUT_CHAR_CAP]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_struct = pool.submit(structure_extraction.extract_module_tree,
+                               client, text, _chat)
+        f_meta = pool.submit(_chat, client,
+                             _P1_META_TEMPLATE.format(syllabus_text=text),
+                             _P1_SYSTEM)
+        tree = f_struct.result()
+        meta = f_meta.result()
+    meta["module_tree"] = tree if isinstance(tree, dict) else {"value": [], "confidence": "missing"}
+    return meta
 
 
 # ── Prompt 2: Bloom Mapping ───────────────────────────────────────────────────
 
-_P2_TEMPLATE = """You are an expert in Bloom's Taxonomy applied to Indian university curriculum design.
+_P2_TEMPLATE = """You are an expert in Bloom's Revised Taxonomy applied to Outcome-Based Education
+in Indian engineering universities. Classify each Course Outcome below.
 
 Course Outcomes extracted from the syllabus:
 {co_list}
 
 Bloom's Taxonomy levels:
-- L1 Remember:   Recalling facts, definitions, names
-- L2 Understand: Explaining concepts, interpreting, summarising
-- L3 Apply:      Using knowledge in new situations, solving, implementing
-- L4 Analyse:    Breaking down, comparing, examining relationships
-- L5 Evaluate:   Judging, justifying, critiquing, assessing quality
-- L6 Create:     Designing, producing, formulating something new
+- L1 Remember:   recall facts — list, define, state, name, identify
+- L2 Understand: explain, describe, classify, summarise, illustrate, discuss
+- L3 Apply:      use in new situations — solve, implement, compute, construct, demonstrate (by doing)
+- L4 Analyse:    break down, compare, differentiate, debug, examine relationships
+- L5 Evaluate:   judge against criteria — justify, critique, assess, recommend
+- L6 Create:     produce something new — design, formulate, develop, architect
 
-For each Course Outcome:
-1. Identify the primary action verb
-2. Map it to the correct Bloom level based on what the verb actually demands cognitively
-3. Assess CO quality — is it specific and measurable or vague and weak?
-4. Give a brief justification
+━━━ CLASSIFICATION RULES ━━━
+1. Judge the COGNITIVE WORK the student must be assessed on — never the verb
+   keyword alone. "Write programs to implement stack operations" is L3 (the work
+   is applying), even though "write" is not a canonical L3 verb. "Explain the
+   design of the TCP/IP stack" is L2 (the work is explaining), even though the
+   word "design" appears in it.
+2. Multi-verb COs ("understand and apply X", "study and analyse Y"): classify at
+   the HIGHEST level the CO genuinely assesses, and report that operative verb
+   as primary_verb. Ignore filler verbs.
+3. Calibration examples:
+   - "Demonstrate the working of AVL trees" → L2 if it means explain/trace on
+     paper; L3 if it means implement/perform. Decide from the CO's own wording
+     and the course context — theory courses lean L2, programming/lab courses L3.
+   - "Understand normalisation and apply it to schema design" → L3 (apply wins).
+   - "Discuss various indexing techniques" → L2.
+   - "Compare shortest-path algorithms for a given road network" → L4.
+   - "Design a normalized database schema for an enterprise scenario" → L6.
+4. QUALITY — judge assessability:
+   - strong: one clear measurable action verb + specific course content + an
+     examiner could set a question testing exactly this.
+   - acceptable: measurable but broad or compound; assessable with some
+     interpretation.
+   - weak: unmeasurable verb (understand, know, learn, appreciate, be familiar
+     with, be aware of), no specific content, or not assessable as written.
 
-Output ONLY this JSON — no explanation, no markdown:
+Output ONLY this JSON — one entry per CO, same order, no explanation, no markdown:
 {{
   "bloom_mapping": [
     {{
       "co_id": "CO1",
       "co_text": "original CO text",
-      "primary_verb": "the main action verb identified",
+      "primary_verb": "the operative action verb",
       "bloom_level": "L1|L2|L3|L4|L5|L6",
       "bloom_name": "Remember|Understand|Apply|Analyse|Evaluate|Create",
       "quality": "strong|acceptable|weak",
@@ -360,20 +419,23 @@ For each CO assess its weakness on a scale of 0.0 to 1.0 where:
 - 0.0 = perfectly strong, specific, measurable, appropriate Bloom level
 - 1.0 = completely vague, unmeasurable, wrong level, or meaningless
 
-ONLY rewrite COs where weakness_score >= 0.95
+Rewrite a CO when its quality assessment above is "weak" OR its weakness_score
+is 0.7 or higher — a vague, unmeasurable, or banned-verb CO must not survive
+just because it is not completely meaningless.
 For all others keep the original text unchanged and mark action as "kept"
 
 When rewriting:
 - Use a precise action verb at an appropriate Bloom level for the course content
 - Make it specific to actual topics in the course
-- Write exactly 2 sentences — what the student does and what success looks like
+- Write ONE concise sentence — a single measurable action statement. Never append
+  a "success looks like" sentence to the CO text; that belongs in success_criteria.
 - Do not use: understand, learn, know, appreciate, be familiar with, be aware of
 
-━━━ TASK 2: SUGGEST ADDITIONAL INDUSTRY-ALIGNED COs ━━━
-Suggest 2 to 3 additional Course Outcomes that:
+━━━ TASK 2: SUGGEST ADDITIONAL INDUSTRY OUTCOMES (IOs) ━━━
+Suggest 2 to 3 Industry Outcomes — supplementary outcomes that:
 - Are NOT already covered by the existing COs
 - Are grounded in real industry requirements for this subject
-- Include at least one CO that addresses emerging AI or modern technology applications if relevant
+- Include at least one IO that addresses emerging AI or modern technology applications if relevant
 - Are at an appropriate Bloom level (L3 or above preferred)
 - Each suggestion includes a Bloom level and justification
 
@@ -385,17 +447,18 @@ Output ONLY this JSON — no explanation, no markdown:
       "original_text": "original CO text",
       "weakness_score": 0.0,
       "action": "kept|rewritten",
-      "final_text": "final CO text — original if kept, rewritten if changed",
+      "final_text": "final CO text — ONE sentence, original if kept, rewritten if changed",
+      "success_criteria": "one sentence: the measurable demonstration of success (empty string when kept)",
       "bloom_level": "L1|L2|L3|L4|L5|L6",
       "reason": "one sentence explaining the decision"
     }}
   ],
   "suggested_cos": [
     {{
-      "suggested_id": "SUGG1",
-      "text": "suggested CO text",
+      "suggested_id": "IO1",
+      "text": "Industry Outcome text — ONE sentence",
       "bloom_level": "L1|L2|L3|L4|L5|L6",
-      "industry_relevance": "one sentence explaining why this CO matters for industry",
+      "industry_relevance": "one sentence explaining why this IO matters for industry",
       "category": "core_industry|emerging_ai|advanced_application"
     }}
   ]
@@ -453,7 +516,8 @@ Bloom level must reflect the academic year of the course:
 Do not mechanically escalate Bloom levels across units — each unit's level must reflect
 what that unit's content genuinely demands at this academic level.
 
-Additionally suggest 1-2 course-level COs that cut across multiple units and reflect industry relevance.
+Additionally suggest 1-2 Industry Outcomes (IOs) — course-level outcomes that cut
+across multiple units and reflect industry relevance.
 
 Bloom level verb guidance — choose based on what the unit genuinely demands:
 - L2 Understand: summarise, classify, interpret, paraphrase
@@ -462,7 +526,9 @@ Bloom level verb guidance — choose based on what the unit genuinely demands:
 - L5 Evaluate:   evaluate, justify, critique, assess
 - L6 Create:     design, create, formulate, synthesise
 
-Never use: understand, learn, know, appreciate, be aware of, explain, describe, list, state
+Never use the unmeasurable verbs: understand, learn, know, appreciate, be familiar
+with, be aware of, study, grasp. (Measurable L1/L2 verbs like explain, describe,
+classify, summarise ARE allowed where a unit genuinely sits at that level.)
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -470,7 +536,8 @@ Output ONLY this JSON — no explanation, no markdown:
     {{
       "co_id": "CO1",
       "unit_id": "UNIT-I",
-      "text": "CO text — 2 sentences. Sentence 1: what student does. Sentence 2: A student successfully achieving this outcome can [measurable demonstration].",
+      "text": "CO text — ONE concise sentence stating what the student can do. Never append a success-criteria sentence here.",
+      "success_criteria": "one sentence: A student successfully achieving this outcome can [measurable demonstration].",
       "bloom_level": "L2|L3|L4|L5|L6",
       "bloom_name": "Understand|Apply|Analyse|Evaluate|Create",
       "action_verb": "verb used",
@@ -479,8 +546,8 @@ Output ONLY this JSON — no explanation, no markdown:
   ],
   "course_level_cos": [
     {{
-      "co_id": "CL1",
-      "text": "course-level CO text",
+      "co_id": "IO1",
+      "text": "Industry Outcome text — ONE sentence",
       "bloom_level": "L2|L3|L4|L5|L6",
       "bloom_name": "Understand|Apply|Analyse|Evaluate|Create",
       "industry_relevance": "one sentence on why this matters for industry",
@@ -513,26 +580,48 @@ def _run_p4b(
 
 # ── Prompt 5: CO–Topic Mapping ───────────────────────────────────────────────
 
-_P5_TEMPLATE = """You are an expert in curriculum alignment for Indian engineering universities.
+_P5_TEMPLATE = """You are an expert in OBE curriculum alignment for Indian engineering universities.
+Map every topic to the Course Outcomes it serves, and judge the Bloom level each
+topic is actually TAUGHT at.
 
 Course topics extracted from the syllabus:
 {topics_summary}
 
-Final Course Outcomes:
+Final Course Outcomes — each carries its Bloom level; USE the levels, they are
+authoritative:
 {final_cos}
 
-━━━ TASK ━━━
-For each topic determine which Course Outcomes it contributes to.
+━━━ TASK 1: CO MAPPING PER TOPIC ━━━
+For each topic decide which COs it contributes to:
+- primary: the ONE evaluated CO (id starting "CO") this topic most directly
+  serves. TWO tests, and both must hold:
+    (a) subject-matter fit — the CO's content is what this topic teaches;
+    (b) cognitive fit — this topic gives students the material to perform the
+        CO's verb at its level. A topic that only introduces definitions cannot
+        be the vehicle for a design-level CO. When two COs fit the content
+        equally, choose on cognitive fit — never on CO order.
+- supporting: COs the topic partially feeds.
+- Every topic MUST have exactly one primary evaluated CO. Outcomes with IDs
+  starting "IO" are Industry Outcomes — supplementary, supporting only, never
+  the sole primary.
+- A topic may serve multiple COs; a CO may be served by multiple topics.
 
-Use your understanding of the subject matter to decide:
-- Primary: this topic directly and substantially addresses the CO
-- Supporting: this topic partially contributes to the CO but is not the main topic for it
-- None: no meaningful relationship
+━━━ TASK 2: TOPIC BLOOM LEVEL ━━━
+For each topic also output topic_bloom — the cognitive level THIS topic's
+teaching genuinely reaches, judged from its own subtopics:
+- survey / definitional / terminology / history topics → L1–L2
+- mechanism, working-principle, protocol, single-technique topics → L2–L3
+- problem-solving, implementation, query-writing, derivation topics → L3
+- comparison, trade-off, performance-analysis topics → L4
+- design, architecture, synthesis, open-ended-project topics → L5–L6
+Constraints:
+- topic_bloom NEVER exceeds the primary CO's Bloom level.
+- Topics under the SAME CO need NOT share a level — an introductory topic under
+  an L4 CO is still L2. Copying the CO's level onto every topic it covers is the
+  exact failure you exist to prevent.
 
-Consider what students actually learn in each topic and what each CO requires them to be able to do.
-A topic may contribute to multiple COs. A CO may be addressed by multiple topics.
-
-IMPORTANT: COs with IDs starting with "CO" (e.g. CO1, CO2) are the evaluated course outcomes — these are the primary assessed outcomes of the course. COs with IDs starting with "SUGG" are supplementary suggested outcomes. Every topic MUST have at least one evaluated CO (CO1–CO4) listed as "primary". SUGG COs should be "supporting" only, never the sole primary CO for a topic.
+━━━ TASK 3: COVERAGE SUMMARY ━━━
+For each CO summarise which topics serve it and how well it is covered.
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -541,11 +630,12 @@ Output ONLY this JSON — no explanation, no markdown:
       "unit_id": "UNIT-I",
       "unit_title": "unit title",
       "topic_title": "topic title",
+      "topic_bloom": "L1|L2|L3|L4|L5|L6",
       "mapped_cos": [
         {{
           "co_id": "CO1",
           "contribution": "primary|supporting",
-          "reason": "one sentence explaining why this topic contributes to this CO"
+          "reason": "one sentence covering BOTH the subject fit and the cognitive fit"
         }}
       ]
     }}
@@ -595,6 +685,8 @@ Close BOTH kinds of gaps below using genuine subject-matter fit — never invent
 
 ━━━ GAP 1: TOPICS MISSING A PRIMARY EVALUATED CO ━━━
 Every topic must have the single best-fitting evaluated CO (id starting "CO") as primary.
+Pick on BOTH subject-matter fit and cognitive fit — the CO Bloom levels are shown above;
+prefer the CO whose level matches how the topic is actually taught.
 {uncovered_topics}
 
 ━━━ GAP 2: COs MAPPED TO NO TOPIC ━━━
@@ -734,6 +826,7 @@ def _p4b_to_p4_format(p4b: dict) -> dict:
             "weakness_score": 0.0,
             "action": "generated",
             "final_text": co["text"],
+            "success_criteria": co.get("success_criteria", ""),
             "bloom_level": co.get("bloom_level", "L3"),
             "bloom_name": co.get("bloom_name", "Apply"),
             "reason": co.get("basis", "Generated from unit content"),
@@ -775,12 +868,15 @@ def _to_ai_extraction(p1: dict, p4_result: dict, p5_result: dict | None = None) 
         co_number_map[co["co_id"]] = i
 
     topic_co_map: dict[tuple[str, str], str] = {}  # (unit_id, topic_title) → co_id
+    topic_bloom_map: dict[tuple[str, str], str] = {}  # P5's per-topic taught level
     unit_primary_bloom: dict[str, str] = {}   # best bloom for unit fallback
     unit_supporting_bloom: dict[str, str] = {}  # fallback when no primary CO exists in unit
     if p5_result:
         for topic_entry in p5_result.get("co_topic_mapping", []):
             uid = topic_entry.get("unit_id", "")
             ttitle = topic_entry.get("topic_title", "")
+            if topic_entry.get("topic_bloom"):
+                topic_bloom_map[(uid, ttitle)] = _norm_bloom(str(topic_entry["topic_bloom"]))
             for mc in topic_entry.get("mapped_cos", []):
                 co_id = mc.get("co_id", "")
                 if co_id not in co_bloom:
@@ -807,7 +903,16 @@ def _to_ai_extraction(p1: dict, p4_result: dict, p5_result: dict | None = None) 
         topics_out: list[dict] = []
         for t in u.get("topics", []):
             co_id = topic_co_map.get((uid, t["title"]))
-            topic_bloom = co_bloom.get(co_id, unit_fallback_bloom) if co_id else unit_fallback_bloom
+            # Ceiling = the primary CO's Bloom (unit fallback when unmapped).
+            ceiling = co_bloom.get(co_id, unit_fallback_bloom) if co_id else unit_fallback_bloom
+            # P5's per-topic taught level wins when present — an introductory
+            # topic under an L4 CO stays L2 instead of inheriting L4 wholesale —
+            # but never above the ceiling.
+            declared = topic_bloom_map.get((uid, t["title"]))
+            if declared and _BLOOM_RANK.get(declared, 6) <= _BLOOM_RANK.get(ceiling, 6):
+                topic_bloom = declared
+            else:
+                topic_bloom = ceiling
             co_num = co_number_map.get(co_id) if co_id else None
             entry: dict = {
                 "title": t["title"],
@@ -897,19 +1002,20 @@ def run_pipeline(syllabus_text: str) -> dict:
 
         has_cos = bool(raw_cos) and "Only Course Objectives" not in co_note
 
-        # ── Prompt 3: Industry skills (always runs) ───────────────────────────
-        logger.info("Pipeline P3: industry skills")
+        # ── Prompts 2 + 3 in parallel (both depend only on P1) ────────────────
+        logger.info("Pipeline P2+P3: bloom mapping + industry skills")
         co_texts = [c["text"] for c in raw_cos] if has_cos else []
-        p3 = _run_p3(client, module_tree, co_texts)
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f3 = pool.submit(_run_p3, client, module_tree, co_texts)
+            f2 = pool.submit(_run_p2, client, raw_cos) if has_cos else None
+            p3 = f3.result()
+            p2 = f2.result() if f2 is not None else {}
         skill_names = [s["skill_name"] for s in p3.get("industry_skills", [])[:5]]
 
-        p2: dict = {}
         co_with_bloom: list[dict] = []
 
         if has_cos:
-            # ── Prompt 2: Bloom mapping ───────────────────────────────────────
-            logger.info("Pipeline P2: bloom mapping")
-            p2 = _run_p2(client, raw_cos)
             bloom_by_id = {m["co_id"]: m for m in p2.get("bloom_mapping", [])}
 
             for co in raw_cos:

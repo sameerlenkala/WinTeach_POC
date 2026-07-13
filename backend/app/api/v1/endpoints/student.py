@@ -28,6 +28,21 @@ def _topic_ids(course: dict) -> list[str]:
     return [t["id"] for u in course.get("units") or [] for t in u.get("topics") or []]
 
 
+def _visible_to_student(user: dict, course: dict) -> bool:
+    """Institute tenancy: get_db bypasses RLS, so hide courses from other
+    institutes here. None on either side passes — demo personas and legacy
+    rows carry institute_id=None."""
+    inst, cinst = user.get("institute_id"), course.get("institute_id")
+    return not (inst and cinst and inst != cinst)
+
+
+def _scope_courses(q, user: dict):
+    """Apply the same tenancy rule as a query filter: the student's institute
+    plus institute-less (demo/legacy) courses; no institute → no filter."""
+    inst = user.get("institute_id")
+    return q.or_(f"institute_id.eq.{inst},institute_id.is.null") if inst else q
+
+
 def _concept_sort_key(cid: str):
     digits = "".join(ch for ch in cid if ch.isdigit())
     return (int(digits) if digits else 0, cid)
@@ -73,10 +88,11 @@ def _topic_mastery(rows: list[dict], published_lessons: int, published_quizzes: 
 @router.get("/courses")
 def list_courses(user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     """Courses with a count of published lessons (approved student notes)."""
-    rows = db.table("courses").select(
-        "id, name, code, credits, semester, status, "
+    q = db.table("courses").select(
+        "id, name, code, credits, semester, status, institute_id, "
         "units(id, unit_number, title, topics(id, title))"
-    ).order("created_at", desc=True).execute().data or []
+    )
+    rows = _scope_courses(q, user).order("created_at", desc=True).execute().data or []
 
     out = []
     for c in rows:
@@ -102,10 +118,10 @@ def course_detail(course_id: str, user: dict = Depends(get_current_user),
     """Units → topics with per-topic published lesson counts and this student's
     progress, so the Courses tab can render a syllabus with read-state."""
     res = db.table("courses").select(
-        "id, name, code, semester, "
+        "id, name, code, semester, institute_id, "
         "units(id, unit_number, title, topics(id, title, bloom_level))"
     ).eq("id", course_id).limit(1).execute()
-    if not res.data:
+    if not res.data or not _visible_to_student(user, res.data[0]):
         raise HTTPException(status_code=404, detail="Course not found")
     course = res.data[0]
     tids = _topic_ids(course)
@@ -163,13 +179,15 @@ def course_detail(course_id: str, user: dict = Depends(get_current_user),
 _STUDENT_TOPIC_ARTS = ("summary", "assignment", "flashcards")
 
 
-def _topic_in_course(db: Client, course_id: str, topic_id: str) -> dict | None:
-    """Return {"course": ..., "topic": ...} when topic_id belongs to course_id,
-    else None — so a student can't read one course's topic through another."""
+def _topic_in_course(db: Client, user: dict, course_id: str, topic_id: str) -> dict | None:
+    """Return {"course": ..., "topic": ...} when topic_id belongs to course_id
+    and the course is visible to this student, else None — so a student can't
+    read one course's topic through another, or across institutes."""
     res = db.table("courses").select(
-        "id, name, code, units(id, unit_number, title, topics(id, title, bloom_level))"
+        "id, name, code, institute_id, "
+        "units(id, unit_number, title, topics(id, title, bloom_level))"
     ).eq("id", course_id).limit(1).execute()
-    if not res.data:
+    if not res.data or not _visible_to_student(user, res.data[0]):
         return None
     course = res.data[0]
     for u in course.get("units") or []:
@@ -196,7 +214,7 @@ def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current
     """Student topic landing page: published subtopics (notes/slides/quiz) plus
     which topic-level artifacts are ready. Mirrors the faculty studio, gated to
     approved concept artifacts and student-safe topic artifacts."""
-    found = _topic_in_course(db, course_id, topic_id)
+    found = _topic_in_course(db, user, course_id, topic_id)
     if not found:
         raise HTTPException(status_code=404, detail="Topic not found")
     course, topic = found["course"], found["topic"]
@@ -267,7 +285,7 @@ def topic_artifact(course_id: str, topic_id: str, kind: str,
     exposed. An artifact must be review_status=ready to be published."""
     if kind not in _STUDENT_TOPIC_ARTS:
         raise HTTPException(status_code=404, detail="Artifact not available")
-    found = _topic_in_course(db, course_id, topic_id)
+    found = _topic_in_course(db, user, course_id, topic_id)
     if not found:
         raise HTTPException(status_code=404, detail="Topic not found")
     rows = (db.table("artifacts").select("content, review_status")
@@ -364,11 +382,12 @@ def _save_resume(db: Client, user_id: str, course_id, topic_id, concept_id, scro
         pass
 
 
-def _course_structures(db: Client) -> list[dict]:
-    return db.table("courses").select(
-        "id, name, code, semester, "
+def _course_structures(db: Client, user: dict) -> list[dict]:
+    q = db.table("courses").select(
+        "id, name, code, semester, institute_id, "
         "units(id, unit_number, title, topics(id, title))"
-    ).order("created_at", desc=True).execute().data or []
+    )
+    return _scope_courses(q, user).order("created_at", desc=True).execute().data or []
 
 
 def _approved_map(db: Client, topic_ids: list[str]) -> dict[str, dict]:
@@ -469,7 +488,7 @@ def learn_home(user: dict = Depends(get_current_user), db: Client = Depends(get_
     """Learn Home (SCR-01): resume pointer, due flashcards, this-week activity,
     and every course with computed mastery + read progress."""
     uid = user["id"]
-    courses = _course_structures(db)
+    courses = _course_structures(db, user)
     all_tids = [t["id"] for c in courses for t in
                 (t2 for u in c.get("units") or [] for t2 in u.get("topics") or [])]
     approved = _approved_map(db, all_tids)
@@ -557,9 +576,9 @@ def course_mastery(course_id: str, user: dict = Depends(get_current_user),
                    db: Client = Depends(get_db)):
     """Mastery Map (SCR-07): per-topic mastery + weakest topics for one course."""
     res = db.table("courses").select(
-        "id, name, units(id, unit_number, title, topics(id, title))"
+        "id, name, institute_id, units(id, unit_number, title, topics(id, title))"
     ).eq("id", course_id).limit(1).execute()
-    if not res.data:
+    if not res.data or not _visible_to_student(user, res.data[0]):
         raise HTTPException(status_code=404, detail="Course not found")
     course = res.data[0]
     tids = _topic_ids(course)
@@ -725,9 +744,9 @@ def revision_hub(course_id: str, user: dict = Depends(get_current_user),
     practice, and weak topics — assembled from approved artifact content."""
     uid = user["id"]
     res = db.table("courses").select(
-        "id, name, units(id, unit_number, title, topics(id, title))"
+        "id, name, institute_id, units(id, unit_number, title, topics(id, title))"
     ).eq("id", course_id).limit(1).execute()
-    if not res.data:
+    if not res.data or not _visible_to_student(user, res.data[0]):
         raise HTTPException(status_code=404, detail="Course not found")
     course = res.data[0]
     tids = _topic_ids(course)

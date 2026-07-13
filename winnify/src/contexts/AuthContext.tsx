@@ -37,6 +37,8 @@ interface AuthContextType {
            opts?: { role?: 'faculty' | 'student'; orgCode?: string; inviteToken?: string }) => Promise<UserRole>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Merge fields into the cached user (after a profile edit). */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,11 +147,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem('winnify_user', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       user, session,
       isAuthenticated: !!user || !!session,
-      isLoading, signIn, signUp, signInWithGoogle, signOut,
+      isLoading, signIn, signUp, signInWithGoogle, signOut, updateUser,
     }}>
       {children}
     </AuthContext.Provider>

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { generationApi, type GenJob, type ConceptArtType } from '@/api/generation';
 import { studentApi, track } from '@/api/student';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 import StudioCelebrate from './StudioCelebrate';
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -165,7 +166,7 @@ function Mermaid({ code }: { code: string }) {
         mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
         try {
           const { svg } = await mermaid.render(`st-mmd-${++mermaidSeq}`, code);
-          if (alive) setSvg(svg);
+          if (alive) setSvg(sanitizeSvg(svg));
         } catch { if (alive) setFailed(true); }
       })
       .catch(() => { if (alive) setFailed(true); });

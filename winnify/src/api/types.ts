@@ -15,6 +15,10 @@ export interface UserProfile {
   role: UserRole;
   institute_id?: string;
   institute_name?: string;
+  designation?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
+  skills?: string[];
 }
 
 export interface Institute {

@@ -37,6 +37,56 @@ _faculty_above = require_role("faculty", "admin", "superadmin")
 _NON_TERMINAL = ("queued", "running")
 
 
+# ── Course-ownership guards ───────────────────────────────────────────────────
+# get_db returns a service-role client that bypasses RLS, so job routes guard
+# the owning course explicitly (same posture as materials.py). Two levels:
+# manage (faculty own their courses; admins their institute; superadmin any)
+# for anything that mutates or exposes drafts, and read (managers plus anyone
+# in the course's institute — students included) for studio/lesson reads.
+
+def _course_or_404(db: Client, course_id: str) -> dict:
+    r = db.table("courses").select("id,faculty_id,institute_id").eq("id", course_id) \
+        .single().execute()
+    if not r.data:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return r.data
+
+
+def _course_of_topic(db: Client, topic_id: str) -> dict:
+    t = db.table("topics").select("unit_id").eq("id", topic_id).single().execute()
+    if not t.data:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    u = db.table("units").select("course_id").eq("id", t.data["unit_id"]).single().execute()
+    if not u.data:
+        raise HTTPException(status_code=404, detail="Unit not found for topic")
+    return _course_or_404(db, u.data["course_id"])
+
+
+def _can_manage(user: dict, course: dict) -> bool:
+    role = user.get("role")
+    return (role == "superadmin"
+            or (role == "admin" and course.get("institute_id") == user.get("institute_id"))
+            or (role == "faculty" and course.get("faculty_id") == user["id"]))
+
+
+def _guard_manage(user: dict, course: dict) -> None:
+    if not _can_manage(user, course):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not manage this course")
+
+
+def _guard_read(user: dict, course: dict) -> None:
+    """Managers pass; everyone else (students, colleague faculty) passes only
+    within the same institute. A missing institute on either side passes —
+    demo personas and legacy rows carry institute_id=None."""
+    if _can_manage(user, course):
+        return
+    inst, course_inst = user.get("institute_id"), course.get("institute_id")
+    if inst and course_inst and inst != course_inst:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="This course belongs to another institute")
+
+
 # ── Advisory helpers ──────────────────────────────────────────────────────────
 
 @router.post("/cos")
@@ -66,6 +116,10 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
                db: Client = Depends(get_db)):
     """Create a generation job for one topic and kick off the Topic Plan.
     Rejects if an active (non-terminal) job already exists for the topic (§6)."""
+    course = _course_of_topic(db, payload.topic_id)
+    _guard_manage(user, course)
+    if course["id"] != payload.course_id:
+        raise HTTPException(status_code=422, detail="Topic does not belong to this course")
     existing = (
         db.table("generation_jobs")
         .select("id,status")
@@ -102,6 +156,7 @@ def create_job(payload: JobCreateRequest, user: dict = Depends(_faculty_above),
 @router.get("/courses/{course_id}/progress")
 def course_progress(course_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     """Live per-topic generation progress for the course board."""
+    _guard_read(user, _course_or_404(db, course_id))
     return gen.course_progress(db, course_id)
 
 
@@ -113,7 +168,10 @@ def dashboard(user: dict = Depends(_faculty_above), db: Client = Depends(get_db)
 
 @router.get("/topics/{topic_id}/job")
 def get_topic_job(topic_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
-    """Latest generation job for a topic (so the studio can resume after reload)."""
+    """Latest generation job for a topic (so the studio can resume after reload).
+    Read-guarded, not manage-guarded — the student lesson resolves its published
+    content through this route too."""
+    _guard_read(user, _course_of_topic(db, topic_id))
     r = (
         db.table("generation_jobs").select("*").eq("topic_id", topic_id)
         .order("created_at", desc=True).limit(1).execute()
@@ -128,6 +186,7 @@ def get_job(job_id: str, user: dict = Depends(get_current_user), db: Client = De
     result = db.table("generation_jobs").select("*").eq("id", job_id).single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Job not found")
+    _guard_read(user, _course_of_topic(db, result.data["topic_id"]))
     return _job_detail(db, result.data)
 
 
@@ -164,9 +223,12 @@ def _job_detail(db: Client, job: dict) -> dict:
 def stream_job(job_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     """SSE fallback: emits the current job snapshot. The board polls /jobs/{id}
     when EventSource is unavailable (§9)."""
+    result = db.table("generation_jobs").select("*").eq("id", job_id).single().execute()
+    payload = result.data or {"id": job_id, "status": "unknown"}
+    if result.data:
+        _guard_read(user, _course_of_topic(db, result.data["topic_id"]))
+
     def _events():
-        result = db.table("generation_jobs").select("*").eq("id", job_id).single().execute()
-        payload = result.data or {"id": job_id, "status": "unknown"}
         yield f"event: snapshot\ndata: {json.dumps(payload)}\n\n"
 
     return StreamingResponse(_events(), media_type="text/event-stream")
@@ -175,6 +237,13 @@ def stream_job(job_id: str, user: dict = Depends(get_current_user), db: Client =
 @router.get("/jobs/{job_id}/artifact/{artifact_type}")
 def get_artifact(job_id: str, artifact_type: str, user: dict = Depends(get_current_user),
                  db: Client = Depends(get_db)):
+    course = _course_of_topic(db, _topic_of(db, job_id))
+    if not _can_manage(user, course):
+        # Non-managers (the student lesson) only ever need the topic plan;
+        # drafts of everything else stay manager-only.
+        _guard_read(user, course)
+        if artifact_type != "topic_plan":
+            raise HTTPException(status_code=404, detail="Artifact not found")
     result = (
         db.table("artifacts").select("*")
         .eq("job_id", job_id).eq("type", artifact_type).limit(1).execute()
@@ -199,6 +268,7 @@ def finalize_artifact(job_id: str, artifact_type: str, payload: FinalizeRequest,
                       user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
     """Drive the gates (§9). For student_notes, unit_id is required — approval is
     per-unit and fan-out fires automatically once the last unit is approved."""
+    _managed_topic_of(db, user, job_id)
     if artifact_type == "student_notes" and payload.decision in ("approve", "revise") \
             and not payload.unit_id:
         raise HTTPException(status_code=422,
@@ -219,12 +289,20 @@ def _topic_of(db: Client, job_id: str) -> str:
     return r.data["topic_id"]
 
 
+def _managed_topic_of(db: Client, user: dict, job_id: str) -> str:
+    """Job's topic_id, after verifying the caller manages the owning course —
+    the guard for every route that mutates or exposes faculty-side state."""
+    topic_id = _topic_of(db, job_id)
+    _guard_manage(user, _course_of_topic(db, topic_id))
+    return topic_id
+
+
 @router.put("/jobs/{job_id}/plan")
 def edit_plan(job_id: str, payload: PlanEditRequest,
               user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
     """Persist faculty edits to the Topic Plan concepts (content type, secondary
     blocks, flags, complexity, scope). Read by later per-concept generation."""
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     return gen.save_plan_edits(db, topic_id, [c.model_dump() for c in payload.concepts])
 
 
@@ -234,7 +312,7 @@ def gen_concept(job_id: str, concept_id: str, artifact_type: str,
     """Generate or regenerate one concept-level artifact (notes/slides/quiz)."""
     if artifact_type not in _CONCEPT_TYPES:
         raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     gen.enqueue_concept_artifact(job_id, topic_id, concept_id, artifact_type)
     return {"status": "generating", "concept_id": concept_id, "artifact_type": artifact_type}
 
@@ -242,7 +320,7 @@ def gen_concept(job_id: str, concept_id: str, artifact_type: str,
 @router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/approve")
 def approve_concept(job_id: str, concept_id: str, artifact_type: str,
                     user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     return gen.approve_concept_artifact(db, user, topic_id, concept_id, artifact_type)
 
 
@@ -259,7 +337,7 @@ def revise_concept(job_id: str, concept_id: str, artifact_type: str, payload: Re
         raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
     if not payload.instruction.strip():
         raise HTTPException(status_code=422, detail="Instruction is required")
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     gen.enqueue_concept_revision(job_id, topic_id, concept_id, artifact_type,
                                  payload.instruction.strip())
     return {"status": "generating", "concept_id": concept_id, "artifact_type": artifact_type}
@@ -267,15 +345,15 @@ def revise_concept(job_id: str, concept_id: str, artifact_type: str, payload: Re
 
 @router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/versions")
 def list_concept_versions(job_id: str, concept_id: str, artifact_type: str,
-                          user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
-    topic_id = _topic_of(db, job_id)
+                          user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    topic_id = _managed_topic_of(db, user, job_id)
     return gen.list_artifact_versions(db, topic_id, concept_id, artifact_type)
 
 
 @router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/versions/{version_no}/restore")
 def restore_concept_version(job_id: str, concept_id: str, artifact_type: str, version_no: int,
                             user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     try:
         return gen.restore_artifact_version(db, job_id, topic_id, concept_id, artifact_type, version_no)
     except ValueError:
@@ -284,11 +362,11 @@ def restore_concept_version(job_id: str, concept_id: str, artifact_type: str, ve
 
 @router.get("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/export")
 def export_concept(job_id: str, concept_id: str, artifact_type: str,
-                   user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
+                   user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
     """Download the artifact as an Office file: notes/quiz → .docx, slides → .pptx."""
     if artifact_type not in _CONCEPT_TYPES:
         raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_CONCEPT_TYPES}")
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     data, filename, media = export_service.export_concept(db, job_id, topic_id, concept_id, artifact_type)
     return Response(content=data, media_type=media,
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
@@ -298,11 +376,13 @@ def export_concept(job_id: str, concept_id: str, artifact_type: str,
 def get_concept(job_id: str, concept_id: str, artifact_type: str,
                 user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     topic_id = _topic_of(db, job_id)
+    course = _course_of_topic(db, topic_id)
+    _guard_read(user, course)
     row = gen._concept_row(db, topic_id, concept_id, artifact_type)
     if not row:
         raise HTTPException(status_code=404, detail="Not generated yet")
-    # Students only ever see faculty-approved (published) content.
-    if user.get("role") == "student" and row.get("approval_status") != "approved":
+    # Non-managers (students, colleague faculty) only ever see published content.
+    if not _can_manage(user, course) and row.get("approval_status") != "approved":
         raise HTTPException(status_code=404, detail="Not published yet")
     return {"content": row.get("content"), "status": row.get("status"),
             "approval_status": row.get("approval_status"),
@@ -316,6 +396,6 @@ def gen_topic_artifact(job_id: str, artifact_type: str,
     faculty_diagnostic/flashcards) from the concept notes."""
     if artifact_type not in _TOPIC_ART_TYPES:
         raise HTTPException(status_code=422, detail=f"artifact_type must be one of {_TOPIC_ART_TYPES}")
-    topic_id = _topic_of(db, job_id)
+    topic_id = _managed_topic_of(db, user, job_id)
     gen.enqueue_topic_artifact(job_id, topic_id, artifact_type)
     return {"status": "generating", "artifact_type": artifact_type}

@@ -1,0 +1,26 @@
+{
+  "name": "trap_generic",
+  "description": "Held-out generalization case: the trailing 'list: item' duplication trap in a completely different domain (thermal engineering), with zero vocabulary overlap with the prompt's worked examples or the other golden cases. Unit I hides the trap after a semicolon list ('Dual combustion cycle: Air-standard efficiency'), Unit II after a comma list ('MPFI, TBI, GDI: Injection timing diagrams'). Each trapped phrase must appear exactly once. Hand-built from trap_generic.txt, NOT from any model output.",
+  "units": [
+    {
+      "unit_number": 1,
+      "hours": 10,
+      "topics": [
+        {"title": "Air Standard Cycles",
+         "subtopics": ["Otto cycle", "Diesel cycle", "Dual combustion cycle", "Air-standard efficiency", "Mean effective pressure"]},
+        {"title": "Actual Cycles",
+         "subtopics": ["Deviations from air-standard cycles", "Time loss factor", "Heat loss factor", "Exhaust blowdown"]}
+      ]
+    },
+    {
+      "unit_number": 2,
+      "hours": 8,
+      "topics": [
+        {"title": "Fuel Systems",
+         "subtopics": ["Carburetion", "Fuel injection systems", "MPFI", "TBI", "GDI", "Injection timing diagrams"]},
+        {"title": "Ignition Systems",
+         "subtopics": ["Battery ignition", "Magneto ignition", "Electronic ignition"]}
+      ]
+    }
+  ]
+}

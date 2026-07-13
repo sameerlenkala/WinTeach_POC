@@ -392,24 +392,72 @@ def _fill_tier(chunks: list[dict], budget: int, cap_per_material: int | None) ->
     return picked
 
 
+_RRF_K = 60          # standard reciprocal-rank-fusion constant
+_MAX_SUB_QUERIES = 4  # embedding sub-queries per retrieval (one embeddings call)
+
+
+def _rrf_fuse(result_lists: list[list[dict]], k: int = _RRF_K) -> list[dict]:
+    """Reciprocal-rank fusion across ranked result lists: score(id) =
+    Σ 1/(k + rank). Rewards chunks that rank well for several sub-queries."""
+    scores: dict[str, float] = {}
+    row_by_id: dict[str, dict] = {}
+    for rows in result_lists:
+        for rank, r in enumerate(rows):
+            row_by_id.setdefault(r["id"], r)
+            scores[r["id"]] = scores.get(r["id"], 0.0) + 1.0 / (k + rank + 1)
+    return [row_by_id[i] for i in sorted(scores, key=lambda i: scores[i], reverse=True)]
+
+
+def _sub_queries(query_terms: list[str]) -> list[str]:
+    """Split the concept's terms into a few focused embedding queries instead
+    of one averaged blob: one big joined query for recall, plus per-facet
+    queries (short scope/concept items are grouped, long TLO statements stand
+    alone) for precision. Capped at _MAX_SUB_QUERIES."""
+    terms = [str(t).strip() for t in query_terms if str(t).strip()]
+    if not terms:
+        return []
+    queries = [" ".join(terms)[:4000]]
+    short = [t for t in terms if len(t) <= 80]
+    long_ = [t for t in terms if len(t) > 80]
+    # Group short items in threes so each sub-query stays focused.
+    for i in range(0, len(short), 3):
+        queries.append(" ".join(short[i:i + 3]))
+    queries += long_
+    # Dedup, keep order, cap.
+    seen: set[str] = set()
+    out = []
+    for q in queries:
+        if q not in seen:
+            seen.add(q)
+            out.append(q)
+    return out[:_MAX_SUB_QUERIES]
+
+
 def _search_chunks(db, mat_ids: list[str], query_terms: list[str],
                    lim: int = 40) -> list[dict]:
-    """Ranked candidate rows, hybrid: semantic matches (pgvector, Phase 2)
-    first, then FTS matches not already found. FTS always runs — the vector
-    RPC filters `embedding is not null`, so chunks ingested without embeddings
-    (no key / API failure) would otherwise be invisible whenever any sibling
-    material has vectors. Both RPCs return the same row shape."""
+    """Ranked candidate rows, hybrid: multi-query semantic retrieval fused with
+    reciprocal-rank fusion (a single averaged embedding dilutes distinctive
+    scope items), then FTS matches not already found. FTS always runs — the
+    vector RPC filters `embedding is not null`, so chunks ingested without
+    embeddings (no key / API failure) would otherwise be invisible whenever any
+    sibling material has vectors. Both RPCs return the same row shape."""
     if not query_terms:
         return []
     rows: list[dict] = []
-    vectors = _embed_texts([" ".join(str(t) for t in query_terms)[:4000]])
+    queries = _sub_queries(query_terms)
+    vectors = _embed_texts(queries)
     if vectors:
-        try:
-            rows = db.rpc("match_material_chunks", {
-                "mat_ids": mat_ids, "query_embedding": vectors[0], "lim": lim,
-            }).execute().data or []
-        except Exception:
-            logger.warning("vector retrieval failed — serving FTS only", exc_info=True)
+        lists: list[list[dict]] = []
+        for vec in vectors:
+            try:
+                lists.append(db.rpc("match_material_chunks", {
+                    "mat_ids": mat_ids, "query_embedding": vec, "lim": lim,
+                }).execute().data or [])
+            except Exception:
+                logger.warning("vector retrieval failed — serving FTS only", exc_info=True)
+                lists = []
+                break
+        rows = _rrf_fuse(lists) if lists else []
     query = build_tsquery(query_terms)
     if query:
         try:

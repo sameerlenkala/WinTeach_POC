@@ -25,15 +25,26 @@ def list_sources(db: Client, user: dict) -> list[dict]:
     return query.order("title").execute().data or []
 
 
-def get_source(db: Client, source_id: str) -> dict:
+def _guard_source_visible(user: dict, row: dict) -> None:
+    """Same tenancy rule as list_sources: faculty/admin only see their own
+    institute's sources (NULL-institute rows are shared/demo). 404, not 403 —
+    don't confirm a foreign source exists."""
+    if user["role"] in ("faculty", "admin") and row.get("institute_id") \
+            and row["institute_id"] != user.get("institute_id"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+
+
+def get_source(db: Client, user: dict, source_id: str) -> dict:
     row = db.table("library_sources").select("*").eq("id", source_id).single().execute()
     if not row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    _guard_source_visible(user, row.data)
     return row.data
 
 
-def get_source_references(db: Client, source_id: str) -> list[dict]:
+def get_source_references(db: Client, user: dict, source_id: str) -> list[dict]:
     """Return all subtopics that reference this library source."""
+    get_source(db, user, source_id)  # tenancy check (404s foreign sources)
     result = (
         db.table("subtopic_sources")
         .select("*, subtopics(id, title, topics(id, title, units(id, title, courses(id, name, code))))")

@@ -1,0 +1,16 @@
+SVU B.Tech. R23 Regulations
+II Year I Semester
+DATABASE MANAGEMENT SYSTEMS
+
+UNIT – I (8 Hours)
+Data Models – Relational model, ER model, Object-based data models, Semi-structured data model
+Database System Architecture – Data abstraction, Data independence, Database users and administrators
+
+UNIT – II (10 Hours)
+Relational Algebra
+Selection and projection, Set operations, Renaming, Joins, Division
+SQL Fundamentals
+DDL commands, DML commands, Integrity constraints, Views, Nested queries
+
+UNIT – III (9 Hours)
+Normalization – Functional dependencies, Armstrong's axioms, Closure of attribute sets, Normal forms (1NF, 2NF, 3NF, BCNF), Lossless join decomposition, Dependency preservation

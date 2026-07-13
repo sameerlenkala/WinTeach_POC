@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from supabase import Client
 from app.core.dependencies import get_db, require_role
 from app.schemas.institute import InstituteCreate, InstituteUpdate, POCreate, PSOCreate
@@ -9,6 +9,16 @@ router = APIRouter(prefix="/institutes", tags=["Institutes"])
 _admin_above        = require_role("admin", "superadmin")
 _faculty_above      = require_role("faculty", "admin", "superadmin")
 _superadmin         = require_role("superadmin")
+
+
+def _guard_institute(user: dict, institute_id: str) -> None:
+    """get_db bypasses RLS, so scope every {institute_id} route explicitly:
+    superadmin any; admins and faculty only their own institute."""
+    if user.get("role") == "superadmin":
+        return
+    if user.get("institute_id") != institute_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="This institute is not yours to access")
 
 
 @router.post("", status_code=201)
@@ -24,11 +34,13 @@ def list_institutes(user: dict = Depends(_faculty_above), db: Client = Depends(g
 
 @router.get("/{institute_id}")
 def get_institute(institute_id: str, user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.get_institute(db, institute_id)
 
 
 @router.patch("/{institute_id}")
 def update_institute(institute_id: str, payload: InstituteUpdate, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.update_institute(db, institute_id, payload)
 
 
@@ -41,16 +53,19 @@ def delete_institute(institute_id: str, user: dict = Depends(_superadmin), db: C
 
 @router.get("/{institute_id}/pos")
 def list_pos(institute_id: str, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.list_pos(db, institute_id)
 
 
 @router.post("/{institute_id}/pos", status_code=201)
 def add_po(institute_id: str, payload: POCreate, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.add_po(db, institute_id, payload)
 
 
 @router.delete("/{institute_id}/pos/{po_id}", status_code=204)
 def delete_po(institute_id: str, po_id: str, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     institute_service.delete_po(db, institute_id, po_id)
 
 
@@ -58,14 +73,17 @@ def delete_po(institute_id: str, po_id: str, user: dict = Depends(_admin_above),
 
 @router.get("/{institute_id}/psos")
 def list_psos(institute_id: str, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.list_psos(db, institute_id)
 
 
 @router.post("/{institute_id}/psos", status_code=201)
 def add_pso(institute_id: str, payload: PSOCreate, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     return institute_service.add_pso(db, institute_id, payload)
 
 
 @router.delete("/{institute_id}/psos/{pso_id}", status_code=204)
 def delete_pso(institute_id: str, pso_id: str, user: dict = Depends(_admin_above), db: Client = Depends(get_db)):
+    _guard_institute(user, institute_id)
     institute_service.delete_pso(db, institute_id, pso_id)

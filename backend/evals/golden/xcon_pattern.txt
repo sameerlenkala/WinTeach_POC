@@ -1,0 +1,13 @@
+SVU B.Tech. R23 Regulations
+III Year II Semester
+ARTIFICIAL INTELLIGENCE
+
+UNIT – IV (9 Hours)
+Uncertain Knowledge and Reasoning – Quantifying uncertainty, Bayesian networks, Fuzzy logic, Dempster-Shafer theory
+Learning – Forms of learning, Inductive learning, Decision trees
+
+UNIT – V (8 Hours)
+Expert Systems – Architecture of expert systems, Roles of expert systems – Knowledge Acquisition, Meta knowledge, Heuristics. Typical expert systems – MYCIN, DART, XCON: Expert systems shells.
+
+Text Books:
+1. Artificial Intelligence A Modern Approach, Russell S, Norvig P, 3rd Edition, Pearson, 2015.

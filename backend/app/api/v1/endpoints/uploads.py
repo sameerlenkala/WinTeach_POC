@@ -1,3 +1,4 @@
+import logging
 import uuid
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
 from supabase import Client
@@ -5,6 +6,8 @@ from app.core.dependencies import get_db, get_current_user, require_role
 from app.schemas.upload import UploadCommit, ExtractionStatus, ReextractPayload
 from app.services import extraction_service, upload_service, pipeline_service
 from app.services.extraction_service import ScannedPDFError, EncryptedPDFError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -56,10 +59,11 @@ async def upload_syllabus(
         "status": "processing",
     }).execute()
 
-    # Extract raw text from the file (needed for pipeline + legacy fallback)
+    # Extract raw text from the file (needed for pipeline + legacy fallback).
+    # Scanned PDFs are transcribed via vision OCR inside extract_text_pdf.
     try:
         if file.content_type == "application/pdf":
-            flat_text, _ = extraction_service._pdf_to_layout(content)
+            flat_text = extraction_service.extract_text_pdf(content)
         else:
             flat_text, _ = extraction_service._docx_to_layout(content)
         if not flat_text.strip():
@@ -74,14 +78,14 @@ async def upload_syllabus(
         db.table("uploads").update({"status": "failed"}).eq("id", upload_id).execute()
         raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}")
 
-    # ── Primary: 5-prompt pipeline (gpt-4o) ──────────────────────────────────
+    # ── Primary: 5-prompt pipeline (settings.generation_model) ───────────────
     pipeline_out = pipeline_service.run_pipeline(flat_text)
 
     if pipeline_out:
         extraction_dict = pipeline_out  # contains ai_extraction + pipeline_result
         ai_extraction_dict = pipeline_out.get("ai_extraction")
     else:
-        # ── Fallback: single-prompt extraction (gpt-4o-mini / regex) ─────────
+        # ── Fallback: single-prompt extraction (settings.generation_light_model / regex)
         try:
             if file.content_type == "application/pdf":
                 extraction = extraction_service.extract_pdf(content)
@@ -92,6 +96,31 @@ async def upload_syllabus(
             raise HTTPException(status_code=422, detail=f"Extraction failed: {exc}")
         extraction_dict = extraction.model_dump()
         ai_extraction_dict = extraction.ai_extraction.model_dump() if extraction.ai_extraction else None
+
+    # Runtime coverage validation (deterministic, advisory): did every unit's
+    # source content actually land in the extracted tree? A correct prompt can
+    # still drop items on a given run — flag it here, at upload time, instead
+    # of it surfacing as missing course content weeks later.
+    coverage_report = None
+    try:
+        units = (ai_extraction_dict or {}).get("units") or []
+        if units:
+            coverage_report = extraction_service.module_tree_coverage(flat_text, units)
+            extraction_dict["coverage_report"] = coverage_report
+            from app.schemas.generation import CheckResult, ValidationResult
+            from app.services.generation_service import log_check_outcomes
+            checks = [CheckResult(
+                name=f"extraction:unit_coverage:U{u['unit_number']}",
+                passed=not u["flagged"],
+                detail=f"{u['coverage']:.0%} covered"
+                       + (f"; missing: {', '.join(u['missing_terms'][:8])}"
+                          if u["missing_terms"] else ""),
+                blocking=False,
+            ) for u in coverage_report["units"]]
+            log_check_outcomes(upload_id, "extraction",
+                               ValidationResult(all_pass=True, checks=checks), db=db)
+    except Exception:
+        logger.warning("extraction coverage validation failed", exc_info=True)
 
     db.table("uploads").update({
         "status": "done",
@@ -105,6 +134,7 @@ async def upload_syllabus(
         "extraction": extraction_dict.get("p1_extraction") or extraction_dict,
         "ai_extraction": ai_extraction_dict,
         "pipeline_result": extraction_dict.get("pipeline_result"),
+        "coverage_report": coverage_report,
     }
 
 

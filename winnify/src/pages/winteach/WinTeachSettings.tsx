@@ -1,10 +1,13 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, User, Palette, Sparkles, Bell } from 'lucide-react';
+import { Sun, Moon, LogOut, User, Palette, Sparkles, Bell, ChevronRight } from 'lucide-react';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { Card, Kicker, Btn } from './WinTeachUI';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { authApi } from '@/api/auth';
+import type { UserProfile } from '@/api/types';
 
 function SectionCard({ icon: Icon, kicker, title, sub, children, delay = 0 }: {
   icon: React.ElementType; kicker: string; title: string; sub: string;
@@ -42,6 +45,17 @@ export default function WinTeachSettings() {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const [me, setMe] = useState<UserProfile | null>(null);
+
+  // Identity comes from /auth/me (source of truth) so this card stays in sync
+  // with edits made on the account page; falls back to cached context on error.
+  useEffect(() => { authApi.me().then(setMe).catch(() => { /* keep context */ }); }, []);
+
+  const name = me?.full_name ?? user?.name ?? '—';
+  const email = me?.email ?? user?.email ?? '';
+  const role = me?.role ?? user?.role ?? 'author';
+  const institute = me?.institute_name;
+  const title = me?.designation;
 
   const handleSignOut = async () => {
     await signOut();
@@ -61,22 +75,27 @@ export default function WinTeachSettings() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 17, flexShrink: 0,
               }}>
-                {user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? '—'}
+                {name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, color: W.text }}>{user?.name ?? '—'}</div>
-                <div style={{ fontSize: 12.5, color: W.text2 }}>{user?.email ?? ''}</div>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 15, color: W.text }}>{name}</div>
+                <div style={{ fontSize: 12.5, color: W.text2 }}>{title || email}</div>
               </div>
               <span style={{
                 marginLeft: 'auto', fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11.5,
                 background: W.brandTintBg, color: W.brandTintFg, borderRadius: 999, padding: '3px 12px',
                 textTransform: 'capitalize', whiteSpace: 'nowrap',
               }}>
-                {user?.role ?? 'author'}
+                {role}
               </span>
             </div>
+            {institute && <InfoRow label="Institute" value={institute} />}
             <InfoRow label="Workspace" value="WinTeach Studio" />
-            <InfoRow label="Organization" value="Winnify" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+              <Btn variant="primary" onClick={() => navigate('/winteach/account')}>
+                Manage account <ChevronRight size={15} />
+              </Btn>
+            </div>
           </SectionCard>
 
           <SectionCard icon={Palette} kicker="Appearance" title="Theme" sub="Switch between light and dark mode" delay={60}>
@@ -116,6 +135,9 @@ export default function WinTeachSettings() {
               ['Generation completed', 'In-app'],
               ['Approval required', 'In-app'],
             ].map(([l, v]) => <InfoRow key={l} label={l} value={v} />)}
+            <div style={{ fontSize: 12, color: W.text3, marginTop: 10 }}>
+              Alerts show in-app while you're in the studio. Email delivery isn't available yet.
+            </div>
           </SectionCard>
 
           <Card compact style={{ borderColor: 'color-mix(in oklab, var(--tint-red-fg) 30%, transparent)' }}>

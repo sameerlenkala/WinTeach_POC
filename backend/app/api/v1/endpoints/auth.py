@@ -13,7 +13,7 @@ from app.schemas.auth import (
     RegisterRequest,
     InviteRequest, InviteResponse,
     CreateUserRequest,
-    MeResponse,
+    MeResponse, UpdateMeRequest, ChangePasswordRequest,
 )
 from app.services import auth_service
 
@@ -41,6 +41,8 @@ def demo_login(payload: DemoLoginRequest, db: Client = Depends(get_db)):
     The JWT is signed with the same supabase_anon_key the backend uses to
     verify all tokens, so it passes decode_supabase_jwt() cleanly.
     """
+    if not settings.demo_login_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     demo = _DEMO_ACCOUNTS.get(payload.email.lower().strip())
     if not demo or payload.password != demo["password"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a demo account")
@@ -48,14 +50,15 @@ def demo_login(payload: DemoLoginRequest, db: Client = Depends(get_db)):
     # Stable demo user ID (deterministic from email so re-logins are idempotent)
     demo_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"demo:{payload.email}"))
 
-    # Upsert profile so get_current_user() can find it
+    # Seed profile (insert-only) so get_current_user() can find it. A plain
+    # upsert would overwrite self-service profile edits on every login.
     try:
         db.table("profiles").upsert({
             "id": demo_id,
             "email": payload.email,
             "full_name": demo["name"],
             "role": demo["role"],
-        }, on_conflict="id").execute()
+        }, on_conflict="id", ignore_duplicates=True).execute()
     except Exception:
         pass  # Profile table may not exist in local dev — safe to ignore
 
@@ -108,6 +111,21 @@ def me(user: dict = Depends(get_current_user), db: Client = Depends(get_db)):
     return auth_service.get_me(db, user)
 
 
+@router.patch("/me", response_model=MeResponse)
+def update_me(payload: UpdateMeRequest, user: dict = Depends(get_current_user),
+              db: Client = Depends(get_db)):
+    """Self-service profile edit (name, headline, phone, skills)."""
+    return auth_service.update_me(db, user, payload)
+
+
+@router.post("/change-password")
+def change_password(payload: ChangePasswordRequest, user: dict = Depends(get_current_user),
+                    db: Client = Depends(get_db)):
+    """Authenticated password change — requires the current password."""
+    return auth_service.change_password(db, user, payload.current_password,
+                                        payload.new_password)
+
+
 @router.post("/invite", response_model=InviteResponse)
 def invite(
     payload: InviteRequest,
@@ -141,10 +159,16 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/reset-password")
 def reset_password(payload: ResetPasswordRequest, db: Client = Depends(get_db)):
+    """DEMO-ONLY convenience: sets a new password from just an email, with no
+    identity proof — an account-takeover primitive if ever exposed for real
+    users. Gated with the demo flag; signed-in users have /auth/change-password,
+    and a real forgot-password flow needs Supabase email recovery."""
+    if not settings.demo_login_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     email = payload.email.lower().strip()
 
     # Update demo account in-memory password
-    demo = _DEMO_ACCOUNTS.get(email)
+    demo = _DEMO_ACCOUNTS.get(email) if settings.demo_login_enabled else None
     if demo:
         _DEMO_ACCOUNTS[email]["password"] = payload.new_password
         # Also update in auth_service map

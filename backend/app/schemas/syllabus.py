@@ -59,7 +59,8 @@ class ExtractedCO(BaseModel):
 
 
 class AIExtraction(BaseModel):
-    """Structured output from GPT-4o-mini — validated by Pydantic before DB write."""
+    """Structured output from the configured light model
+    (settings.generation_light_model) — validated by Pydantic before DB write."""
     course_name: str = ""
     course_code: str = ""
     credits: int = 0

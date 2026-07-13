@@ -17,6 +17,7 @@ LLM node runners lazy-import OpenAI so this module imports cleanly offline.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -38,7 +39,26 @@ from app.schemas.generation import (
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-4o"   # notes nodes use strict json_schema; other nodes json_object
+# Prompt version stamped on every generated artifact (excluded from hashing) so
+# validator telemetry and quality regressions can be attributed to the prompt
+# set that produced them.
+from app.services.generation_prompts import PROMPT_VERSION  # noqa: E402
+
+# Offline/test fallbacks only — live runs route via settings.generation_model /
+# settings.generation_light_model (see _model). Values mirror the config
+# defaults; the API key has no access to gpt-4o / gpt-4o-mini anymore.
+MODEL = "gpt-5.6-terra"
+LIGHT_MODEL = "gpt-5.4-nano"
+
+
+def _model(light: bool = False) -> str:
+    """Per-node model routing: heavy nodes author student-facing content; light
+    nodes do mechanical repairs (verb fixes, TLO retagging, subtopic splits)."""
+    try:
+        from app.core.config import settings
+        return settings.generation_light_model if light else settings.generation_model
+    except Exception:  # pragma: no cover - settings unavailable offline
+        return LIGHT_MODEL if light else MODEL
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -133,14 +153,27 @@ def _generate_cos_llm(req: COGenerateRequest, bloom: str) -> list[str] | None:
     if client is None:
         return None
     try:
+        verbs = ", ".join(sorted(ct.APPROVED_VERBS.get(bloom, ct.APPROVED_VERBS["L3"]))[:10])
         prompt = (
-            "Generate exactly {n} Course Outcomes at Bloom level {bloom} for a "
-            "course covering these units: {units}. Each CO is one measurable, "
-            "student-facing sentence using an approved verb at level {bloom}. "
+            "You are an expert OBE curriculum designer for Indian engineering "
+            "universities. Generate exactly {n} Course Outcomes at Bloom level "
+            "{bloom} for a course covering these units: {units}.\n\n"
+            "Rules:\n"
+            "- Each CO is written from the student perspective and starts with "
+            "an approved {bloom} verb — choose from: {verbs}.\n"
+            "- NEVER use: understand, learn, know, appreciate, be familiar with, "
+            "be aware of, study, grasp, comprehend, be exposed to.\n"
+            "- Each CO is specific to the actual unit content named above — "
+            "never generic filler that fits any course.\n"
+            "- Each CO must be assessable: an examiner could set a question "
+            "testing exactly this.\n"
+            "- One sentence per CO, no numbering inside the text.\n"
             'Return JSON: {{"course_outcomes": ["...", ...]}}.'
-        ).format(n=req.count, bloom=bloom, units=", ".join(req.unit_titles) or "the course")
-        resp = client.chat.completions.create(
-            model=MODEL,
+        ).format(n=req.count, bloom=bloom, verbs=verbs,
+                 units=", ".join(req.unit_titles) or "the course")
+        from app.services import llm_compat
+        resp = llm_compat.create_chat_completion(
+            client, model=_model(),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             response_format={"type": "json_object"},
@@ -211,7 +244,7 @@ _STAMP_FIELDS = frozenset({
     "topic_plan_version", "validated_at", "scope_hash", "notes_version",
     "content_hash", "unit_hash", "approved_at", "slides_version",
     "derived_from_notes_version", "derived_from_content_hash", "version",
-    "concept_id", "tlo_id", "grounded_in",
+    "concept_id", "tlo_id", "grounded_in", "prompt_version",
 })
 
 
@@ -489,53 +522,102 @@ _meter = threading.local()
 def meter_reset() -> None:
     _meter.prompt = 0
     _meter.completion = 0
+    _meter.cost = 0.0
 
 
-def _meter_add(prompt_tokens: int, completion_tokens: int) -> None:
+def _meter_add(prompt_tokens: int, completion_tokens: int, model: str = MODEL) -> None:
     _meter.prompt = getattr(_meter, "prompt", 0) + (prompt_tokens or 0)
     _meter.completion = getattr(_meter, "completion", 0) + (completion_tokens or 0)
+    # Cost is accumulated per call at that call's model rate — a job that mixes
+    # heavy and light models bills each call correctly.
+    _meter.cost = getattr(_meter, "cost", 0.0) + ct.usd_cost(prompt_tokens or 0,
+                                                             completion_tokens or 0, model)
 
 
 def meter_read() -> tuple[int, int, float]:
     """(prompt_tokens, completion_tokens, usd_cost) since the last reset."""
     p = getattr(_meter, "prompt", 0)
     c = getattr(_meter, "completion", 0)
-    return p, c, ct.usd_cost(p, c)
+    return p, c, round(getattr(_meter, "cost", 0.0), 4)
+
+
+# Transient OpenAI errors worth a backoff-retry (matched by name so this module
+# still imports cleanly without the openai package).
+_TRANSIENT_ERRORS = ("RateLimitError", "APITimeoutError", "APIConnectionError",
+                     "InternalServerError", "APIError")
+
+
+def _is_transient(e: Exception) -> bool:
+    return type(e).__name__ in _TRANSIENT_ERRORS
 
 
 def _chat_json(client: Any, system: str, user: str, temperature: float = 0.4,
-               schema: dict | None = None, schema_name: str = "output") -> dict:
+               schema: dict | None = None, schema_name: str = "output",
+               light: bool = False, effort: str | None = None) -> dict:
     """One JSON-mode chat call. When `schema` is given, strict json_schema mode
     enforces the output shape mechanically (json_object mode demonstrably lets
     the model drop structured shapes, e.g. prose formal_definition); otherwise
     json_object with semantics checked by the code validators — §7. Token usage
-    is accumulated into the thread-local meter for cost tracking."""
+    is accumulated into the thread-local meter at the call's model rate.
+
+    Failure handling: transient API errors are retried with backoff; invalid
+    JSON is retried with the parse error fed back so the model can correct it
+    (a blind identical retry demonstrably repeats the same failure); a
+    truncated response (finish_reason=length) is told to compress prose."""
+    import time
+    model = _model(light)
     if schema is not None:
         response_format: dict = {"type": "json_schema", "json_schema": {
             "name": schema_name, "strict": True, "schema": schema}}
     else:
         response_format = {"type": "json_object"}
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
     last_err: Exception | None = None
-    for attempt in range(2):
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "system", "content": system},
-                      {"role": "user", "content": user}],
-            temperature=temperature,
-            max_tokens=16000,  # gpt-4o output ceiling; the default cap truncates large polish/core payloads mid-string
-            response_format=response_format,
-        )
+    api_retries = 0
+    from app.services import llm_compat
+    for attempt in range(3):
+        try:
+            resp = llm_compat.create_chat_completion(
+                client, model=model,
+                messages=messages,
+                temperature=temperature,
+                reasoning_effort=effort,
+                max_tokens=16000,  # output cap for cost control; the SDK default truncates large core/polish payloads mid-string
+                response_format=response_format,
+            )
+        except Exception as e:
+            if _is_transient(e) and api_retries < 2:
+                api_retries += 1
+                logger.warning("_chat_json transient API error (%s), retry %d", type(e).__name__, api_retries)
+                time.sleep(2 * api_retries)
+                continue
+            raise
         u = getattr(resp, "usage", None)
         if u is not None:
-            _meter_add(getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+            _meter_add(getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0), model)
         choice = resp.choices[0]
+        content = choice.message.content or "{}"
+        finish = getattr(choice, "finish_reason", None)
         try:
-            return json.loads(choice.message.content or "{}")
+            return json.loads(content)
         except json.JSONDecodeError as e:
             last_err = e
             logger.warning("_chat_json invalid JSON (attempt %d, finish_reason=%s): %s",
-                           attempt + 1, getattr(choice, "finish_reason", "?"), e)
-    raise last_err  # both attempts unparseable
+                           attempt + 1, finish, e)
+            # Feed the failure back instead of blindly re-asking.
+            if finish == "length":
+                note = ("Your previous response was cut off before the JSON completed. "
+                        "Re-emit the COMPLETE JSON object, compressing prose fields "
+                        "enough to fit — never truncate the structure itself.")
+            else:
+                note = (f"Your previous response was not valid JSON (parse error: {e}). "
+                        "Re-emit the COMPLETE, corrected JSON object — nothing else.")
+            messages = messages[:2] + [
+                {"role": "assistant", "content": content[:6000]},
+                {"role": "user", "content": note},
+            ]
+    raise last_err  # all attempts unparseable
 
 
 def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list[dict]:
@@ -553,7 +635,7 @@ def split_subtopics(client: Any, topic_title: str, subtopics: list[str]) -> list
             client,
             "You are an expert curriculum architect. Output ONLY valid JSON.",
             build_subtopic_split_prompt(topic_title, subtopics),
-            temperature=0.1,
+            temperature=0.1, light=True, effort="low",
         )
         by_title = {(e.get("title") or "").strip().casefold(): e
                     for e in (r.get("subtopics") or []) if isinstance(e, dict)}
@@ -673,6 +755,7 @@ def stamp_topic_plan(plan: dict, version: str = "1.0.0") -> dict:
     fm = plan.setdefault("front_matter", {})
     fm["scope_hash"] = canonical_hash(scope_body(plan))
     fm["topic_plan_version"] = version
+    fm["prompt_version"] = PROMPT_VERSION
     return plan
 
 
@@ -725,7 +808,7 @@ def repair_plan_alignment(client: Any, plan: dict) -> dict:
     # Pass 1 — verify/correct TLO-concept tagging against the TLOs' wording.
     try:
         r = _chat_json(client, sys_msg, gp.build_tlo_realign_prompt(tlos, concepts),
-                       temperature=0.1)
+                       temperature=0.1, light=True, effort="low")
         tlo_ids = {t.get("tlo_id") for t in tlos}
         corrected = {a.get("subtopic_id"): [t for t in (a.get("served_tlos") or []) if t in tlo_ids]
                      for a in (r.get("corrected_assignments") or [])
@@ -745,7 +828,7 @@ def repair_plan_alignment(client: Any, plan: dict) -> dict:
             if not co.get("co_id") or co.get("co_id") in covered:
                 continue
             r = _chat_json(client, sys_msg, gp.build_missing_co_tlo_prompt(co, concepts),
-                           temperature=0.2)
+                           temperature=0.2, light=True, effort="low")
             best = r.get("best_subtopic_id")
             stmt = (r.get("outcome_statement") or "").strip()
             target = next((c for c in concepts if c.get("concept_id") == best), None)
@@ -774,7 +857,7 @@ def repair_plan_alignment(client: Any, plan: dict) -> dict:
             verbs = sorted(ct.APPROVED_VERBS.get(bloom_target, ct.APPROVED_VERBS["L2"]))[:8]
             r = _chat_json(client, sys_msg,
                            gp.build_subtopic_tlo_prompt(c, bloom_target, verbs),
-                           temperature=0.2)
+                           temperature=0.2, light=True, effort="low")
             stmt = (r.get("outcome_statement") or "").strip()
             if not stmt:
                 continue
@@ -803,7 +886,7 @@ def repair_plan_alignment(client: Any, plan: dict) -> dict:
             verbs = sorted(ct.APPROVED_VERBS.get(lvl, ct.APPROVED_VERBS["L2"]))
             r = _chat_json(client, sys_msg,
                            gp.build_tlo_verb_fix_prompt(stmt, lvl, verbs[:12]),
-                           temperature=0.1)
+                           temperature=0.1, light=True, effort="low")
             fixed = (r.get("outcome_statement") or "").strip()
             if fixed and ct.verb_allowed_at(fixed, lvl):
                 t["statement"] = fixed
@@ -863,6 +946,23 @@ def _word_count(text) -> int:
     return len(_flatten_text(text).split()) if text else 0
 
 
+# Generic curriculum filler carries no coverage signal — only distinctive tokens
+# decide whether a named concept/scope item is demonstrated in the text.
+_COVERAGE_STOP = {"and", "the", "for", "with", "into", "from", "statement", "statements",
+                  "operation", "operations", "concept", "concepts", "basic", "basics",
+                  "introduction", "overview", "types", "different", "using"}
+
+
+def _covered_in(haystack: str, name: str) -> bool:
+    """Loose token coverage: every distinctive word of `name` appears somewhere
+    in `haystack` (already casefolded). 'INSERT statement' is covered when
+    'insert' appears — a verbatim-substring test would fail legitimate phrasing
+    like 'scheduling of processes' for 'process scheduling'."""
+    words = [w for w in re.findall(r"[a-z0-9+#]+", str(name).casefold())
+             if len(w) >= 3 and w not in _COVERAGE_STOP]
+    return not words or all(w in haystack for w in words)
+
+
 def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
                    prev_title: str | None, next_title: str | None,
                    prior_terms: list[str],
@@ -881,7 +981,8 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
                      schema=njs.CORE_SCHEMA, schema_name="notes_core")
     closing = _chat_json(client, *p.build_closing_prompt(unit, ctx,
                         prev_title=prev_title, next_title=next_title,
-                        condensed_core=_condense_core(core)), temperature=0.5,
+                        condensed_core=_condense_core(core),
+                        grounding=grounding), temperature=0.5,
                         schema=njs.CLOSING_SCHEMA, schema_name="notes_closing")
 
     cid = unit.get("concept_id")
@@ -987,8 +1088,10 @@ def validate_notes_unit(unit_output: dict, unit: dict, ctx: dict) -> ValidationR
                                   detail=f"{len(rows)} comparison rows (need ≥4)"))
 
     # Scope lock — every scope_in item demonstrated somewhere in the unit text.
-    haystack = json.dumps(core, ensure_ascii=False).lower()
-    missing = [s for s in (unit.get("scope_in") or []) if str(s).lower() not in haystack]
+    # Token-based (same matcher as concept coverage): a verbatim-substring test
+    # blocks notes that teach the item under legitimately different phrasing.
+    haystack = json.dumps(core, ensure_ascii=False).casefold()
+    missing = [s for s in (unit.get("scope_in") or []) if not _covered_in(haystack, s)]
     checks.append(CheckResult(name="scope:in_covered", passed=not missing,
                               detail="" if not missing else f"scope_in not demonstrated: {missing}"))
     # scope_out mechanics should be absent — heuristic, non-blocking.
@@ -1093,7 +1196,7 @@ def critique_and_polish_unit(client: Any, unit_output: dict, unit: dict, ctx: di
     try:
         review = _chat_json(client, *p.build_notes_critic_prompt(unit, ctx, note),
                             temperature=0.2, schema=njs.CRITIC_SCHEMA,
-                            schema_name="notes_critique")
+                            schema_name="notes_critique", effort="low")
     except Exception:
         logger.warning("notes critic failed", exc_info=True)
         return {"scores": None, "polished": False, "error": "critic_failed"}
@@ -1104,9 +1207,20 @@ def critique_and_polish_unit(client: Any, unit_output: dict, unit: dict, ctx: di
     record: dict = {"scores": scores, "polished": False, "patched_paths": []}
     total = sum(v for v in scores.values() if isinstance(v, (int, float)))
     has_zero = any(v == 0 for v in scores.values())
-    # Polish only when genuinely below the bar — every dimension ≥1 and a strong
-    # total passes without a second call.
-    if fixes and (has_zero or total < 15):
+    # The dimensions that most predict whether a note actually teaches — a 1
+    # here reads "mediocre", which is below the product's bar even when the
+    # total is otherwise strong.
+    weak_signal = any(scores.get(d, 2) <= 1 for d in
+                      ("scenario_stakes", "teaches_not_documents", "example_diversity"))
+    # Polish when genuinely below the bar — any zero, a weak total, or a
+    # high-signal dimension at 1.
+    if fixes and (has_zero or total < 15 or weak_signal):
+        # Snapshot the pre-polish content so a net-harmful polish can be
+        # reverted. Polish is done by the SAME model that generated the note,
+        # so a strong model improves it (observed terra 12→17) but a weaker one
+        # can degrade it (observed luna 14→13). The gate makes polish monotonic:
+        # keep it only when the re-score didn't drop.
+        pre_polish = copy.deepcopy({k: unit_output.get(k) for k in ("opening", "core", "closing")})
         try:
             result = _chat_json(client, *p.build_notes_polish_prompt(unit, ctx, note, fixes),
                                 temperature=0.5)
@@ -1128,16 +1242,28 @@ def critique_and_polish_unit(client: Any, unit_output: dict, unit: dict, ctx: di
         except Exception:
             logger.warning("notes polish failed", exc_info=True)
             record["error"] = "polish_failed"
-    # Re-score after a polish so the stored scores describe the content that
-    # actually ships — pre-polish scores misreport patched notes to faculty.
-    if record["polished"]:
-        try:
-            rescore = _chat_json(client, *p.build_notes_critic_prompt(unit, ctx, note),
-                                 temperature=0.2, schema=njs.CRITIC_SCHEMA,
-                                 schema_name="notes_critique")
-            record["scores_after"] = rescore.get("scores") or {}
-        except Exception:
-            logger.warning("notes re-critique failed", exc_info=True)
+        # Monotonicity gate: re-score the polished note; revert if worse.
+        if record["polished"]:
+            try:
+                rescore = _chat_json(client, *p.build_notes_critic_prompt(unit, ctx, note),
+                                     temperature=0.2, schema=njs.CRITIC_SCHEMA,
+                                     schema_name="notes_critique", effort="low")
+                after = rescore.get("scores") or {}
+                total_after = sum(v for v in after.values() if isinstance(v, (int, float)))
+                if total_after < total:
+                    # Net-harmful polish — restore the pre-polish content. Because
+                    # `note` shares nested objects with unit_output, reassigning
+                    # the three top-level keys reverts the shipped artifact.
+                    for k in ("opening", "core", "closing"):
+                        unit_output[k] = pre_polish[k]
+                    record["polished"] = False
+                    record["polish_reverted"] = True
+                    record["rejected_scores_after"] = after
+                    logger.info("notes polish reverted (%d → %d)", total, total_after)
+                else:
+                    record["scores_after"] = after
+            except Exception:
+                logger.warning("notes re-critique failed", exc_info=True)
     return record
 
 
@@ -1260,7 +1386,7 @@ def critique_and_polish_deck(client: Any, content: dict, unit: dict, ctx: dict) 
     from app.services import generation_prompts as p  # lazy
     try:
         review = _chat_json(client, *p.build_deck_critic_prompt(unit, ctx, content),
-                            temperature=0.2)
+                            temperature=0.2, effort="low")
     except Exception:
         logger.warning("deck critic failed", exc_info=True)
         return {"scores": None, "polished": False, "error": "critic_failed"}
@@ -1271,7 +1397,12 @@ def critique_and_polish_deck(client: Any, content: dict, unit: dict, ctx: dict) 
     record: dict = {"scores": scores, "polished": False, "patched_slides": []}
     total = sum(v for v in scores.values() if isinstance(v, (int, float)))
     has_zero = any(v == 0 for v in scores.values())
-    if fixes and (has_zero or total < 15):
+    # High-signal deck dimensions: a 1 on any of these means a deck a professor
+    # can't comfortably teach from, regardless of the total.
+    weak_signal = any(scores.get(d, 2) <= 1 for d in
+                      ("speaker_scripts", "running_example", "phase_completeness"))
+    if fixes and (has_zero or total < 15 or weak_signal):
+        pre_polish_slides = copy.deepcopy(content.get("slides") or [])
         try:
             result = _chat_json(client, *p.build_deck_polish_prompt(unit, ctx, content, fixes),
                                 temperature=0.5)
@@ -1289,7 +1420,185 @@ def critique_and_polish_deck(client: Any, content: dict, unit: dict, ctx: dict) 
         except Exception:
             logger.warning("deck polish failed", exc_info=True)
             record["error"] = "polish_failed"
+        # Monotonicity gate (same rationale as the notes polish): re-score and
+        # revert a polish that lowered the total.
+        if record["polished"]:
+            try:
+                rescore = _chat_json(client, *p.build_deck_critic_prompt(unit, ctx, content),
+                                     temperature=0.2, effort="low")
+                after = rescore.get("scores") or {}
+                total_after = sum(v for v in after.values() if isinstance(v, (int, float)))
+                if total_after < total:
+                    content["slides"] = pre_polish_slides
+                    record["polished"] = False
+                    record["polish_reverted"] = True
+                    record["rejected_scores_after"] = after
+                    logger.info("deck polish reverted (%d → %d)", total, total_after)
+                else:
+                    record["scores_after"] = after
+            except Exception:
+                logger.warning("deck re-critique failed", exc_info=True)
     return record
+
+
+# ── Quiz: deterministic normalization + gate (mirrors the notes/deck gates) ───
+
+_QUIZ_LETTERS = ("A", "B", "C", "D")
+
+
+def normalize_quiz(content: dict) -> dict:
+    """Deterministic repairs the orchestrator owns: MAQ answers deduped/sorted
+    (the prompt asks for alphabetical order but the model drifts), true/false
+    options nulled, ids resequenced."""
+    for i, q in enumerate((content.get("questions") or []), 1):
+        if not isinstance(q, dict):
+            continue
+        q["id"] = i
+        if q.get("type") == "maq" and isinstance(q.get("answer"), list):
+            q["answer"] = sorted({str(a).strip().upper()[:1] for a in q["answer"]
+                                  if str(a).strip()})
+        if q.get("type") == "true_false":
+            q["options"] = None
+    return content
+
+
+def _quiz_correct_texts(q: dict) -> list[str]:
+    """The text of the correct option(s), labels stripped — for hint-leak checks."""
+    options = q.get("options") or []
+    by_letter = {}
+    for o in options:
+        m = re.match(r"^\s*([A-D])\)\s*(.+)$", str(o))
+        if m:
+            by_letter[m.group(1)] = m.group(2).strip()
+    ans = q.get("answer")
+    letters = ans if isinstance(ans, list) else [ans]
+    return [by_letter[l] for l in letters if l in by_letter]
+
+
+def validate_quiz(content: dict, unit: dict) -> ValidationResult:
+    """Mechanical quiz gate: every rule the prompt states that code can check —
+    structural answer formats (blocking), Bloom ceiling (blocking), and the
+    quality heuristics (counts, answer balance, duplicate stems, hint leaks)
+    as non-blocking telemetry."""
+    checks: list[CheckResult] = []
+    qs = [q for q in (content.get("questions") or []) if isinstance(q, dict)]
+
+    checks.append(CheckResult(name="quiz:nonempty", passed=bool(qs),
+                              detail=f"{len(qs)} questions"))
+    checks.append(CheckResult(name="quiz:count_band", passed=10 <= len(qs) <= 18,
+                              detail=f"{len(qs)} questions (target 10-18)", blocking=False))
+
+    # Structural answer-format rules per type.
+    bad_format = []
+    for q in qs:
+        t, opts, ans = q.get("type"), q.get("options"), q.get("answer")
+        ok = bool(q.get("question")) and bool(q.get("explanation"))
+        if t == "mcq":
+            ok = ok and isinstance(opts, list) and len(opts) == 4 \
+                and isinstance(ans, str) and ans in _QUIZ_LETTERS
+        elif t == "maq":
+            ok = ok and isinstance(opts, list) and len(opts) == 4 \
+                and isinstance(ans, list) and 2 <= len(ans) <= 3 \
+                and all(a in _QUIZ_LETTERS for a in ans)
+        elif t == "true_false":
+            ok = ok and ans in ("True", "False")
+        else:
+            ok = False
+        if not ok:
+            bad_format.append(q.get("id"))
+    checks.append(CheckResult(name="quiz:answer_format", passed=not bad_format,
+                              detail=f"malformed questions: {bad_format}" if bad_format else ""))
+
+    # Bloom ceiling — no item above the concept's ceiling.
+    ceiling = ct.bloom_rank(unit.get("bloom_ceiling", "L3"))
+    over = [q.get("id") for q in qs
+            if ct.bloom_rank(q.get("bloom_level", "L1")) > ceiling]
+    checks.append(CheckResult(name="quiz:bloom_ceiling", passed=not over,
+                              detail=f"items above ceiling: {over}" if over else ""))
+
+    # Duplicate stems — the prompt forbids testing the same fact twice.
+    stems = [re.sub(r"\s+", " ", str(q.get("question", ""))).casefold() for q in qs]
+    dups = len(stems) - len(set(stems))
+    checks.append(CheckResult(name="quiz:duplicate_stems", passed=dups == 0,
+                              detail=f"{dups} duplicated stems" if dups else "", blocking=False))
+
+    # Answer-letter balance across MCQs (prompt: no letter > ~35%).
+    mcq_answers = [q.get("answer") for q in qs if q.get("type") == "mcq"]
+    if len(mcq_answers) >= 4:
+        from collections import Counter
+        top = Counter(mcq_answers).most_common(1)[0]
+        checks.append(CheckResult(name="quiz:answer_balance",
+                                  passed=top[1] / len(mcq_answers) <= 0.5,
+                                  detail=f"letter {top[0]} correct {top[1]}/{len(mcq_answers)} times",
+                                  blocking=False))
+
+    # True/False balance (prompt: roughly half and half).
+    tf = [q.get("answer") for q in qs if q.get("type") == "true_false"]
+    if len(tf) >= 3:
+        trues = sum(1 for a in tf if a == "True")
+        checks.append(CheckResult(name="quiz:tf_balance",
+                                  passed=0 < trues < len(tf),
+                                  detail=f"{trues}/{len(tf)} True", blocking=False))
+
+    # Hint leak — the hint must never contain the answer.
+    leaks = []
+    for q in qs:
+        hint = str(q.get("hint") or "").casefold()
+        if not hint:
+            continue
+        for correct in _quiz_correct_texts(q):
+            if len(correct) >= 4 and correct.casefold() in hint:
+                leaks.append(q.get("id"))
+                break
+    checks.append(CheckResult(name="quiz:hint_leak", passed=not leaks,
+                              detail=f"hints containing the answer: {leaks}" if leaks else "",
+                              blocking=False))
+
+    return ValidationResult(all_pass=all(c.passed for c in checks if c.blocking), checks=checks)
+
+
+# ── Assignment: deterministic normalization + gate ────────────────────────────
+
+def validate_and_fix_assignment(content: dict, plan: dict) -> ValidationResult:
+    """Mechanical assignment gate with orchestrator-owned repairs: total_marks
+    is derived from the task marks and the rubric is rescaled to sum exactly to
+    it (same normalization the plan weights get) — the prompt-only 'sums
+    EXACTLY' rule demonstrably drifts. Subtopic coverage is telemetry."""
+    checks: list[CheckResult] = []
+    tasks = [t for t in (content.get("tasks") or []) if isinstance(t, dict)]
+    rubric = [r for r in (content.get("rubric") or []) if isinstance(r, dict)]
+
+    checks.append(CheckResult(name="assignment:has_tasks", passed=bool(tasks),
+                              detail=f"{len(tasks)} tasks"))
+
+    marks_sum = sum(int(t.get("marks") or 0) for t in tasks)
+    if marks_sum > 0 and content.get("total_marks") != marks_sum:
+        content["total_marks"] = marks_sum   # tasks are the source of truth
+    checks.append(CheckResult(name="assignment:marks_reconciled", passed=marks_sum > 0,
+                              detail=f"task marks sum {marks_sum}"))
+
+    rubric_sum = sum(int(r.get("points") or 0) for r in rubric)
+    if rubric and marks_sum > 0 and rubric_sum > 0 and rubric_sum != marks_sum:
+        scaled = [round(int(r.get("points") or 0) * marks_sum / rubric_sum) for r in rubric]
+        scaled[-1] += marks_sum - sum(scaled)
+        for r, s in zip(rubric, scaled):
+            r["points"] = s
+        rubric_sum = marks_sum
+    checks.append(CheckResult(name="assignment:rubric_sum",
+                              passed=not rubric or rubric_sum == marks_sum,
+                              detail=f"rubric {rubric_sum} vs total {marks_sum}"))
+
+    # Every subtopic exercised by ≥1 task (prompt rule; token-matched).
+    concept_names = [c.get("concept_name", "") for c in
+                     (plan.get("concept_inventory") or []) if isinstance(c, dict)]
+    task_text = json.dumps([{k: t.get(k) for k in ("title", "scenario", "prompt", "subtopics")}
+                            for t in tasks], ensure_ascii=False).casefold()
+    untouched = [n for n in concept_names if n and not _covered_in(task_text, n)]
+    checks.append(CheckResult(name="assignment:subtopic_coverage", passed=not untouched,
+                              detail=f"subtopics no task exercises: {untouched}" if untouched else "",
+                              blocking=False))
+
+    return ValidationResult(all_pass=all(c.passed for c in checks if c.blocking), checks=checks)
 
 
 def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: dict) -> ValidationResult:
@@ -1318,21 +1627,9 @@ def validate_and_expand_unit(client: Any, unit_output: dict, unit: dict, ctx: di
     concepts = [c for c in (unit.get("concepts_covered") or [])
                 if isinstance(c, str) and c.strip()]
     if len(concepts) > 1 and client is not None:
-        # Generic curriculum filler carries no signal — only distinctive tokens
-        # decide coverage ("INSERT statement" is covered when "insert" appears).
-        _STOP = {"and", "the", "for", "with", "into", "from", "statement", "statements",
-                 "operation", "operations", "concept", "concepts", "basic", "basics",
-                 "introduction", "overview", "types", "different", "using"}
-
         def _uncovered(core_obj) -> list[str]:
             text = json.dumps(core_obj, ensure_ascii=False).casefold()
-            out = []
-            for cname in concepts:
-                words = [w for w in re.findall(r"[a-z0-9+#]+", cname.casefold())
-                         if len(w) >= 3 and w not in _STOP]
-                if words and not all(w in text for w in words):
-                    out.append(cname)
-            return out
+            return [cname for cname in concepts if not _covered_in(text, cname)]
 
         core = unit_output.get("core", {})
         missing = _uncovered(core)
@@ -1398,12 +1695,9 @@ def assemble_notes(unit_records: list[dict], plan: dict, ctx: dict,
 _FANOUT_TYPES = ("slides", "summary", "quiz", "assignment", "faculty_diagnostic", "flashcards")
 _JIT_TYPES = ("summary", "quiz", "assignment", "faculty_diagnostic", "flashcards")
 
-
-def gen_slides(client: Any, ctx: dict, plan: dict, notes: dict) -> dict:
-    """Node C: reformat approved Notes into a render-agnostic slide model.
-    Introduces no content absent from the Notes (validated structurally, §10.3)."""
-    from app.services.generation_prompts import build_slides_prompt  # lazy
-    return _chat_json(client, *build_slides_prompt(ctx, plan, notes), temperature=0.4)
+# The legacy topic-level gen_slides was retired: it bypassed the deck
+# validators/critic and contradicted the concept-deck face limits. Decks are
+# generated per concept (gen_concept_slides) in the interactive studio.
 
 
 def placeholder_artifact(artifact_type: str, notes: dict) -> dict:
@@ -1562,7 +1856,7 @@ def run_topic_job(db, job_id: str, course_id: str, topic_id: str) -> None:
             logger.warning("topic plan attempt %d parse/gen failed: %s", attempt, e)
             continue
         result = validate_topic_plan(plan, credits=ctx.get("credits"))
-        log_check_outcomes(job_id, "topic_plan", result)   # telemetry from day one (§6)
+        log_check_outcomes(job_id, "topic_plan", result, db=db)   # telemetry from day one (§6)
         if result.all_pass:
             break
 
@@ -1638,14 +1932,14 @@ def _run_notes_phase(db, client, job_id: str, topic_id: str, ctx: dict, plan: di
                                  "approval": {"status": "error", "reviewer": None}})
             continue
         v = validate_and_expand_unit(client, out, unit, ctx)
-        log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}", v)
+        log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}", v, db=db)
         critique = critique_and_polish_unit(client, out, unit, ctx)
         if critique.get("polished"):
             # Polish rewrites fields freely and can shrink them below the word
             # minimums — re-run the mechanical gate so validation describes the
             # note that ships, and expansion repairs any shrunk field.
             v = validate_and_expand_unit(client, out, unit, ctx)
-            log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}:post_polish", v)
+            log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}:post_polish", v, db=db)
         prior_terms = prior_terms + list((out.get("core", {}) or {}).get("new_terms_introduced", []) or [])
         unit_records.append({
             "unit_ref": unit.get("concept_id"), **out, "unit_hash": canonical_hash(out),
@@ -1675,12 +1969,25 @@ def _run_notes_phase(db, client, job_id: str, topic_id: str, ctx: dict, plan: di
     _set_job(db, job_id, phase="unit_approve")
 
 
-def log_check_outcomes(job_id: str, node: str, result: ValidationResult) -> None:
+def log_check_outcomes(job_id: str, node: str, result: ValidationResult, db=None) -> None:
     """Per-check pass-rate telemetry (§6). A check that fails systematically is a
-    prompt defect, not generation noise."""
+    prompt defect, not generation noise. When `db` is given the outcomes are
+    also persisted to validator_outcomes (best-effort — telemetry never blocks
+    generation) so pass rates can be aggregated per prompt version."""
     for c in result.checks:
         logger.info("validator job=%s node=%s check=%s passed=%s %s",
                     job_id, node, c.name, c.passed, c.detail)
+    if db is None or not result.checks:
+        return
+    try:
+        db.table("validator_outcomes").insert([{
+            "id": str(uuid.uuid4()), "job_id": job_id, "node": node,
+            "check_name": c.name, "passed": c.passed, "blocking": c.blocking,
+            "detail": (c.detail or "")[:500], "prompt_version": PROMPT_VERSION,
+            "model": _model(),  # attributes pass rates to the generating model (A/B canary)
+        } for c in result.checks]).execute()
+    except Exception:  # pragma: no cover - table may not exist yet
+        logger.debug("validator telemetry persist failed", exc_info=True)
 
 
 def enqueue_fanout(job_id: str) -> None:
@@ -1720,23 +2027,15 @@ def run_fanout(db, job_id: str) -> None:
     _set_job(db, job_id, phase="generating_fanout")
     nv = notes["topic_header"]["notes_version"]
     nh = notes["topic_header"]["content_hash"]
-    client = _openai_client()
 
-    # Slides (Node C) — the one finalized fan-out template.
-    try:
-        if client is None:
-            raise RuntimeError("OPENAI_API_KEY not configured")
-        slides = gen_slides(client, ctx, plan, notes)
-        slides.setdefault("deck_meta", {}).update(
-            {"slides_version": "1.0.0", "derived_from_notes_version": nv,
-             "derived_from_content_hash": nh})
-        _upsert_artifact(db, job_id, topic_id, "slides", slides,
-                         gate_type="structural_review", review_status="pending",
-                         artifact_version="1.0.0", derived_from_version=nv, derived_from_hash=nh)
-    except Exception as e:
-        logger.warning("slides gen failed: %s", e)
-        _upsert_artifact(db, job_id, topic_id, "slides", {"error": str(e)},
-                         gate_type="structural_review", review_status="error")
+    # Slides: the legacy topic-level deck was retired (no validators/critic,
+    # stale face limits). Fan-out stores a pointer placeholder; real decks are
+    # generated per concept in the studio with the full quality gates.
+    _upsert_artifact(db, job_id, topic_id, "slides",
+                     {**placeholder_artifact("slides", notes),
+                      "note": "Generated per concept in the studio (concept decks)."},
+                     gate_type="structural_review", review_status="pending",
+                     derived_from_version=nv, derived_from_hash=nh)
 
     # The five JIT artifacts — placeholder until their templates are authored (§7.4).
     for art_type in _JIT_TYPES:
@@ -2161,6 +2460,7 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
                              prior_terms=_prior_terms(db, topic_id, plan, concept_id),
                              grounding=grounding or None)
         v = validate_and_expand_unit(client, out, unit, ctx)
+        log_check_outcomes(job_id, f"notes:{concept_id}", v, db=db)
         critique = critique_and_polish_unit(client, out, unit, ctx)
         if critique.get("polished"):
             # Polish can shrink fields below the word minimums — re-gate and
@@ -2186,7 +2486,7 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
         if artifact_type == "slides":
             content = gen_concept_slides(client, unit, ctx, notes)
             dv = validate_slides_deck(content, unit)
-            log_check_outcomes(job_id, f"slides:{concept_id}", dv)
+            log_check_outcomes(job_id, f"slides:{concept_id}", dv, db=db)
             content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
             content["validation"] = {"all_pass": dv.all_pass,
                                      "failures": [c.model_dump() for c in dv.failures]}
@@ -2195,7 +2495,13 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
             content = _chat_json(client, *p.build_concept_quiz_prompt(unit, ctx, notes),
                                  temperature=0.4, schema=njs.CONCEPT_QUIZ_SCHEMA,
                                  schema_name="concept_quiz")
+            content = normalize_quiz(content)
+            qv = validate_quiz(content, unit)
+            log_check_outcomes(job_id, f"quiz:{concept_id}", qv, db=db)
+            content["validation"] = {"all_pass": qv.all_pass,
+                                     "failures": [c.model_dump() for c in qv.failures]}
 
+    content["prompt_version"] = PROMPT_VERSION
     p_tok, c_tok, cost = meter_read()
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
                     status="ready", approval_status="pending", content=content,
@@ -2313,6 +2619,8 @@ def revise_concept_artifact(db, job_id, topic_id, concept_id, artifact_type, ins
     revised = _chat_json(client, *build_revision_prompt(artifact_type, payload, instruction,
                                                         ctx, grounding=grounding),
                          temperature=0.4)
+    if artifact_type == "quiz":
+        revised = normalize_quiz(revised)
     if artifact_type == "student_notes":
         revised = {**revised, "unit_hash": canonical_hash(revised),
                    "validation": current.get("validation", {})}
@@ -2391,6 +2699,12 @@ def generate_topic_artifact(db, job_id, topic_id, artifact_type) -> None:
     content = _chat_json(client, *builders[artifact_type](ctx, plan, notes),
                          temperature=0.5, schema=schemas.get(artifact_type),
                          schema_name=f"topic_{artifact_type}")
+    if artifact_type == "assignment":
+        av = validate_and_fix_assignment(content, plan)
+        log_check_outcomes(job_id, "assignment", av, db=db)
+        content["validation"] = {"all_pass": av.all_pass,
+                                 "failures": [c.model_dump() for c in av.failures]}
+    content["prompt_version"] = PROMPT_VERSION
     p_tok, c_tok, cost = meter_read()
     _upsert_artifact(db, job_id, topic_id, artifact_type, content,
                      gate_type="review", review_status="ready",

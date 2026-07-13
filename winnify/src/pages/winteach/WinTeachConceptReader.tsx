@@ -10,6 +10,7 @@ import { IBack, ICheck, INotes } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi, CONCEPT_TYPES, type GenJob, type ConceptArtifactState, type ConceptArtType } from '@/api/generation';
 import { studentApi, track } from '@/api/student';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 
 /* ── per-type metadata ───────────────────────────────────────────────────── */
 
@@ -145,7 +146,7 @@ function MermaidBlock({ code }: { code: string }) {
         mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
         try {
           const { svg } = await mermaid.render(`wt-mmd-${++mermaidSeq}`, code);
-          if (alive) setSvg(svg);
+          if (alive) setSvg(sanitizeSvg(svg));
         } catch {
           if (alive) setFailed(true);
         }
