@@ -25,7 +25,8 @@ Deploy the **backend first** — you need its public URL to configure the fronte
    | `SUPABASE_URL` | `https://<project>.supabase.co` |
    | `SUPABASE_SERVICE_KEY` | Supabase → Settings → API → service_role key |
    | `SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
-   | `SUPABASE_JWT_SECRET` | Supabase → Settings → JWT Keys → JWT Secret |
+   | `SUPABASE_JWT_PUBLIC_KEY` | ES256 public key PEM (Supabase → Settings → JWT Keys). **Required** — current Supabase projects sign user tokens with ES256; without this every request after login 401s and the app logs out instantly. |
+   | `SUPABASE_JWT_SECRET` | Supabase → Settings → JWT Keys → JWT Secret (only needed for legacy HS256 projects) |
    | `OPENAI_API_KEY` | `sk-...` (key with gpt-5.6-terra/luna + gpt-5.4-nano access) |
    | `FRONTEND_URL` | Vercel URL from step 2 below (add after that deploy exists) |
    | `DEMO_LOGIN_ENABLED` | `false` ← **required for any real deployment** |
