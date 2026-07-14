@@ -30,15 +30,16 @@ app.add_middleware(
         "http://localhost:5199",
         "http://127.0.0.1:5199",
     ],
-    # This project's own Vercel deployments only — the production domain plus its
-    # preview builds (web-winnify-<hash|git-branch>-<scope>.vercel.app). Scoped to
-    # the `web-winnify` project prefix so an unrelated attacker-controlled
-    # *.vercel.app site cannot make credentialed cross-origin requests.
+    # This project's own Vercel deployments only — the production domains plus
+    # their preview builds (<project>-<hash|git-branch>-<scope>.vercel.app).
+    # Scoped to the known project prefixes (`web-winnify`, `winteach`) so an
+    # unrelated attacker-controlled *.vercel.app site cannot make credentialed
+    # cross-origin requests.
     # Also allows any private-LAN IP on any port (http) so phones and tablets on
     # the same Wi-Fi can reach the dev server — the three RFC-1918 ranges (10.x,
     # 172.16–31.x, 192.168.x) plus loopback.
     allow_origin_regex=(
-        r"https://web-winnify(?:-[a-z0-9-]+)?\.vercel\.app"
+        r"https://(?:web-winnify|winteach)(?:-[a-z0-9-]+)?\.vercel\.app"
         r"|http://(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
         r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
         r"|192\.168\.\d{1,3}\.\d{1,3}"
