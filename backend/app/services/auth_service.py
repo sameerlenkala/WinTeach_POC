@@ -271,8 +271,9 @@ def change_password(db: Client, profile: dict, current_password: str, new_passwo
 
     try:
         db.auth.admin.update_user_by_id(profile["id"], {"password": new_password})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update password: {e}")
+    except Exception:
+        logger.exception("change-password: admin update failed for %s", profile.get("id"))
+        raise HTTPException(status_code=500, detail="Failed to update password")
     return {"success": True}
 
 
@@ -338,8 +339,10 @@ def create_user_directly(db: Client, creator: dict, payload) -> dict:
             "email_confirm": True,
             "user_metadata": {"full_name": payload.full_name, "role": payload.role},
         })
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Could not create user: {e}")
+    except Exception:
+        logger.exception("create_user_directly: auth create_user failed for %s", payload.email)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Could not create user (the email may already be in use)")
 
     if not resp.user:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="User creation failed")
@@ -426,9 +429,9 @@ def register_open(db: Client, email: str, password: str, full_name: str,
     if not org_code or org_code.strip().upper() != _ORG_SIGNUP_CODE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Invalid organization code.")
-    if len(password) < 6:
+    if len(password) < 8:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Password must be at least 6 characters.")
+                            detail="Password must be at least 8 characters.")
 
     email = email.lower().strip()
 
@@ -450,9 +453,10 @@ def register_open(db: Client, email: str, password: str, full_name: str,
             "email_confirm": True,
             "user_metadata": {"full_name": full_name, "role": role},
         })
-    except Exception as e:
+    except Exception:
+        logger.exception("register_open: auth create_user failed for %s", email)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Could not create account: {e}")
+                            detail="Could not create account (the email may already be in use)")
     if not resp.user:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="Account creation failed.")

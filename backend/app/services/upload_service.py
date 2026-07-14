@@ -5,11 +5,28 @@ from app.schemas.upload import UploadCommit, ExtractionStatus
 from app.services.extraction_service import extract_pdf, extract_docx
 
 
-def get_extraction(db: Client, upload_id: str) -> ExtractionStatus:
+def check_upload_access(user: dict, upload: dict) -> None:
+    """Authorize access to a single upload row. get_db bypasses RLS, so tenancy
+    is enforced here: superadmin sees all; admin sees its own institute; faculty
+    sees uploads it created (or institute-less legacy/demo rows). Anyone else —
+    including students and other institutes' staff — gets 403. Mirrors the
+    course_service._check_access rule."""
+    role = user.get("role")
+    if role == "superadmin":
+        return
+    if role == "admin" and upload.get("institute_id") == user.get("institute_id"):
+        return
+    if role == "faculty" and upload.get("uploaded_by") in (user["id"], None, ""):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+def get_extraction(db: Client, user: dict, upload_id: str) -> ExtractionStatus:
     row = db.table("uploads").select("*").eq("id", upload_id).single().execute()
     if not row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
     upload = row.data
+    check_upload_access(user, upload)
     extraction_result = upload.get("extraction_result") or {}
     return ExtractionStatus(
         upload_id=upload_id,
@@ -24,12 +41,17 @@ def commit_upload(db: Client, user: dict, upload_id: str, payload: UploadCommit)
     upload_row = db.table("uploads").select("*").eq("id", upload_id).single().execute()
     if not upload_row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
+    check_upload_access(user, upload_row.data)
     if upload_row.data.get("status") != "done":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Extraction not complete yet")
 
     course_row = db.table("courses").select("*").eq("id", payload.course_id).single().execute()
     if not course_row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    # Committing writes COs/units/topics into this course — require write access
+    # to the target course, not just to the upload.
+    from app.services.course_service import _check_access
+    _check_access(user, course_row.data)
 
     committed_cos: list[str] = []
     committed_topics: list[str] = []

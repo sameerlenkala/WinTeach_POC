@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client
 from app.db.supabase import get_client
+from app.core.config import settings
 from app.core.security import decode_supabase_jwt
 
 bearer = HTTPBearer()
@@ -30,14 +31,18 @@ async def get_current_user(
 
     # Demo personas (e.g. superadmin) may have no profiles row because
     # profiles.id FKs to real auth.users. Their JWTs are signed by this backend
-    # and carry an app role claim, so the claims are trustworthy. Supabase
-    # tokens carry role="authenticated", which never matches an app role.
-    role = payload.get("role")
-    if role in ("superadmin", "admin", "faculty", "student"):
-        email = payload.get("email", "")
-        return {"id": user_id, "email": email,
-                "full_name": email.split("@")[0] if email else "User",
-                "role": role, "institute_id": None}
+    # and carry an app role claim. The signature is now verified upstream, but
+    # the backend signs those tokens with the anon key — which is only a secret
+    # in demo mode — so this profile-less role fallback is gated behind the demo
+    # flag. In a real deployment (demo off) a token with no matching profile is
+    # rejected. Supabase user tokens carry role="authenticated", never an app role.
+    if settings.demo_login_enabled:
+        role = payload.get("role")
+        if role in ("superadmin", "admin", "faculty", "student"):
+            email = payload.get("email", "")
+            return {"id": user_id, "email": email,
+                    "full_name": email.split("@")[0] if email else "User",
+                    "role": role, "institute_id": None}
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User profile not found")
 

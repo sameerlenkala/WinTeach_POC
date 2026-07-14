@@ -3,11 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.router import router as v1_router
 
+# Interactive API docs expose the full endpoint/schema surface. Keep them on for
+# local/demo environments (same flag that gates demo auth), off in real
+# deployments so the API surface isn't publicly enumerable.
+_docs_enabled = settings.demo_login_enabled
+
 app = FastAPI(
     title="Winnify API",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 app.add_middleware(
@@ -24,11 +30,15 @@ app.add_middleware(
         "http://localhost:5199",
         "http://127.0.0.1:5199",
     ],
-    # Vercel previews (https) + any private-LAN IP on any port (http) so phones
-    # and tablets on the same Wi-Fi can reach the dev server. Covers the three
-    # RFC-1918 ranges — 10.x, 172.16–31.x, 192.168.x — plus loopback.
+    # This project's own Vercel deployments only — the production domain plus its
+    # preview builds (web-winnify-<hash|git-branch>-<scope>.vercel.app). Scoped to
+    # the `web-winnify` project prefix so an unrelated attacker-controlled
+    # *.vercel.app site cannot make credentialed cross-origin requests.
+    # Also allows any private-LAN IP on any port (http) so phones and tablets on
+    # the same Wi-Fi can reach the dev server — the three RFC-1918 ranges (10.x,
+    # 172.16–31.x, 192.168.x) plus loopback.
     allow_origin_regex=(
-        r"https://.*\.vercel\.app"
+        r"https://web-winnify(?:-[a-z0-9-]+)?\.vercel\.app"
         r"|http://(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
         r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
         r"|192\.168\.\d{1,3}\.\d{1,3}"

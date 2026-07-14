@@ -31,9 +31,10 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     jwt_algorithm: str = "HS256"
     invite_expiry_days: int = 7
-    # Demo personas (hardcoded credentials incl. superadmin) — on for local/demo
-    # deployments, MUST be false in any real deployment: DEMO_LOGIN_ENABLED=false.
-    demo_login_enabled: bool = True
+    # Demo personas (hardcoded credentials incl. superadmin). Default OFF so a
+    # real deployment is secure unless it explicitly opts in. Turn on ONLY for
+    # local/demo environments via DEMO_LOGIN_ENABLED=true.
+    demo_login_enabled: bool = False
 
 
 settings = Settings()  # type: ignore[call-arg]

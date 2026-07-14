@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +17,8 @@ from app.schemas.auth import (
     MeResponse, UpdateMeRequest, ChangePasswordRequest,
 )
 from app.services import auth_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -187,7 +190,8 @@ def reset_password(payload: ResetPasswordRequest, db: Client = Depends(get_db)):
 
     try:
         db.auth.admin.update_user_by_id(user_map[email], {"password": payload.new_password})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update password: {e}")
+    except Exception:
+        logger.exception("reset-password: admin update_user_by_id failed for %s", email)
+        raise HTTPException(status_code=500, detail="Failed to update password")
 
     return {"success": True}

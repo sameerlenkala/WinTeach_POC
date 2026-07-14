@@ -1,4 +1,6 @@
 import logging
+import os
+import re
 import uuid
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
 from supabase import Client
@@ -18,6 +20,15 @@ ALLOWED_TYPES = {
 MAX_MB = 10  # reduced from 20 MB
 
 _faculty_above = require_role("faculty", "admin", "superadmin")
+
+
+def _safe_filename(name: str) -> str:
+    """Reduce a client-supplied filename to a single, path-traversal-safe segment
+    before it goes into a storage key. Strips any directory components ('../',
+    '/', '\\'), keeps only [A-Za-z0-9._-], drops leading dots, and caps length."""
+    base = os.path.basename((name or "").replace("\\", "/"))
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base).lstrip(".")
+    return (base or "file")[:120]
 
 
 @router.post("", status_code=201)
@@ -40,7 +51,8 @@ async def upload_syllabus(
         )
 
     upload_id = str(uuid.uuid4())
-    storage_path = f"syllabi/{user['id']}/{upload_id}/{file.filename}"
+    safe_name = _safe_filename(file.filename)
+    storage_path = f"syllabi/{user['id']}/{upload_id}/{safe_name}"
 
     try:
         db.storage.from_("syllabi").upload(storage_path, content, {"content-type": file.content_type})
@@ -74,9 +86,10 @@ async def upload_syllabus(
     except EncryptedPDFError as exc:
         db.table("uploads").update({"status": "failed"}).eq("id", upload_id).execute()
         raise HTTPException(status_code=422, detail=str(exc))
-    except Exception as exc:
+    except Exception:
+        logger.exception("text extraction failed for upload %s", upload_id)
         db.table("uploads").update({"status": "failed"}).eq("id", upload_id).execute()
-        raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}")
+        raise HTTPException(status_code=422, detail="Text extraction failed")
 
     # ── Primary: 5-prompt pipeline (settings.generation_model) ───────────────
     pipeline_out = pipeline_service.run_pipeline(flat_text)
@@ -91,9 +104,10 @@ async def upload_syllabus(
                 extraction = extraction_service.extract_pdf(content)
             else:
                 extraction = extraction_service.extract_docx(content)
-        except Exception as exc:
+        except Exception:
+            logger.exception("fallback extraction failed for upload %s", upload_id)
             db.table("uploads").update({"status": "failed"}).eq("id", upload_id).execute()
-            raise HTTPException(status_code=422, detail=f"Extraction failed: {exc}")
+            raise HTTPException(status_code=422, detail="Extraction failed")
         extraction_dict = extraction.model_dump()
         ai_extraction_dict = extraction.ai_extraction.model_dump() if extraction.ai_extraction else None
 
@@ -144,7 +158,7 @@ def get_extraction(
     user: dict = Depends(get_current_user),
     db: Client = Depends(get_db),
 ):
-    return upload_service.get_extraction(db, upload_id)
+    return upload_service.get_extraction(db, user, upload_id)
 
 
 @router.post("/{upload_id}/commit")
@@ -179,6 +193,7 @@ def reextract_field(
         raise HTTPException(status_code=404, detail="Upload not found")
 
     row = result.data[0]
+    upload_service.check_upload_access(user, row)
     extraction_result: dict = row.get("extraction_result") or {}
 
     # Read and update attempt counter
