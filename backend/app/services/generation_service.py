@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 # validator telemetry and quality regressions can be attributed to the prompt
 # set that produced them.
 from app.services.generation_prompts import PROMPT_VERSION  # noqa: E402
+from app.services.latex_sanitizer import sanitize_content
 
 # Offline/test fallbacks only — live runs route via settings.generation_model /
 # settings.generation_light_model (see _model). Values mirror the config
@@ -2111,6 +2112,10 @@ def _upsert_artifact(db, job_id: str, topic_id: str, artifact_type: str, content
     its id. Artifacts are unique per (topic_id, type), so a re-run under a new
     job must overwrite the existing row (repointing job_id) rather than insert a
     duplicate — otherwise the unique constraint aborts the job."""
+    content, n_fixed = sanitize_content(content)
+    if n_fixed:
+        logger.warning("latex sanitizer repaired %d string(s) in %s artifact for topic %s",
+                       n_fixed, artifact_type, topic_id)
     row = {"job_id": job_id, "topic_id": topic_id, "type": artifact_type,
            "content": content, **fields}
     existing = (
@@ -2376,6 +2381,11 @@ def _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, **fields) -
     existing = _concept_row(db, topic_id, concept_id, artifact_type)
     fields["updated_at"] = "now()"
     fields.pop("updated_at", None)  # let DB default handle; avoid string cast issues
+    if isinstance(fields.get("content"), (dict, list)):
+        fields["content"], n_fixed = sanitize_content(fields["content"])
+        if n_fixed:
+            logger.warning("latex sanitizer repaired %d string(s) in %s/%s",
+                           n_fixed, concept_id, artifact_type)
     # Materialize the revision-card count for student notes so Learn Home's
     # due-count never has to pull note content (see student.flashcard_count_for).
     if artifact_type == "student_notes" and isinstance(fields.get("content"), dict):

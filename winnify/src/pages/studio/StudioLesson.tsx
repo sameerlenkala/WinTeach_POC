@@ -19,7 +19,10 @@ import StudioCelebrate from './StudioCelebrate';
    Small rendering primitives (studio-native, mobile type scale)
    ════════════════════════════════════════════════════════════════════════ */
 
-const unescapeNL = (s: string) => s.replace(/\\n/g, '\n');
+// Literal "\n" → real newline, except inside $…$ / $$…$$ where "\n" starts
+// LaTeX commands (\neg, \neq, \nexists, …) and must survive for KaTeX.
+const unescapeNL = (s: string) =>
+  s.replace(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)|\\n/g, (_m, math) => math ?? '\n');
 const asText = (v: unknown): string =>
   typeof v === 'string' ? v : v == null ? '' : Array.isArray(v) ? v.filter(Boolean).map(String).join('\n\n') : String(v);
 
@@ -46,7 +49,16 @@ function inline(text: string, key = 'k'): ReactNode[] {
     if (seg.startsWith('$$') && seg.endsWith('$$') && seg.length > 4) return math(seg.slice(2, -2), true);
     if (seg.startsWith('$') && seg.endsWith('$') && seg.length > 2) return math(seg.slice(1, -1), false);
     if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) return <strong key={k}>{seg.slice(2, -2)}</strong>;
-    if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) return <code key={k}>{seg.slice(1, -1)}</code>;
+    if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
+      const inner = seg.slice(1, -1);
+      // Models sometimes wrap math in `code` fences instead of $…$; a real
+      // identifier never has a backslash command, so typeset if it's valid LaTeX.
+      if (katexMod && /\\[a-zA-Z]/.test(inner)) {
+        try { return <span key={k} dangerouslySetInnerHTML={{ __html: katexMod.renderToString(inner, { throwOnError: true }) }} />; }
+        catch { /* fall through to code */ }
+      }
+      return <code key={k}>{inner}</code>;
+    }
     if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) return <em key={k}>{seg.slice(1, -1)}</em>;
     return <span key={k}>{seg}</span>;
   });
@@ -85,6 +97,21 @@ function Rich({ text }: { text: unknown }) {
       })}
     </>
   );
+}
+
+// Rich text for studio surfaces outside the lesson player (revision cards,
+// formula sheet, PYQs): same rendering as lesson prose, plus a self-contained
+// KaTeX load — the player's central loader (which kicks loadKatex for lesson
+// content) doesn't run on those screens.
+export function StudioRichText({ text }: { text: unknown }) {
+  const [, setTick] = useState(0);
+  const str = asText(text);
+  useEffect(() => {
+    // Load KaTeX for $…$ math OR LaTeX mis-wrapped in `code` fences.
+    const needs = str.includes('$') || /`[^`\n]*\\[a-zA-Z][^`\n]*`/.test(str);
+    if (!katexMod && needs) loadKatex().then(() => setTick(t => t + 1));
+  }, [str]);
+  return <Rich text={text} />;
 }
 
 // Arrays render as point lists; prose falls through to Rich.
@@ -234,18 +261,24 @@ function Stepped({ text }: { text: unknown }) {
   );
 }
 
-// Dry-run traces reveal line by line inside the mono block.
+// Dry-run traces reveal line by line. Each line is rich text (not raw mono):
+// math-heavy subjects put $…$ LaTeX, **bold**, and `code` in the trace.
 function SteppedTrace({ text: raw }: { text: unknown }) {
   const joined = unescapeNL(Array.isArray(raw) ? raw.filter(Boolean).map(String).join('\n') : asText(raw));
   const text = joined.includes('\n') ? joined : splitInlineSteps(joined).replace(/\n\n/g, '\n');
   const lines = text.split('\n');
   const [shown, setShown] = useState(2);
   useEffect(() => { setShown(2); }, [text]);
-  if (lines.length < 5) return <pre className="st-code" style={{ whiteSpace: 'pre-wrap' }}>{text}</pre>;
+  const block = (body: string[]) => (
+    <div className="st-code" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {body.map((ln, i) => <div key={i}>{ln.trim() ? <StudioRichText text={ln} /> : ' '}</div>)}
+    </div>
+  );
+  if (lines.length < 5) return block(lines);
   const done = shown >= lines.length;
   return (
     <>
-      <pre className="st-code" style={{ whiteSpace: 'pre-wrap' }}>{lines.slice(0, shown).join('\n')}</pre>
+      {block(lines.slice(0, shown))}
       {!done && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button className="st-chip st-press" style={{ background: 'var(--st-lime)', color: 'var(--st-ink-on-lime)', borderColor: 'var(--st-lime)', fontWeight: 700 }}
@@ -1272,29 +1305,83 @@ function SlidesPlayer({ content }: { content: any }) {
       <div className="st-deck" ref={deckRef} onScroll={onScroll} style={{ flex: 1, minHeight: 0 }}>
         {slides.map((s: any, i: number) => {
           const bullets: string[] = (s.body_blocks ?? []).filter((b: any) => typeof b === 'string' && b.trim());
+          // `code` is a {content, language} object from the generator — and it is
+          // present (with null content) even on non-code slides, so never
+          // stringify it wholesale; extract the text or skip.
+          const codeText: string | null =
+            typeof s.code === 'string' && s.code.trim() ? s.code
+              : typeof s.code?.content === 'string' && s.code.content.trim() ? s.code.content
+                : typeof s.code_block === 'string' && s.code_block.trim() ? s.code_block : null;
+          const hasVisual = !!(s.visual && (s.visual.mermaid_code || (s.visual.rows?.length ?? 0) > 0));
+          // Same layout fallback chain as the faculty reader's SlideCard.
+          const layout: string = s.layout
+            ?? (s.myth || s.reality ? 'myth_reality' : codeText ? 'code' : hasVisual ? 'visual' : bullets.length ? 'bullets' : 'statement');
+          const half = Math.ceil(bullets.length / 2);
+          const renderBullets = (items: any[], kb: string) => items
+            .filter(b => b != null && asText(b).trim())
+            .map((b, bi) => (
+              <div key={`${kb}${bi}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--st-lime)', flexShrink: 0, marginTop: 8 }} />
+                <span style={{ font: '450 14px/1.6 var(--st-sans)', color: 'var(--st-text-2)' }}>{inline(asText(b), `${kb}${bi}`)}</span>
+              </div>
+            ));
+          const tintCard = (label: string, color: string, body: ReactNode, key?: string) => (
+            <div key={key} style={{ borderRadius: 14, padding: '12px 14px', background: `color-mix(in oklab, ${color} 9%, transparent)`, border: `1px solid color-mix(in oklab, ${color} 35%, transparent)` }}>
+              <div className="st-eyebrow" style={{ color, marginBottom: 6 }}>{label}</div>
+              {body}
+            </div>
+          );
           return (
             <div key={i} className="st-slide">
               {s.role && <div className="st-eyebrow" style={{ color: 'var(--st-aqua)', marginBottom: 8 }}>{s.role}</div>}
+              {s.kicker && <div className="st-eyebrow" style={{ color: 'var(--st-text-3)', marginBottom: 6 }}>{asText(s.kicker)}</div>}
               <div style={{ font: '700 21px/1.25 var(--st-display)', letterSpacing: '-0.02em', color: 'var(--st-text)', marginBottom: 14 }}>
-                {s.title}
+                {inline(asText(s.title), `st${i}`)}
               </div>
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {(s.code || s.code_block) && <pre className="st-code" style={{ fontSize: 11.5 }}>{asText(s.code ?? s.code_block)}</pre>}
-                {bullets.map((b, bi) => (
-                  <div key={bi} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--st-lime)', flexShrink: 0, marginTop: 8 }} />
-                    <span style={{ font: '450 14.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)' }}>{inline(b, `s${i}b${bi}`)}</span>
-                  </div>
-                ))}
+                {layout === 'myth_reality' ? (
+                  <>
+                    {tintCard('✗ Myth', '#fb7185', <>
+                      {s.myth && <div style={{ font: '600 14px/1.5 var(--st-sans)', color: 'var(--st-text)', marginBottom: 6 }}>{inline(asText(s.myth), `my${i}`)}</div>}
+                      {renderBullets(bullets.slice(0, half), `s${i}m`)}
+                    </>)}
+                    {tintCard('✓ Reality', '#4ade80', <>
+                      {s.reality && <div style={{ font: '600 14px/1.5 var(--st-sans)', color: 'var(--st-text)', marginBottom: 6 }}>{inline(asText(s.reality), `re${i}`)}</div>}
+                      {renderBullets(bullets.slice(half), `s${i}r`)}
+                    </>)}
+                  </>
+                ) : layout === 'two_column' ? (
+                  <>
+                    {tintCard(asText(s.left_heading) || 'Advantages', '#4ade80', <>{renderBullets(s.left_bullets ?? [], `s${i}l`)}</>)}
+                    {tintCard(asText(s.right_heading) || 'Limitations', '#fb7185', <>{renderBullets(s.right_bullets ?? [], `s${i}rt`)}</>)}
+                  </>
+                ) : layout === 'terminology' ? (
+                  (s.terms ?? []).map((t: any, ti: number) => (
+                    <div key={ti} style={{ borderRadius: 14, padding: '10px 14px', background: 'var(--st-card, rgba(255,255,255,.04))', border: '1px solid var(--st-border-2)' }}>
+                      <span style={{ font: '700 13.5px var(--st-sans)', color: 'var(--st-text)' }}>{inline(asText(t?.term), `tm${i}${ti}`)}</span>
+                      <div style={{ font: '450 13px/1.55 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 2 }}>{inline(asText(t?.definition), `td${i}${ti}`)}</div>
+                    </div>
+                  ))
+                ) : layout === 'definition' && s.definition_core ? (
+                  <>
+                    <div style={{ borderRadius: 14, padding: '13px 16px', background: 'rgba(205,244,99,.08)', borderLeft: '3px solid var(--st-lime)' }}>
+                      <div style={{ font: '600 14.5px/1.55 var(--st-sans)', color: 'var(--st-text)' }}>{inline(asText(s.definition_core), `dc${i}`)}</div>
+                    </div>
+                    {renderBullets(bullets, `s${i}b`)}
+                  </>
+                ) : (
+                  <>
+                    {codeText && layout !== 'visual' && <Code code={codeText} language={typeof s.code === 'object' ? s.code?.language : null} />}
+                    {hasVisual && (s.visual.mermaid_code
+                      ? <Mermaid code={String(s.visual.mermaid_code)} />
+                      : <Tbl cols={s.visual.columns ?? []} rows={s.visual.rows ?? []} />)}
+                    {renderBullets(bullets, `s${i}b`)}
+                  </>
+                )}
                 {(s.sections ?? []).map((sec: any, si: number) => (
                   <div key={si}>
-                    {sec.heading && <div style={{ font: '700 13px var(--st-display)', color: 'var(--st-text)', marginBottom: 6 }}>{sec.heading}</div>}
-                    {(sec.bullets ?? []).map((b: string, bi: number) => (
-                      <div key={bi} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--st-lime)', flexShrink: 0, marginTop: 8 }} />
-                        <span style={{ font: '450 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)' }}>{inline(b, `sec${si}b${bi}`)}</span>
-                      </div>
-                    ))}
+                    {sec.heading && <div style={{ font: '700 13px var(--st-display)', color: 'var(--st-text)', marginBottom: 6 }}>{inline(asText(sec.heading), `sh${si}`)}</div>}
+                    {renderBullets(sec.bullets ?? [], `sec${si}b`)}
                   </div>
                 ))}
               </div>
@@ -1355,12 +1442,16 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
     studentApi.course(courseId).then(c => setCode(c.code ?? c.name ?? '')).catch(() => {});
   }, [courseId]);
 
-  // Lessons containing $…$ math load KaTeX once, then re-render.
+  // Lessons with $…$ math (or LaTeX mis-wrapped in `code` fences) load KaTeX
+  // once, then re-render.
   const [, setMathTick] = useState(0);
   useEffect(() => {
     if (!content || katexMod) return;
     try {
-      if (JSON.stringify(content).includes('$')) loadKatex().then(() => setMathTick(t => t + 1));
+      const s = JSON.stringify(content);
+      // Serialized content doubles backslashes, so match `…\\command inside a
+      // `code` fence (mis-wrapped LaTeX with no surrounding $…$).
+      if (s.includes('$') || /`[^`]*\\\\[a-zA-Z]/.test(s)) loadKatex().then(() => setMathTick(t => t + 1));
     } catch { /* non-serialisable content — skip */ }
   }, [content]);
 

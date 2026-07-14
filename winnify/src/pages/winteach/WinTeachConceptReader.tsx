@@ -120,7 +120,7 @@ function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
             <tr key={ri}>
               {(Array.isArray(r) ? r : [r]).map((cell: any, ci: number) => (
                 <td key={ci} style={{ padding: '8px 12px', borderBottom: ri < rows.length - 1 ? `1px solid ${W.border}` : 'none', color: W.text2, lineHeight: 1.5, verticalAlign: 'top' }}>
-                  {cell == null ? '—' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)}
+                  {cell == null ? '—' : typeof cell === 'object' ? JSON.stringify(cell) : <RichText inline text={String(cell)} />}
                 </td>
               ))}
             </tr>
@@ -170,46 +170,13 @@ const loadKatex = () =>
   (katexPromise ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')])
     .then(([k]) => (k as any).default ?? k));
 
-type MathSeg = { kind: 'text' | 'math'; value: string; display: boolean };
-function splitMath(text: string): MathSeg[] {
-  const segs: MathSeg[] = [];
-  const re = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    if (m.index > last) segs.push({ kind: 'text', value: text.slice(last, m.index), display: false });
-    segs.push({ kind: 'math', value: (m[1] ?? m[2]) as string, display: m[1] != null });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) segs.push({ kind: 'text', value: text.slice(last), display: false });
-  return segs;
-}
-
-// Typesets LaTeX wrapped in $…$ / $$…$$ via lazily-loaded KaTeX; anything else
-// (including content generated before the LaTeX prompt rule) passes through as
-// plain text, and invalid LaTeX falls back to the raw delimited source.
+// Inline rich text: $…$/$$…$$ math via KaTeX, plus **bold**, `code`, and LaTeX
+// that models mis-wrapped in `code` fences. Kept as a named export because the
+// quiz, cheat-sheet and topic-artifact views import it; it delegates to
+// RichText's inline renderer so every surface handles the same markup instead
+// of leaving `code`/**bold** as literal source.
 export function MathText({ text }: { text: any }) {
-  const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
-  const hasMath = /\$[^$]/.test(str);
-  const [nodes, setNodes] = useState<React.ReactNode[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    if (!hasMath) { setNodes(null); return; }
-    loadKatex().then(katex => {
-      if (!alive) return;
-      setNodes(splitMath(str).map((s, i) => {
-        if (s.kind === 'text') return <span key={i}>{s.value}</span>;
-        try {
-          return <span key={i} dangerouslySetInnerHTML={{ __html: katex.renderToString(s.value, { displayMode: s.display, throwOnError: true }) }} />;
-        } catch {
-          return <span key={i}>{s.display ? `$$${s.value}$$` : `$${s.value}$`}</span>;
-        }
-      }));
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [str, hasMath]);
-  if (!hasMath || nodes == null) return <>{str}</>;
-  return <>{nodes}</>;
+  return <RichText inline text={text} />;
 }
 
 // ── rich prose: paragraphs + inline **bold** / *italic* / `code` / $math$ ────
@@ -246,7 +213,15 @@ function renderInline(text: string, katex: any | null, keyBase: string): React.R
       return <strong key={key} style={{ color: W.text, fontWeight: 600 }}>{seg.slice(2, -2)}</strong>;
     }
     if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
-      return <code key={key} style={{ fontFamily: MONO, fontSize: '0.88em', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 4, padding: '1px 5px' }}>{seg.slice(1, -1)}</code>;
+      const inner = seg.slice(1, -1);
+      // Models sometimes wrap math in `code` fences instead of $…$, e.g.
+      // `Meter(m1) \rightarrow Calibrated(m1)`. A real identifier never contains
+      // a backslash command, so if the span is valid LaTeX, typeset it.
+      if (katex && /\\[a-zA-Z]/.test(inner)) {
+        try { return <span key={key} dangerouslySetInnerHTML={{ __html: katex.renderToString(inner, { throwOnError: true }) }} />; }
+        catch { /* not valid LaTeX — render as code below */ }
+      }
+      return <code key={key} style={{ fontFamily: MONO, fontSize: '0.88em', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 4, padding: '1px 5px' }}>{inner}</code>;
     }
     if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) {
       return <em key={key}>{seg.slice(1, -1)}</em>;
@@ -270,12 +245,16 @@ const CALLOUT_RE = /^>\s*(tip|warning|key idea|recall|exam tip|note)\s*[:—-]\s
 // Block prose: splits on blank lines into paragraphs. `inline` renders a single
 // run (for bullets, titles, one-liners).
 // Models sometimes double-escape newlines inside JSON strings; render them as
-// real breaks instead of literal "\n" glyphs.
-const unescapeNL = (s: string) => s.replace(/\\n/g, '\n');
+// real breaks instead of literal "\n" glyphs. Math segments are skipped: inside
+// $…$ / $$…$$, "\n" is the start of LaTeX commands (\neg, \neq, \nexists, …),
+// and an injected newline would also stop INLINE_RE from matching the formula.
+const unescapeNL = (s: string) =>
+  s.replace(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)|\\n/g, (_m, math) => math ?? '\n');
 
-function RichText({ text, inline }: { text: any; inline?: boolean }) {
+export function RichText({ text, inline }: { text: any; inline?: boolean }) {
   const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
-  const katex = useKatex(/\$[^$]/.test(str));
+  // Load KaTeX for real $…$ math OR LaTeX mis-wrapped in `code` fences.
+  const katex = useKatex(/\$[^$]/.test(str) || /`[^`\n]*\\[a-zA-Z][^`\n]*`/.test(str));
   if (!str) return null;
   if (inline) return <>{renderInline(str, katex, 'i')}</>;
   const paras = str.split(/\n\s*\n/).filter(p => p.trim());
@@ -390,7 +369,9 @@ function SteppedParagraphs({ text }: { text: any }) {
   );
 }
 
-// Dry-run traces reveal line by line inside the mono block.
+// Dry-run traces reveal line by line. Each line is rich text (not raw mono):
+// math-heavy subjects put $…$ LaTeX, **bold**, and `code` in the trace, so a
+// plain <pre> would leave all of it as literal source.
 function SteppedTrace({ text: raw }: { text: any }) {
   // Structured notes emit step arrays; legacy notes emit newline-joined prose.
   // Run-on single-line traces get their inline step markers recovered too.
@@ -399,17 +380,18 @@ function SteppedTrace({ text: raw }: { text: any }) {
   const lines = text.split('\n');
   const [shown, setShown] = useState(2);
   useEffect(() => { setShown(2); }, [text]);
-  const pre = (body: string) => (
-    <pre style={{
+  const pre = (body: string[]) => (
+    <div style={{
       background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 8, padding: '12px 16px',
-      overflow: 'auto', fontSize: 12.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', fontFamily: MONO, color: W.text,
-    }}>{body}</pre>
+      overflow: 'auto', fontSize: 13, lineHeight: 1.7, margin: 0, color: W.text,
+      display: 'flex', flexDirection: 'column', gap: 7,
+    }}>{body.map((ln, i) => <div key={i}>{ln.trim() ? <RichText inline text={ln} /> : ' '}</div>)}</div>
   );
-  if (lines.length < 5) return pre(text);
+  if (lines.length < 5) return pre(lines);
   const done = shown >= lines.length;
   return (
     <>
-      {pre(lines.slice(0, shown).join('\n'))}
+      {pre(lines.slice(0, shown))}
       {!done && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button style={stepBtn} onClick={() => setShown(s => Math.min(s + 1, lines.length))}>What happens next? ({shown}/{lines.length})</button>
@@ -991,7 +973,7 @@ function NotesArticle({ content }: { content: any }) {
             <div style={{ marginTop: 12 }}>
               <DataTable columns={['Best case', 'Average case', 'Worst case', 'Space']}
                 rows={[[grid.best_case_time, grid.average_case_time, grid.worst_case_time, grid.space_complexity]]} />
-              {grid.justification && grid.justification !== 'N/A' && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: W.text3 }}>{grid.justification}</p>}
+              {grid.justification && grid.justification !== 'N/A' && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: W.text3 }}><RichText inline text={grid.justification} /></p>}
             </div>
           )}
         </Section>
@@ -1029,7 +1011,7 @@ function NotesArticle({ content }: { content: any }) {
               <div style={{ border: `1px solid ${W.border}`, borderLeft: '3px solid var(--status-green)', borderRadius: 8, padding: '12px 16px', background: W.card }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.greenFg, marginBottom: 6 }}>Advantages</div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, listStyle: 'disc' }}>
-                  {advantages.map((a: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof a === 'string' ? a : JSON.stringify(a)}</li>)}
+                  {advantages.map((a: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof a === 'string' ? <RichText inline text={a} /> : JSON.stringify(a)}</li>)}
                 </ul>
               </div>
             )}
@@ -1037,7 +1019,7 @@ function NotesArticle({ content }: { content: any }) {
               <div style={{ border: `1px solid ${W.border}`, borderLeft: `3px solid ${W.orangeFg}`, borderRadius: 8, padding: '12px 16px', background: W.card }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, color: W.orangeFg, marginBottom: 6 }}>Trade-offs</div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, listStyle: 'disc' }}>
-                  {disadvantages.map((d: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof d === 'string' ? d : JSON.stringify(d)}</li>)}
+                  {disadvantages.map((d: any, i: number) => <li key={i} style={{ marginBottom: 4, display: 'list-item' }}>{typeof d === 'string' ? <RichText inline text={d} /> : JSON.stringify(d)}</li>)}
                 </ul>
               </div>
             )}
@@ -1047,8 +1029,8 @@ function NotesArticle({ content }: { content: any }) {
       {hasApplications && (
         <Section n={++n} title="Real-world applications">
           {Array.isArray(applications)
-            ? <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>{applications.map((a: any, i: number) => <li key={i} style={{ marginBottom: 6 }}>{typeof a === 'string' ? a : a?.text ?? JSON.stringify(a)}</li>)}</ul>
-            : <p style={{ margin: 0 }}>{applications}</p>}
+            ? <ul style={{ margin: 0, paddingLeft: 20, listStyle: 'disc' }}>{applications.map((a: any, i: number) => { const s = typeof a === 'string' ? a : a?.text; return <li key={i} style={{ marginBottom: 6 }}>{typeof s === 'string' ? <RichText inline text={s} /> : JSON.stringify(a)}</li>; })}</ul>
+            : <p style={{ margin: 0 }}><RichText inline text={String(applications)} /></p>}
         </Section>
       )}
       {hasAnalysis && (
@@ -1151,7 +1133,7 @@ function NotesArticle({ content }: { content: any }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
               {revision.important_definitions.map((d: any, i: number) => (
                 <div key={i} style={{ fontSize: 13.5 }}>
-                  <span style={{ fontWeight: 600, color: W.text }}>{d.term}</span> — {d.definition}
+                  <span style={{ fontWeight: 600, color: W.text }}><RichText inline text={d.term} /></span> — <RichText inline text={d.definition} />
                 </div>
               ))}
             </div>
@@ -1184,7 +1166,7 @@ function NotesArticle({ content }: { content: any }) {
               <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 10, padding: '12px 16px', background: W.card }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 13.5, color: W.text, marginBottom: 4 }}>{t.term}</div>
                 {t.formal_definition && <div style={{ fontSize: 12.5, lineHeight: 1.6, color: W.text2 }}><MathText text={t.formal_definition} /></div>}
-                {t.simple_explanation && <div style={{ fontSize: 12, color: W.text3, marginTop: 5, lineHeight: 1.55 }}>In plain terms: {t.simple_explanation}</div>}
+                {t.simple_explanation && <div style={{ fontSize: 12, color: W.text3, marginTop: 5, lineHeight: 1.55 }}>In plain terms: <RichText inline text={t.simple_explanation} /></div>}
                 {(t.related_terms?.length ?? 0) > 0 && <div style={{ fontSize: 11.5, color: 'var(--tint-brand-fg)', marginTop: 6 }}>{t.related_terms.join(' · ')}</div>}
               </div>
             ))}
@@ -1194,10 +1176,10 @@ function NotesArticle({ content }: { content: any }) {
       {hasRelated && (
         <Section n={++n} title="Related topics">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, lineHeight: 1.65 }}>
-            {related.previous_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Builds on:</span> {related.previous_subtopic ? `${related.previous_subtopic} — ` : ''}{related.previous_connection}</div>}
-            {related.next_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Leads to:</span> {related.next_subtopic ? `${related.next_subtopic} — ` : ''}{related.next_connection}</div>}
+            {related.previous_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Builds on:</span> {related.previous_subtopic ? `${related.previous_subtopic} — ` : ''}<RichText inline text={related.previous_connection} /></div>}
+            {related.next_connection && <div><span style={{ fontWeight: 600, color: W.text }}>Leads to:</span> {related.next_subtopic ? `${related.next_subtopic} — ` : ''}<RichText inline text={related.next_connection} /></div>}
             {(related.builds_toward?.length ?? 0) > 0 && <div><span style={{ fontWeight: 600, color: W.text }}>Builds toward:</span> {related.builds_toward.join(', ')}</div>}
-            {related.industry_relevance && <div><span style={{ fontWeight: 600, color: W.text }}>In industry:</span> {related.industry_relevance}</div>}
+            {related.industry_relevance && <div><span style={{ fontWeight: 600, color: W.text }}>In industry:</span> <RichText inline text={related.industry_relevance} /></div>}
           </div>
         </Section>
       )}

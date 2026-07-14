@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, RotateCcw, Check } from 'lucide-react';
 import { studentApi, track, type RevisionPayload } from '@/api/student';
+import { RichText } from '@/pages/winteach/WinTeachConceptReader';
 
 type Tab = 'cards' | 'formulas' | 'practice';
 
@@ -136,13 +137,13 @@ function FlashcardRunner({ data, courseId }: { data: RevisionPayload; courseId: 
         {!flipped ? (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12 }}>Question</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, lineHeight: 1.4, color: 'var(--text)' }}>{card.front}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, lineHeight: 1.4, color: 'var(--text)' }}><RichText inline text={card.front} /></div>
             <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-3)' }}>Tap to reveal</div>
           </>
         ) : (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tint-brand-fg)', marginBottom: 12 }}>Answer</div>
-            <div style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--text)' }}>{card.back}</div>
+            <div style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--text)' }}><RichText text={card.back} /></div>
           </>
         )}
       </div>
@@ -176,8 +177,8 @@ function FormulaSheet({ data }: { data: RevisionPayload }) {
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-2)', marginBottom: 6 }}>{topic}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {list.map((f, i) => (
-              <div key={i} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, lineHeight: 1.6, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)' }}>
-                {f.replace(/\$\$?/g, '')}
+              <div key={i} style={{ fontSize: 13.5, lineHeight: 1.6, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text)' }}>
+                <RichText inline text={f} />
               </div>
             ))}
           </div>
@@ -213,13 +214,13 @@ function PracticeCard({ q, label, color, bg }: { q: { topic_title: string; quest
         {q.bloom_level && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{q.bloom_level}</span>}
         <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50%' }}>{q.topic_title}</span>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.5 }}>{q.question}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.5 }}><RichText inline text={q.question} /></div>
       {q.answer && (
         <>
           <button onClick={() => { setOpen(o => !o); if (!open) track('learn_pyq_revealed', { level: label }); }} style={{ ...btnGhost, marginTop: 10, fontSize: 12.5, padding: '5px 12px' }}>
             {open ? 'Hide answer' : 'Show answer'}
           </button>
-          {open && <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.65, color: 'var(--text-2)' }}>{q.answer}</div>}
+          {open && <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.65, color: 'var(--text-2)' }}><RichText text={q.answer} /></div>}
         </>
       )}
     </div>

@@ -8,6 +8,7 @@ import {
   ArrowRight, Check, ChevronLeft, Layers, RotateCcw, Sigma, Sparkles, X,
 } from 'lucide-react';
 import { studentApi, track, type RevisionPayload } from '@/api/student';
+import { StudioRichText } from './StudioLesson';
 
 type Tab = 'cards' | 'formulas' | 'practice';
 type Band = 'easy' | 'medium' | 'hard';
@@ -105,10 +106,10 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
         >
           <div className="st-flip-inner" style={{ height: '100%', minHeight: 280 }}>
             <div className="st-flip-face st-flip-front">
-              <div style={{ font: '700 20px/1.4 var(--st-display)', color: 'var(--st-text)' }}>{card.front}</div>
+              <div style={{ font: '700 20px/1.4 var(--st-display)', color: 'var(--st-text)' }}><StudioRichText text={card.front} /></div>
             </div>
             <div className="st-flip-face st-flip-back">
-              <div style={{ font: '450 15.5px/1.7 var(--st-sans)', color: 'var(--st-text)' }}>{card.back}</div>
+              <div style={{ font: '450 15.5px/1.7 var(--st-sans)', color: 'var(--st-text)' }}><StudioRichText text={card.back} /></div>
             </div>
           </div>
         </div>
@@ -173,7 +174,9 @@ function Formulas({ data }: { data: RevisionPayload }) {
           <div key={topic}>
             <div className="st-eyebrow" style={{ color: 'var(--st-aqua)', marginBottom: 8 }}>{topic}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {formulas.map((f, i) => <pre key={i} className="st-code" style={{ whiteSpace: 'pre-wrap' }}>{f}</pre>)}
+              {formulas.map((f, i) => (
+                <div key={i} className="st-code" style={{ whiteSpace: 'pre-wrap' }}><StudioRichText text={f} /></div>
+              ))}
             </div>
           </div>
         ))}
@@ -222,13 +225,13 @@ function Practice({ data }: { data: RevisionPayload }) {
                     marginTop: 3, fontVariantNumeric: 'tabular-nums',
                   }}>Q{i + 1}</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ font: '600 14.5px/1.55 var(--st-sans)', color: 'var(--st-text)' }}>{q.question}</div>
+                    <div style={{ font: '600 14.5px/1.55 var(--st-sans)', color: 'var(--st-text)' }}><StudioRichText text={q.question} /></div>
                     <div style={{ font: '500 11.5px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 4 }}>
                       {[q.topic_title, q.bloom_level].filter(Boolean).join(' · ')}
                     </div>
                     {open ? (
                       <div style={{ font: '450 13.5px/1.65 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 10, borderLeft: '3px solid var(--st-border-2)', paddingLeft: 12 }}>
-                        {q.answer}
+                        <StudioRichText text={q.answer} />
                       </div>
                     ) : (
                       <button
