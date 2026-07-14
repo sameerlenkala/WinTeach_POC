@@ -50,5 +50,12 @@ def decode_supabase_jwt(token: str) -> dict:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
         except jwt.InvalidTokenError:
             continue  # try the next candidate key (e.g. anon-key demo token vs. jwt-secret user token)
+        except (ValueError, TypeError):
+            # A malformed verification key (e.g. a PEM whose framing got mangled
+            # by an env-var UI) makes PyJWT raise ValueError from prepare_key.
+            # Treat it like an unusable key and move on, so a misconfigured key
+            # yields a clean 401 (which the CORS middleware can decorate) instead
+            # of an uncaught 500 that reaches the browser as an opaque CORS error.
+            continue
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

@@ -1,4 +1,30 @@
+import re
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.DOTALL)
+
+
+def _normalize_pem(raw: str) -> str:
+    """Rebuild a PEM's line framing from a value whose newlines were mangled.
+
+    Env-var UIs (Railway, some CI systems) routinely flatten a pasted multi-line
+    PEM — collapsing the newlines to spaces, dropping them entirely, or storing a
+    literal ``\\n``. `cryptography` then rejects it with "MalformedFraming". We
+    extract the base64 body, strip all whitespace, and re-wrap at 64 columns so
+    any of those manglings loads correctly. Non-PEM / empty values pass through.
+    """
+    if not raw or "-----BEGIN" not in raw:
+        return raw
+    s = raw.strip().replace("\\n", "\n")
+    m = _PEM_RE.search(s)
+    if not m:
+        return s
+    label = m.group(1).strip()
+    body = re.sub(r"\s+", "", m.group(2))
+    wrapped = "\n".join(body[i:i + 64] for i in range(0, len(body), 64))
+    return f"-----BEGIN {label}-----\n{wrapped}\n-----END {label}-----"
 
 
 class Settings(BaseSettings):
@@ -10,6 +36,11 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
     supabase_jwt_public_key: str = ""  # ECC public key PEM — for ES256 (current Supabase default)
+
+    @field_validator("supabase_jwt_public_key")
+    @classmethod
+    def _fix_pem_framing(cls, v: str) -> str:
+        return _normalize_pem(v)
 
     # OpenAI
     openai_api_key: str = ""
