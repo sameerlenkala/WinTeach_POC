@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "winnify", "--", "--port", "5199", "--strictPort"],
       "port": 5199
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "backend/.venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--env-file", "backend/.env", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

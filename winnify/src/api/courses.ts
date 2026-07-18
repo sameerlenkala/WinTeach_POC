@@ -8,7 +8,12 @@ interface CourseCreatePayload {
   semester?: string;
   regulation?: string;
   status?: 'draft' | 'active' | 'archived';
-  units?: { title: string; unit_number: number; hours?: number; topics?: string[] }[];
+  units?: {
+    title: string; unit_number: number; hours?: number;
+    // Topic objects carry the create wizard's CO mapping + bloom; plain
+    // strings remain accepted for callers that only have names.
+    topics?: (string | { title: string; co_number?: number | null; bloom_level?: string | null })[];
+  }[];
   course_outcomes?: string[];
 }
 

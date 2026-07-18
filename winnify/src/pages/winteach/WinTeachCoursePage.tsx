@@ -579,12 +579,27 @@ export default function WinTeachCoursePage() {
                       <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 14, color: W.text }}>{t.title ?? t.name}</div>
                       <div style={{ fontSize: 12, color: W.text2, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {(t.subtopics ?? t.subs ?? []).length} subtopics
-                        {cos.length > 0 && (
-                          <><span>·</span><CoMapTag>{c ? coRefFor(c, ui) : `CO${ui + 1}`}</CoMapTag></>
-                        )}
-                        {(t.bloom_level ?? t.co?.bloom) && (
-                          <BloomBadge bloom={t.bloom_level ?? t.co?.bloom} />
-                        )}
+                        {(() => {
+                          // Resolve the topic's CO from its stored mapping
+                          // (topics.co_id) and show that CO's CURRENT bloom, so
+                          // editing a CO's bloom reflects here immediately.
+                          // Positional unit→CO is only the fallback for legacy
+                          // rows created before the mapping was persisted.
+                          const bloomName: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
+                          const mapped = t.co_id ? cos.find(o => o.id === t.co_id) : undefined;
+                          const fallback = cos.find(o => o.co_number === ((u as any).unit_number ?? ui + 1));
+                          const co = mapped ?? fallback;
+                          const bloomRaw = mapped?.bloom_level ?? t.bloom_level ?? co?.bloom_level ?? t.co?.bloom;
+                          const bloom = bloomRaw ? (bloomName[bloomRaw] ?? bloomRaw) : null;
+                          return (
+                            <>
+                              {cos.length > 0 && (
+                                <><span>·</span><CoMapTag>{co ? `CO${co.co_number}` : c ? coRefFor(c, ui) : `CO${ui + 1}`}</CoMapTag></>
+                              )}
+                              {bloom && <BloomBadge bloom={bloom} />}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     {/* artifact pills — plan & notes progress from the generation pipeline */}

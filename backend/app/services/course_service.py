@@ -20,6 +20,25 @@ def create_course(db: Client, user: dict, payload: CourseCreate) -> dict:
         "status": payload.status,
     }).execute()
 
+    # COs first: topics reference them (topics.co_id) via their 1-based number.
+    co_id_by_number: dict[int, str] = {}
+    for i, co_item in enumerate(payload.course_outcomes):
+        if isinstance(co_item, str):
+            co_text, bloom_level = co_item, None
+        else:
+            co_text, bloom_level = co_item.text, co_item.bloom or None
+        co_id = str(uuid.uuid4())
+        co_id_by_number[i + 1] = co_id
+        row = {
+            "id": co_id,
+            "course_id": course_id,
+            "co_number": i + 1,
+            "description": co_text,
+        }
+        if bloom_level:
+            row["bloom_level"] = bloom_level
+        db.table("course_outcomes").insert(row).execute()
+
     for unit in payload.units:
         unit_id = str(uuid.uuid4())
         db.table("units").insert({
@@ -29,28 +48,19 @@ def create_course(db: Client, user: dict, payload: CourseCreate) -> dict:
             "unit_number": unit.unit_number,
             "hours": unit.hours,
         }).execute()
-        for i, title in enumerate(unit.topics):
-            db.table("topics").insert({
+        for i, topic in enumerate(unit.topics):
+            row = {
                 "id": str(uuid.uuid4()),
                 "unit_id": unit_id,
-                "title": title,
+                "title": topic if isinstance(topic, str) else topic.title,
                 "order": i + 1,
-            }).execute()
-
-    for i, co_item in enumerate(payload.course_outcomes):
-        if isinstance(co_item, str):
-            co_text, bloom_level = co_item, None
-        else:
-            co_text, bloom_level = co_item.text, co_item.bloom or None
-        row = {
-            "id": str(uuid.uuid4()),
-            "course_id": course_id,
-            "co_number": i + 1,
-            "description": co_text,
-        }
-        if bloom_level:
-            row["bloom_level"] = bloom_level
-        db.table("course_outcomes").insert(row).execute()
+            }
+            if not isinstance(topic, str):
+                if topic.bloom_level:
+                    row["bloom_level"] = topic.bloom_level
+                if topic.co_number and topic.co_number in co_id_by_number:
+                    row["co_id"] = co_id_by_number[topic.co_number]
+            db.table("topics").insert(row).execute()
 
     return get_course(db, user, course_id)
 

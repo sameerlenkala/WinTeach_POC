@@ -764,6 +764,8 @@ important_definitions (2–4, crisp one-liners); active_recall_prompts (2–4, e
 
 GLOSSARY: one entry per new term this lesson introduced — formal_definition,
 simple_explanation, used_in ["{subtopic_id}"], related_terms. If none, output empty terms.
+Terms ALREADY defined by earlier lessons in this topic (do NOT repeat them in this
+glossary, and do NOT write flashcards whose front is one of them): {prior_terms}
 
 PRACTICE QUESTIONS about "{subtopic_title}", each tagged subtopic_id "{subtopic_id}", none
 exceeding Bloom {bloom_ceiling}: easy (L1/L2) 2 + 60+ word explanations; medium 2 applied
@@ -783,6 +785,8 @@ MATH NOTATION: wrap all mathematical notation (formulas, Big-O, expressions) in 
 delimiters — $...$ inline, $$...$$ display — including every important_formulas entry.
 VOICE: second person, direct, exam-aware. **Bold** key terms, `inline code` for
 identifiers. Short paragraphs separated by a blank line where a field is prose.
+Multi-line code goes in a fenced ```lang block with real newlines (\\n in JSON)
+— never squashed onto one line, never bare code without a fence.
 
 Output ONLY this JSON — no explanation, no markdown:
 {{
@@ -815,7 +819,8 @@ Output ONLY this JSON — no explanation, no markdown:
 
 def build_closing_prompt(unit: dict, ctx: dict, *, prev_title: str | None, next_title: str | None,
                          condensed_core: dict | None = None,
-                         grounding: list[dict] | None = None) -> tuple[str, str]:
+                         grounding: list[dict] | None = None,
+                         prior_terms: list[str] | None = None) -> tuple[str, str]:
     system = preamble(ctx)
     user = _CLOSING_TEMPLATE.format(
         subject_label=ctx.get("subject_type_label") or ctx.get("subject_domain") or "the discipline",
@@ -823,6 +828,7 @@ def build_closing_prompt(unit: dict, ctx: dict, *, prev_title: str | None, next_
         subtopic_id=unit.get("concept_id", ""), proficiency_target=unit.get("proficiency_target", ""),
         bloom_ceiling=unit.get("bloom_ceiling", "L3"), scope_in=_j(unit.get("scope_in", [])),
         scope_out=_j(unit.get("scope_out", [])),
+        prior_terms=_j(prior_terms) if prior_terms else "none — this is the topic's first lesson",
         prev_subtopic=prev_title or "None — this is the first subtopic",
         next_subtopic=next_title or "None — this is the last subtopic",
         industry_skills=_j(ctx.get("industry_skills")) if ctx.get("industry_skills")
@@ -1287,6 +1293,13 @@ GROUNDING RULES:
 - No question may test knowledge not present in the notes.
 - No two questions may test the same fact, even across different question types.
 
+CODE FORMATTING:
+- Identifiers and short fragments go in single backticks: `battery_percent`.
+- A multi-line code fragment in a question stem goes in a fenced block —
+  ```lang on its own line, real newlines (\\n in JSON) between statements,
+  closing ``` on its own line. NEVER squash a fenced block onto one line.
+- Options are single-line: inline backtick code only, never fenced blocks.
+
 MCQ RULES:
 - Exactly one correct option; the other three must be plausible distractors.
 - For easy MCQs: distractors can be clearly wrong but related to the topic.
@@ -1486,7 +1499,12 @@ ALWAYS include per subtopic (only when its source content exists):
   • definition  — 1–2 crisp sentences. Capture the core idea precisely.
   • keyterms    — important terms with sharp 1-line definitions
   • bullets     — 4–6 must-know facts, each ≤ 15 words, punchy
-  • code        — most essential syntax or code template (coding/DB topics only)
+  • code        — most essential syntax or code template (coding/DB topics only).
+                  Show the GENERAL syntax form with placeholder names
+                  (condition, value, item, table…), NOT a scenario-specific
+                  example — "if condition:\\n    statements\\nelif condition:" not
+                  "if battery_percent <= 15:". A one-line concrete example may
+                  follow the template, never replace it.
 
 Include if relevant to the subtopic:
   • formula     — key formulas with what each variable means (math/algo topics)

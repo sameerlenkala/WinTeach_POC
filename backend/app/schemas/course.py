@@ -5,11 +5,19 @@ from typing import Literal
 CourseStatus = Literal["draft", "active", "archived"]
 
 
+class TopicIn(BaseModel):
+    title: str
+    # 1-based CO number the create wizard mapped this topic to; resolved to the
+    # created CO's id at insert time so the mapping survives past creation.
+    co_number: int | None = None
+    bloom_level: str | None = None
+
+
 class UnitIn(BaseModel):
     title: str
     unit_number: int
     hours: int = 0
-    topics: list[str] = []
+    topics: list[str | TopicIn] = []
 
 
 class COIn(BaseModel):

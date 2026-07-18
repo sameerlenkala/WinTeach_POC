@@ -101,10 +101,16 @@ def get_topic(course_id: str, topic_id: str, user: dict = Depends(get_current_us
     if topic.get("unit_id"):
         unit = db.table("units").select("id, title, unit_number").eq("id", topic["unit_id"]).single().execute().data
         topic["unit"] = unit
-    # Attach first CO that matches by co_number == unit_number (common Indian syllabus convention)
-    unit_number = (topic.get("unit") or {}).get("unit_number") or topic.get("order", 1)
+    # Linked CO: the explicit topics.co_id mapping (stored at course creation)
+    # wins; otherwise fall back to co_number == unit_number (common Indian
+    # syllabus convention). Never fall back to topic.order — that's a
+    # within-unit position, and using it as a CO number made this endpoint
+    # disagree with the curriculum view about which CO a topic serves.
     cos = db.table("course_outcomes").select("id, co_number, description, bloom_level").eq("course_id", course_id).order("co_number").execute().data or []
-    matched_co = next((c for c in cos if c["co_number"] == unit_number), cos[0] if cos else None)
+    matched_co = next((c for c in cos if topic.get("co_id") and c["id"] == topic["co_id"]), None)
+    if matched_co is None:
+        unit_number = (topic.get("unit") or {}).get("unit_number")
+        matched_co = next((c for c in cos if unit_number and c["co_number"] == unit_number), cos[0] if cos else None)
     topic["linked_co"] = matched_co
     return topic
 

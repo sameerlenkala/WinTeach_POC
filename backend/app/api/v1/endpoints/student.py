@@ -771,6 +771,9 @@ def revision_hub(course_id: str, user: dict = Depends(get_current_user),
 
     now_iso = _now().isoformat()
     due_cards, formulas, pyq = [], [], {"easy": [], "medium": [], "hard": []}
+    # Notes generated before the prior-terms exclusion repeat glossary terms
+    # across subtopics; dedupe fronts course-wide so the deck deals each once.
+    seen_fronts: set[str] = set()
     for row in notes:
         cid, tid = row["concept_id"], row["topic_id"]
         content = row.get("content") or {}
@@ -780,6 +783,10 @@ def revision_hub(course_id: str, user: dict = Depends(get_current_user),
         # predating the flashcard_section still populate the deck.
         cards = _flashcards_from_closing(closing)
         for card in cards:
+            f = card["front"].strip().casefold()
+            if f in seen_fronts:
+                continue
+            seen_fronts.add(f)
             key = _card_key(tid, cid, card["front"])
             st = srs.get(key)
             if st is None or (st.get("due_at") or now_iso) <= now_iso:

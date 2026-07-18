@@ -143,7 +143,13 @@ function MermaidBlock({ code }: { code: string }) {
     import('mermaid')
       .then(async m => {
         const mermaid = m.default;
-        mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
+        // htmlLabels must be off: sanitizeSvg (DOMPurify, svg profile) strips
+        // <foreignObject>, which is where mermaid puts HTML labels — with them
+        // on, every node/edge label vanishes and diagrams render blank.
+        mermaid.initialize({
+          startOnLoad: false, theme: 'neutral', securityLevel: 'strict',
+          htmlLabels: false, flowchart: { htmlLabels: false }, er: { useMaxWidth: true },
+        } as any);
         try {
           const { svg } = await mermaid.render(`wt-mmd-${++mermaidSeq}`, code);
           if (alive) setSvg(sanitizeSvg(svg));
@@ -221,7 +227,9 @@ function renderInline(text: string, katex: any | null, keyBase: string): React.R
         try { return <span key={key} dangerouslySetInnerHTML={{ __html: katex.renderToString(inner, { throwOnError: true }) }} />; }
         catch { /* not valid LaTeX — render as code below */ }
       }
-      return <code key={key} style={{ fontFamily: MONO, fontSize: '0.88em', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 4, padding: '1px 5px' }}>{inner}</code>;
+      // Explicit color: the chip sits on a light surface even inside dark or
+      // brand-colored slides, where the inherited text color is white.
+      return <code key={key} style={{ fontFamily: MONO, fontSize: '0.88em', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 4, padding: '1px 5px', color: W.text }}>{inner}</code>;
     }
     if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) {
       return <em key={key}>{seg.slice(1, -1)}</em>;
@@ -251,11 +259,49 @@ const CALLOUT_RE = /^>\s*(tip|warning|key idea|recall|exam tip|note)\s*[:—-]\s
 const unescapeNL = (s: string) =>
   s.replace(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)|\\n/g, (_m, math) => math ?? '\n');
 
+// Fenced code the models embed in prose/one-line fields — ```python …``` (also
+// the occasional ``…`` variant with a language tag). Rendered as real code
+// blocks; without this the fence characters leak into the page as literal
+// backticks and the single-backtick inline rule mis-parses them.
+const FENCE_RE = /(`{2,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n?([\s\S]*?)\1/;
+// Tags accepted on the degenerate ``…`` variant — a real ``inline span``
+// whose first word merely looks tag-like must stay inline code.
+const FENCE_LANGS = /^(python|py|sql|java|c|cpp|c\+\+|cs|csharp|js|javascript|ts|typescript|html|css|json|bash|sh|shell|r|go|rust|kotlin|swift|php|ruby|matlab|verilog|vhdl|asm|pseudocode|text)$/i;
+
+type FenceSeg = { code: string; lang: string } | { text: string };
+function splitFences(str: string): FenceSeg[] {
+  const out: FenceSeg[] = [];
+  let rest = str;
+  for (;;) {
+    const m = rest.match(FENCE_RE);
+    // ``…`` is only a fence when it spans lines or names a real language;
+    // otherwise it's inline code.
+    if (!m || (m[1].length === 2 && !/\n/.test(m[3]) && !FENCE_LANGS.test(m[2]))) break;
+    const idx = m.index!;
+    if (idx > 0) out.push({ text: rest.slice(0, idx) });
+    const code = m[3].trim();
+    if (code) out.push({ code, lang: m[2] || '' });
+    rest = rest.slice(idx + m[0].length);
+  }
+  if (rest) out.push({ text: rest });
+  return out;
+}
+
 export function RichText({ text, inline }: { text: any; inline?: boolean }) {
   const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
   // Load KaTeX for real $…$ math OR LaTeX mis-wrapped in `code` fences.
   const katex = useKatex(/\$[^$]/.test(str) || /`[^`\n]*\\[a-zA-Z][^`\n]*`/.test(str));
   if (!str) return null;
+  const fenceSegs = splitFences(str);
+  if (fenceSegs.some(s => 'code' in s)) {
+    return (
+      <>
+        {fenceSegs.map((seg, i) => 'code' in seg
+          ? <div key={i} style={{ margin: '8px 0' }}><CodeBlock code={seg.code} language={seg.lang || null} /></div>
+          : <RichText key={i} text={seg.text} inline={inline} />)}
+      </>
+    );
+  }
   if (inline) return <>{renderInline(str, katex, 'i')}</>;
   const paras = str.split(/\n\s*\n/).filter(p => p.trim());
   return (
@@ -596,7 +642,16 @@ function buildFlashcards(content: any): { front: string; back: string }[] {
   for (const p of cs.revision_section?.active_recall_prompts ?? []) {
     if (p?.prompt) cards.push({ front: p.prompt, back: p.answer_explanation || '' });
   }
-  return cards.filter(c => c.back);
+  // Dedup by front — glossary terms and important_definitions overlap with the
+  // generated cards, which dealt the same card twice (and desynced the count
+  // from the backend's _flashcards_from_closing, which dedupes the same way).
+  const seen = new Set<string>();
+  return cards.filter(c => {
+    const f = c.front.trim().toLowerCase();
+    if (!c.back || seen.has(f)) return false;
+    seen.add(f);
+    return true;
+  });
 }
 
 // Inline flashcard deck — lives in the article body as its own section.
@@ -1043,7 +1098,13 @@ function NotesArticle({ content }: { content: any }) {
       )}
       {hasComparison && (
         <Section n={++n} title={`Comparison${comparison.compared_against ? ` — vs ${comparison.compared_against}` : ''}`}>
-          <DataTable columns={['Parameter', 'This concept', comparison.compared_against ?? 'Alternative']}
+          <DataTable columns={[
+            'Parameter',
+            // Name the concept being compared — "This concept" tells the
+            // reader nothing about which side of the table is which.
+            content?.subtopic_title ?? content?.opening?.subtopic_title ?? content?.core?.subtopic_title ?? 'This concept',
+            comparison.compared_against ?? 'Alternative',
+          ]}
             rows={compRows.map((r: any) => [r.parameter, r.option_a, r.option_b])} />
         </Section>
       )}
@@ -1227,17 +1288,21 @@ function SlideBullets({ items, small, light, big }: { items: string[]; small?: b
             </div>
           ))}
         </div>
-      ) : g.items.map((b, i) => (
+      ) : g.items.map((b, i) => {
+        // Quiz-slide question stems ("Q1. …") read bolder than their options.
+        const isQ = /^Q\d+[.)]\s/i.test(b.trim());
+        return (
         <div key={`${gi}-${i}`} style={{ display: 'flex', gap: big ? 13 : 10, alignItems: 'baseline' }}>
           <span style={{
             width: big ? 8 : 6, height: big ? 8 : 6, borderRadius: 2, flexShrink: 0, transform: 'translateY(-2px)',
             background: light ? 'rgba(255,255,255,.75)' : 'var(--brand)',
           }} />
-          <span style={{ fontSize: bulletFs, lineHeight: 1.5, color: light ? 'rgba(255,255,255,.92)' : W.text2 }}>
+          <span style={{ fontSize: bulletFs, lineHeight: 1.5, fontWeight: isQ ? 600 : 400, color: light ? 'rgba(255,255,255,.92)' : isQ ? W.text : W.text2 }}>
             <RichText inline text={b} />
           </span>
         </div>
-      )))}
+        );
+      }))}
     </div>
   );
 }
@@ -1295,8 +1360,15 @@ function SlideCard({ s, index, total, present }: { s: any; index: number; total:
                 <RichText inline text={s.title} />
               </div>
               {/* Present mode centres sparse content in the tall 16:9 face so it
-                  doesn't hug the top and leave a large void below. */}
-              <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', justifyContent: present ? 'center' : 'flex-start', gap: present ? 16 : 10 }}>
+                  doesn't hug the top and leave a large void below. Centering is
+                  done with auto margins on an inner wrapper — justify-content:
+                  center on an overflowing scroller clips the top rows and makes
+                  them unreachable (the classic flexbox overflow trap). */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+              {/* present: auto margins center short content, collapse to 0 when it
+                  overflows; edit view: fill height so the takeaway's margin-top:
+                  auto still pins it to the slide's bottom edge. */}
+              <div style={{ margin: present ? 'auto 0' : 0, flex: present ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', gap: present ? 16 : 10 }}>
                 {layout === 'myth_reality' ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, flex: 1 }}>
                     <div style={{ borderRadius: 10, padding: '13px 16px', background: W.redBg, borderTop: '3px solid var(--status-red)' }}>
@@ -1368,6 +1440,7 @@ function SlideCard({ s, index, total, present }: { s: any; index: number; total:
                     }}>★ <RichText inline text={s.takeaway} /></span>
                   </div>
                 )}
+              </div>
               </div>
             </>
           )}

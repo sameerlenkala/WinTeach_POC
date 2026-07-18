@@ -835,7 +835,17 @@ export default function WinTeachCreateCourse() {
             unit_number: ui + 1,
             title: u.title || `Unit ${ui + 1}`,
             hours: (u as any).hours || 0,
-            topics: u.topics.map(t => t.name),
+            // Send the wizard's CO mapping and bloom along — a bare name list
+            // dropped both, so every later surface fell back to guessing the
+            // CO from the unit position.
+            topics: u.topics.map(t => {
+              const coIdx = t.coKey ? cos.findIndex(c => c.key === t.coKey) : -1;
+              return {
+                title: t.name,
+                co_number: coIdx >= 0 ? coIdx + 1 : t.coNumber ?? null,
+                bloom_level: t.co?.bloom || null,
+              };
+            }),
           })),
         });
 

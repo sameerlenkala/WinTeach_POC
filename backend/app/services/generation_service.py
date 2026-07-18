@@ -983,7 +983,10 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
     closing = _chat_json(client, *p.build_closing_prompt(unit, ctx,
                         prev_title=prev_title, next_title=next_title,
                         condensed_core=_condense_core(core),
-                        grounding=grounding), temperature=0.5,
+                        grounding=grounding,
+                        # Earlier lessons' terms — keeps glossary entries and
+                        # flashcards from repeating across subtopics.
+                        prior_terms=prior_terms), temperature=0.5,
                         schema=njs.CLOSING_SCHEMA, schema_name="notes_closing")
 
     cid = unit.get("concept_id")
@@ -2426,6 +2429,16 @@ def _prior_terms(db, topic_id: str, plan: dict, concept_id: str) -> list[str]:
 def enqueue_concept_artifact(job_id, topic_id, concept_id, artifact_type) -> None:
     """Generate/regenerate one concept artifact off-request; status is driven from
     the concept_artifacts row so the studio can poll."""
+    # Flip the row to 'generating' (and approval back to 'pending') BEFORE the
+    # request returns: the UI refetches the job immediately after the 202, and
+    # when the flip happened later inside the worker thread it raced that
+    # refetch — the reader kept the stale ready+approved state, never started
+    # polling, and the Approve button never came back after a regenerate.
+    from app.db.supabase import get_client
+    db0 = get_client()
+    _upsert_concept(db0, job_id, topic_id, concept_id, artifact_type,
+                    status="generating", approval_status="pending", error=None)
+
     def _worker():
         from app.db.supabase import get_client
         db = get_client()
@@ -2576,6 +2589,13 @@ def enqueue_concept_revision(job_id, topic_id, concept_id, artifact_type, instru
     """Targeted revision: apply one faculty instruction to the current artifact,
     snapshotting the outgoing content first. Off-request like generation — the
     row's status drives the studio/reader polling."""
+    # Same pre-thread status flip as enqueue_concept_artifact: the UI refetches
+    # right after the 202, so 'generating' must already be visible by then.
+    from app.db.supabase import get_client
+    db0 = get_client()
+    _upsert_concept(db0, job_id, topic_id, concept_id, artifact_type,
+                    status="generating", approval_status="pending", error=None)
+
     def _worker():
         from app.db.supabase import get_client
         db = get_client()

@@ -38,7 +38,27 @@ export const loadKatex = () =>
 
 // Inline markdown-ish runs: **bold**, `code`, *italic*, $math$ / $$math$$.
 const INLINE_RE = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+
+// Fenced code the models embed in prose fields (```python …``` — sometimes on
+// one line, sometimes with a `` variant). Rendered as a real code block;
+// without this the fences leak as literal backticks through the single-backtick
+// inline rule. Mirrors the faculty reader's splitFences.
+const FENCE_RE = /(`{2,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n?([\s\S]*?)\1/;
+// Tags accepted on the degenerate ``…`` variant — a real ``inline span`` whose
+// first word merely looks tag-like must stay inline code.
+const FENCE_LANGS = /^(python|py|sql|java|c|cpp|c\+\+|cs|csharp|js|javascript|ts|typescript|html|css|json|bash|sh|shell|r|go|rust|kotlin|swift|php|ruby|matlab|verilog|vhdl|asm|pseudocode|text)$/i;
 function inline(text: string, key = 'k'): ReactNode[] {
+  const m = text.match(FENCE_RE);
+  // ``…`` is only a fence when it spans lines or names a real language.
+  if (m && !(m[1].length === 2 && !/\n/.test(m[3]) && !FENCE_LANGS.test(m[2]))) {
+    const idx = m.index!;
+    const code = m[3].trim();
+    return [
+      ...(idx > 0 ? inline(text.slice(0, idx), `${key}a`) : []),
+      ...(code ? [<Code key={`${key}f`} code={code} language={m[2] || null} />] : []),
+      ...inline(text.slice(idx + m[0].length), `${key}b`),
+    ];
+  }
   return text.split(INLINE_RE).filter(Boolean).map((seg, i) => {
     const k = `${key}${i}`;
     const math = (src: string, display: boolean) => {
@@ -190,7 +210,12 @@ function Mermaid({ code }: { code: string }) {
     import('mermaid')
       .then(async m => {
         const mermaid = m.default;
-        mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
+        // htmlLabels off: sanitizeSvg (DOMPurify) strips <foreignObject>, where
+        // mermaid puts HTML labels — with them on, diagrams render blank.
+        mermaid.initialize({
+          startOnLoad: false, theme: 'neutral', securityLevel: 'strict',
+          htmlLabels: false, flowchart: { htmlLabels: false },
+        } as any);
         try {
           const { svg } = await mermaid.render(`st-mmd-${++mermaidSeq}`, code);
           if (alive) setSvg(sanitizeSvg(svg));
@@ -1283,15 +1308,24 @@ function SlidesPlayer({ content }: { content: any }) {
   const slides: any[] = content?.slides ?? [];
   const deckRef = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
+  // Slide stride = width + the deck's flex gap. Dividing by clientWidth alone
+  // drifts by one gap per slide, so on long decks the computed index ran ahead
+  // of the real one and jump() snapped back to the same slide — navigation
+  // appeared stuck a couple of slides before the end (e.g. "29/31").
+  const stride = (el: HTMLElement) => {
+    const a = el.children[0] as HTMLElement | undefined;
+    const b = el.children[1] as HTMLElement | undefined;
+    return a && b ? b.offsetLeft - a.offsetLeft : el.clientWidth;
+  };
   const onScroll = () => {
     const el = deckRef.current;
     if (!el) return;
-    setIdx(Math.round(el.scrollLeft / el.clientWidth));
+    setIdx(Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / stride(el)))));
   };
   const jump = (d: 1 | -1) => {
     const el = deckRef.current;
     if (!el) return;
-    el.scrollTo({ left: (idx + d) * el.clientWidth, behavior: 'smooth' });
+    el.scrollTo({ left: (idx + d) * stride(el), behavior: 'smooth' });
   };
   if (!slides.length) {
     return (
@@ -1317,14 +1351,30 @@ function SlidesPlayer({ content }: { content: any }) {
           const layout: string = s.layout
             ?? (s.myth || s.reality ? 'myth_reality' : codeText ? 'code' : hasVisual ? 'visual' : bullets.length ? 'bullets' : 'statement');
           const half = Math.ceil(bullets.length / 2);
+          // Quiz slides arrive as flat bullets ("Q1. …", "A) …" … "D) …") — style
+          // questions bold and options as indented answer chips so the two are
+          // visually distinct instead of one undifferentiated bullet list.
           const renderBullets = (items: any[], kb: string) => items
             .filter(b => b != null && asText(b).trim())
-            .map((b, bi) => (
-              <div key={`${kb}${bi}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--st-lime)', flexShrink: 0, marginTop: 8 }} />
-                <span style={{ font: '450 14px/1.6 var(--st-sans)', color: 'var(--st-text-2)' }}>{inline(asText(b), `${kb}${bi}`)}</span>
-              </div>
-            ));
+            .map((b, bi) => {
+              const t = asText(b).trim();
+              if (/^[A-D]\)\s/.test(t)) {
+                return (
+                  <div key={`${kb}${bi}`} style={{
+                    margin: '0 0 6px 16px', padding: '7px 12px', borderRadius: 10,
+                    border: '1px solid var(--st-border-2)', background: 'var(--st-glass)',
+                    font: '450 13.5px/1.5 var(--st-sans)', color: 'var(--st-text-2)',
+                  }}>{inline(t, `${kb}${bi}`)}</div>
+                );
+              }
+              const isQ = /^Q\d+[.)]\s/i.test(t);
+              return (
+                <div key={`${kb}${bi}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 6, marginTop: isQ && bi > 0 ? 10 : 0 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--st-lime)', flexShrink: 0, marginTop: 8 }} />
+                  <span style={{ font: `${isQ ? 600 : 450} 14px/1.6 var(--st-sans)`, color: isQ ? 'var(--st-text)' : 'var(--st-text-2)' }}>{inline(t, `${kb}${bi}`)}</span>
+                </div>
+              );
+            });
           const tintCard = (label: string, color: string, body: ReactNode, key?: string) => (
             <div key={key} style={{ borderRadius: 14, padding: '12px 14px', background: `color-mix(in oklab, ${color} 9%, transparent)`, border: `1px solid color-mix(in oklab, ${color} 35%, transparent)` }}>
               <div className="st-eyebrow" style={{ color, marginBottom: 6 }}>{label}</div>

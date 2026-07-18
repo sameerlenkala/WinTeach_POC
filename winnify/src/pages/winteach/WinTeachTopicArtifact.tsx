@@ -65,7 +65,7 @@ function InterviewBody({ content }: { content: any }) {
         <div key={i} style={{ border: `1px solid ${W.border}`, borderRadius: 12, padding: '14px 18px', background: W.card, boxShadow: W.shadowCard }}>
           <div style={{ display: 'flex', gap: 9, alignItems: 'baseline', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: W.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>Q{c.id ?? i + 1}</span>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: W.text, lineHeight: 1.45, flex: 1, fontFamily: W.fontDisplay }}>{c.question}</div>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: W.text, lineHeight: 1.45, flex: 1, fontFamily: W.fontDisplay }}><Rich text={c.question} /></div>
             {c.difficulty && <Badge variant={DIFF_BADGE[c.difficulty] ?? 'muted'}>{c.difficulty}</Badge>}
           </div>
           <div style={{ marginLeft: 27 }}>
@@ -81,7 +81,7 @@ function InterviewBody({ content }: { content: any }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 9, flexWrap: 'wrap' }}>
-              {c.follow_up && <span style={{ fontSize: 12.5, fontStyle: 'italic', color: W.text3 }}>↳ Likely follow-up: {c.follow_up}</span>}
+              {c.follow_up && <span style={{ fontSize: 12.5, fontStyle: 'italic', color: W.text3 }}>↳ Likely follow-up: <Rich text={c.follow_up} /></span>}
               <span style={{ marginLeft: 'auto' }}><SubtopicChip label={c.subtopic} /></span>
             </div>
           </div>
@@ -109,7 +109,7 @@ function AssignmentBody({ content }: { content: any }) {
               </div>
               {t.scenario && <div style={{ fontSize: 13, lineHeight: 1.6, color: W.text2, fontStyle: 'italic', borderLeft: `2px solid ${W.borderStrong}`, paddingLeft: 11, marginBottom: 8 }}><Rich text={t.scenario} /></div>}
               <div style={{ fontSize: 13.5, lineHeight: 1.6, color: W.text }}><Rich text={t.prompt} /></div>
-              {t.deliverable && <div style={{ fontSize: 12.5, color: W.text2, marginTop: 7 }}><b style={{ color: W.text }}>Deliverable:</b> {t.deliverable}</div>}
+              {t.deliverable && <div style={{ fontSize: 12.5, color: W.text2, marginTop: 7 }}><b style={{ color: W.text }}>Deliverable:</b> <Rich text={t.deliverable} /></div>}
               {(t.subtopics ?? []).length > 0 && (
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
                   {t.subtopics.map((s: string, si: number) => <SubtopicChip key={si} label={s} />)}
@@ -134,9 +134,9 @@ function AssignmentBody({ content }: { content: any }) {
           </tr></thead>
           <tbody>{(content.rubric ?? []).map((r: any, i: number) => (
             <tr key={i}>
-              <td style={{ padding: '6px 9px', borderBottom: `1px solid ${W.border}`, fontWeight: 600, color: W.text, verticalAlign: 'top' }}>{r.criterion}</td>
+              <td style={{ padding: '6px 9px', borderBottom: `1px solid ${W.border}`, fontWeight: 600, color: W.text, verticalAlign: 'top' }}><Rich text={r.criterion} /></td>
               <td style={{ padding: '6px 9px', borderBottom: `1px solid ${W.border}`, color: W.text, verticalAlign: 'top', fontVariantNumeric: 'tabular-nums' }}>{r.points}</td>
-              <td style={{ padding: '6px 9px', borderBottom: `1px solid ${W.border}`, color: W.text2, verticalAlign: 'top' }}>{r.descriptor}</td>
+              <td style={{ padding: '6px 9px', borderBottom: `1px solid ${W.border}`, color: W.text2, verticalAlign: 'top' }}><Rich text={r.descriptor} /></td>
             </tr>
           ))}</tbody>
         </table>
@@ -148,7 +148,7 @@ function AssignmentBody({ content }: { content: any }) {
         </details>
       )}
       {content.integrity_policy && (
-        <Section title="Integrity policy"><div style={{ fontSize: 13, lineHeight: 1.6, color: W.text }}>{content.integrity_policy}</div></Section>
+        <Section title="Integrity policy"><div style={{ fontSize: 13, lineHeight: 1.6, color: W.text }}><Rich text={content.integrity_policy} /></div></Section>
       )}
     </>
   );
