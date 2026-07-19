@@ -15,7 +15,7 @@ interface ExtractionStatus {
 interface CommitPayload {
   course_id: string;
   cos?: { text: string; bloom?: string }[];
-  topics?: { unit_index: number; title: string; subtopics?: string[]; co_text?: string; bloom?: string }[];
+  topics?: { unit_index: number; title: string; subtopics?: string[]; co_text?: string; bloom?: string; co_number?: number | null }[];
   replace_cos?: boolean;
   replace_topics?: boolean;
 }

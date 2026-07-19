@@ -806,6 +806,10 @@ export default function WinTeachCreateCourse() {
       const errs: Record<string, string> = {};
       if (!code.trim()) errs.code = 'Required';
       if (!name.trim()) errs.name = 'Required';
+      // The details step requires these too — but this review step lets the
+      // user finalize directly, so re-validate here or a blank semester
+      // silently ships with the course.
+      if (!String(sem).trim()) errs.sem = 'Required';
       if (Object.keys(errs).length) {
         // No toast here: a toast re-renders the context and remounts this
         // inline step component, wiping the error state it just set.
@@ -830,7 +834,7 @@ export default function WinTeachCreateCourse() {
           semester: String(d.sem),
           regulation: d.regulation,
           status: 'draft',
-          course_outcomes: cos.map(c => ({ text: c.text, bloom: c.bloom || '' })) as any,
+          course_outcomes: cos.map(c => ({ text: c.text, bloom: c.bloom || '', is_industry: !!c.isIndustry })) as any,
           units: e.units.map((u, ui) => ({
             unit_number: ui + 1,
             title: u.title || `Unit ${ui + 1}`,
@@ -852,13 +856,20 @@ export default function WinTeachCreateCourse() {
         // 2. If there's an upload, commit subtopics + bloom levels via the upload path
         if (draft!.uploadId) {
           const flatTopics = e.units.flatMap((u, ui) =>
-            u.topics.map(t => ({
-              unit_index: ui,
-              title: t.name,
-              subtopics: t.subs,
-              co_text: t.co.text,
-              bloom: t.co.bloom,
-            }))
+            u.topics.map(t => {
+              // Same CO resolution as the create payload — the commit path
+              // REPLACES the topics created in step 1, so it must carry the
+              // mapping too or the co_id stored there is wiped.
+              const coIdx = t.coKey ? cos.findIndex(c => c.key === t.coKey) : -1;
+              return {
+                unit_index: ui,
+                title: t.name,
+                subtopics: t.subs,
+                co_text: t.co.text,
+                bloom: t.co.bloom,
+                co_number: coIdx >= 0 ? coIdx + 1 : t.coNumber ?? null,
+              };
+            })
           );
           await uploadsApi.commit(draft!.uploadId, {
             course_id: created.id,
@@ -980,7 +991,7 @@ export default function WinTeachCreateCourse() {
                 </div>
               </Field>
               <Field label="Regulation"><Select value={regulation} onChange={setRegulation} options={regOptions} /></Field>
-              <Field label="Semester"><Input value={sem} onChange={setSem} type="number" placeholder="e.g. 4" /></Field>
+              <Field label="Semester" error={errors.sem}><Input value={sem} onChange={v => { setSem(v); setErrors(er => ({ ...er, sem: '' })); }} type="number" placeholder="e.g. 4" /></Field>
               <Field label="Credits"><Input value={credits} onChange={setCredits} type="number" placeholder="e.g. 3" /></Field>
             </div>
           </Card>

@@ -6,7 +6,6 @@ import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { BloomBadge, ProgressBar, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
 import { IBack, IEdit, IAssess, IDashboard, IArrow } from './WinTeachIcons';
-import { coRefFor } from './winteachData';
 import { ReferenceMaterials } from './WinTeachMaterials';
 import type { CourseOutcome, COMapping } from '@/api/types';
 import type { TopicProgress } from '@/api/generation';
@@ -189,7 +188,13 @@ export default function WinTeachCoursePage() {
   // Use API COs when available, fall back to local
   const cos: CourseOutcome[] = apiCOs.length
     ? apiCOs
-    : (c?.cos ?? []).map((co, i) => ({ id: co.id, co_number: i + 1, description: co.text, bloom_level: co.bloom, course_id: id }));
+    : (c?.cos ?? []).map((co, i) => ({ id: co.id, co_number: i + 1, description: co.text, bloom_level: co.bloom, course_id: id, is_industry: (co as any).isIndustry }));
+
+  // Industry outcomes keep their IO identity everywhere (list + topic chips) —
+  // numbering them within the industry set, not the CO sequence.
+  const coLabel = (co: CourseOutcome, i?: number) => co.is_industry
+    ? `IO${cos.filter(o => o.is_industry && o.co_number <= co.co_number).length || 1}`
+    : `CO${co.co_number || co.number || (i ?? 0) + 1}`;
 
   // Build CO-PO/PSO map columns
   const mapByCoId: Record<string, Record<string, number>> = {};
@@ -348,7 +353,10 @@ export default function WinTeachCoursePage() {
               const bloomLabel = normBloom(co.bloom_level);
               return (
             <div key={co.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, border: '1.5px solid var(--border)', borderRadius: 10, marginBottom: i < cos.length - 1 ? 8 : 0, background: 'var(--card)' }}>
-              <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.brand, flex: '0 0 56px', paddingTop: 2 }}>CO{co.co_number || co.number || i + 1}</div>
+              <div style={{ flex: '0 0 56px', paddingTop: 2 }}>
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: co.is_industry ? 'var(--tint-blue-fg)' : W.brand }}>{coLabel(co, i)}</div>
+                {co.is_industry && <div style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 8.5, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tint-blue-fg)', marginTop: 2 }}>Industry</div>}
+              </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 8 }}>{co.description ?? (co as any).text}</div>
                 <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -587,14 +595,17 @@ export default function WinTeachCoursePage() {
                           // rows created before the mapping was persisted.
                           const bloomName: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
                           const mapped = t.co_id ? cos.find(o => o.id === t.co_id) : undefined;
-                          const fallback = cos.find(o => o.co_number === ((u as any).unit_number ?? ui + 1));
+                          // units.unit_number is stored as text — coerce both
+                          // sides or the positional fallback never matches.
+                          const unitNo = Number((u as any).unit_number ?? ui + 1);
+                          const fallback = cos.find(o => Number(o.co_number) === unitNo && !o.is_industry);
                           const co = mapped ?? fallback;
                           const bloomRaw = mapped?.bloom_level ?? t.bloom_level ?? co?.bloom_level ?? t.co?.bloom;
                           const bloom = bloomRaw ? (bloomName[bloomRaw] ?? bloomRaw) : null;
                           return (
                             <>
-                              {cos.length > 0 && (
-                                <><span>·</span><CoMapTag>{co ? `CO${co.co_number}` : c ? coRefFor(c, ui) : `CO${ui + 1}`}</CoMapTag></>
+                              {cos.length > 0 && co && (
+                                <><span>·</span><CoMapTag>{coLabel(co)}</CoMapTag></>
                               )}
                               {bloom && <BloomBadge bloom={bloom} />}
                             </>

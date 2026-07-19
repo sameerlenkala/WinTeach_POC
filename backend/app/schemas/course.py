@@ -23,6 +23,9 @@ class UnitIn(BaseModel):
 class COIn(BaseModel):
     text: str
     bloom: str = ""
+    # Industry outcome (wizard "IO" cards) — kept distinct from regular COs so
+    # every surface can label them IOn instead of absorbing them into COn.
+    is_industry: bool = False
 
 
 class CourseCreate(BaseModel):

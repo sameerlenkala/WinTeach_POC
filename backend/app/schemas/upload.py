@@ -19,6 +19,10 @@ class CommitTopic(BaseModel):
     subtopics: list[str] = []
     co_text: str = ""
     bloom: str = "L3"
+    # 1-based CO number from the create wizard's mapping — resolved to the
+    # course's CO id at commit time (the commit replaces topics, so it must
+    # carry the mapping or the create-step co_id is lost).
+    co_number: int | None = None
 
 
 class UploadCommit(BaseModel):

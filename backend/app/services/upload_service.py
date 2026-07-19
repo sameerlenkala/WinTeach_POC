@@ -115,6 +115,12 @@ def commit_upload(db: Client, user: dict, upload_id: str, payload: UploadCommit)
         # unit_number is stored as text; normalize so an int unit_index matches.
         unit_map = {str(u["unit_number"]): u["id"] for u in units}
 
+        # CO number → id, so the wizard's topic↔CO mapping survives the commit
+        # (this path replaces the topics created by create_course).
+        co_rows = (db.table("course_outcomes").select("id, co_number")
+                   .eq("course_id", payload.course_id).execute().data or [])
+        co_id_by_number = {int(c["co_number"]): c["id"] for c in co_rows if c.get("co_number") is not None}
+
         if payload.replace_topics and not payload.units:
             # units block already cleared topics above; only clear here if no units payload
             for unit_id in unit_map.values():
@@ -137,13 +143,16 @@ def commit_upload(db: Client, user: dict, upload_id: str, payload: UploadCommit)
             order = len(existing_topics.data or []) + 1
             topic_id = str(uuid.uuid4())
 
-            db.table("topics").insert({
+            topic_row = {
                 "id": topic_id,
                 "unit_id": unit_id,
                 "title": title,
                 "bloom_level": bloom,
                 "order": order,
-            }).execute()
+            }
+            if topic.co_number and topic.co_number in co_id_by_number:
+                topic_row["co_id"] = co_id_by_number[topic.co_number]
+            db.table("topics").insert(topic_row).execute()
 
             for j, sub in enumerate(topic.subtopics):
                 sub = sub.strip()

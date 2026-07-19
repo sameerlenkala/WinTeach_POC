@@ -24,9 +24,9 @@ def create_course(db: Client, user: dict, payload: CourseCreate) -> dict:
     co_id_by_number: dict[int, str] = {}
     for i, co_item in enumerate(payload.course_outcomes):
         if isinstance(co_item, str):
-            co_text, bloom_level = co_item, None
+            co_text, bloom_level, is_industry = co_item, None, False
         else:
-            co_text, bloom_level = co_item.text, co_item.bloom or None
+            co_text, bloom_level, is_industry = co_item.text, co_item.bloom or None, co_item.is_industry
         co_id = str(uuid.uuid4())
         co_id_by_number[i + 1] = co_id
         row = {
@@ -34,6 +34,7 @@ def create_course(db: Client, user: dict, payload: CourseCreate) -> dict:
             "course_id": course_id,
             "co_number": i + 1,
             "description": co_text,
+            "is_industry": is_industry,
         }
         if bloom_level:
             row["bloom_level"] = bloom_level

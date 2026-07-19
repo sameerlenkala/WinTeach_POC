@@ -1944,7 +1944,15 @@ def _run_notes_phase(db, client, job_id: str, topic_id: str, ctx: dict, plan: di
             # note that ships, and expansion repairs any shrunk field.
             v = validate_and_expand_unit(client, out, unit, ctx)
             log_check_outcomes(job_id, f"notes:{unit.get('concept_id')}:post_polish", v, db=db)
+        # Accumulate core new-terms AND glossary/definition terms — the closing
+        # prompt's repetition exclusion only works if it names what earlier
+        # glossaries actually contain (models glossary more than they declare).
         prior_terms = prior_terms + list((out.get("core", {}) or {}).get("new_terms_introduced", []) or [])
+        out_closing = ((out.get("closing") or {}).get("sections")) or {}
+        prior_terms += [g.get("term") for g in ((out_closing.get("glossary_section") or {}).get("terms")) or []
+                        if isinstance(g, dict) and g.get("term")]
+        prior_terms += [d.get("term") for d in ((out_closing.get("revision_section") or {}).get("important_definitions")) or []
+                        if isinstance(d, dict) and d.get("term")]
         unit_records.append({
             "unit_ref": unit.get("concept_id"), **out, "unit_hash": canonical_hash(out),
             "critique": critique,
@@ -2382,8 +2390,14 @@ def reconcile_stale_generations(db, concept_artifacts: list[dict]) -> list[dict]
 
 def _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, **fields) -> None:
     existing = _concept_row(db, topic_id, concept_id, artifact_type)
-    fields["updated_at"] = "now()"
-    fields.pop("updated_at", None)  # let DB default handle; avoid string cast issues
+    # updated_at must be written explicitly: the column only has an INSERT
+    # default and no update trigger, so without this every UPDATE kept the
+    # original insert timestamp — and a REGENERATION of an old row went to
+    # 'generating' with a stale timestamp, which reconcile_stale_generations
+    # instantly flipped to 'error' mid-run (killing the UI's polling, so the
+    # finished artifact and its Approve button never appeared).
+    from datetime import datetime, timezone
+    fields["updated_at"] = datetime.now(timezone.utc).isoformat()
     if isinstance(fields.get("content"), (dict, list)):
         fields["content"], n_fixed = sanitize_content(fields["content"])
         if n_fixed:
@@ -2416,13 +2430,33 @@ def _neighbors(plan: dict, concept_id: str) -> tuple[str | None, str | None]:
 
 
 def _prior_terms(db, topic_id: str, plan: dict, concept_id: str) -> list[str]:
-    """Terms introduced by earlier concepts' generated notes (for scope-lock)."""
+    """Terms introduced by earlier concepts' generated notes (for scope-lock and
+    the closing prompt's glossary/flashcard exclusion). Collects the core's
+    new_terms_introduced AND the closing's glossary + important-definition
+    terms — models glossary far more than they declare in new_terms, and the
+    exclusion only works if it names what earlier glossaries actually contain."""
     order = [c.get("concept_id") for c in plan.get("concept_inventory", []) or []]
     stop = order.index(concept_id) if concept_id in order else len(order)
     terms: list[str] = []
+    seen: set[str] = set()
+
+    def add(t) -> None:
+        t = str(t or "").strip()
+        if t and t.casefold() not in seen:
+            seen.add(t.casefold())
+            terms.append(t)
+
     for cid in order[:stop]:
         nt = _concept_row(db, topic_id, cid, "student_notes").get("content") or {}
-        terms += list((nt.get("core", {}) or {}).get("new_terms_introduced", []) or [])
+        for t in (nt.get("core", {}) or {}).get("new_terms_introduced", []) or []:
+            add(t)
+        closing = ((nt.get("closing") or {}).get("sections")) or {}
+        for g in ((closing.get("glossary_section") or {}).get("terms")) or []:
+            if isinstance(g, dict):
+                add(g.get("term"))
+        for d in ((closing.get("revision_section") or {}).get("important_definitions")) or []:
+            if isinstance(d, dict):
+                add(d.get("term"))
     return terms
 
 

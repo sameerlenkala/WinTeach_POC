@@ -85,6 +85,7 @@ export interface CourseOutcome {
   description: string;
   text?: string;         // alias used in some local paths
   bloom_level?: string;
+  is_industry?: boolean; // wizard "IO" cards — labeled IOn, not COn
 }
 
 export interface COMapping {

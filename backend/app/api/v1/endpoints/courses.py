@@ -106,11 +106,17 @@ def get_topic(course_id: str, topic_id: str, user: dict = Depends(get_current_us
     # syllabus convention). Never fall back to topic.order — that's a
     # within-unit position, and using it as a CO number made this endpoint
     # disagree with the curriculum view about which CO a topic serves.
-    cos = db.table("course_outcomes").select("id, co_number, description, bloom_level").eq("course_id", course_id).order("co_number").execute().data or []
+    cos = db.table("course_outcomes").select("id, co_number, description, bloom_level, is_industry").eq("course_id", course_id).order("co_number").execute().data or []
     matched_co = next((c for c in cos if topic.get("co_id") and c["id"] == topic["co_id"]), None)
     if matched_co is None:
-        unit_number = (topic.get("unit") or {}).get("unit_number")
-        matched_co = next((c for c in cos if unit_number and c["co_number"] == unit_number), cos[0] if cos else None)
+        # units.unit_number is TEXT ("1", "I", "E") — coerce before comparing,
+        # or the int co_number never matches and everything fell to cos[0].
+        raw = str((topic.get("unit") or {}).get("unit_number") or "")
+        romans = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
+        unit_number = int(raw) if raw.isdigit() else romans.get(raw.upper())
+        regular = [c for c in cos if not c.get("is_industry")]
+        matched_co = next((c for c in regular if unit_number and int(c["co_number"]) == unit_number),
+                          regular[0] if regular else None)
     topic["linked_co"] = matched_co
     return topic
 
