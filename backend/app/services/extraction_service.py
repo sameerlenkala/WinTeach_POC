@@ -616,6 +616,7 @@ Return exactly this shape:
       "topics": [
         {
           "title": "topic name — the bold heading before the colon",
+          "co_number": "integer — the CO this topic most directly serves, judged by MEANING",
           "bloom_level": "inherit from the CO this topic supports — do NOT default all to Understand",
           "subtopics": [
             { "title": "each comma-separated item after the colon" }
@@ -628,6 +629,12 @@ Return exactly this shape:
 }
 
 Additional rules:
+- For topic co_number: match the topic's CONTENT against every CO statement and pick the CO it
+  most directly serves — this is a semantic judgement, not positional (unit 2's topics do not
+  automatically map to CO2, and topics late in the course do not default to CO1). If several COs
+  fit, pick the most specific one. If NO CO genuinely covers the topic (syllabi often list topics,
+  like transactions or recovery, that the CO list forgot), pick the CO whose theme is CLOSEST —
+  never fall back to CO 1 just because nothing matches.
 - For topic bloom_level: first check if the syllabus explicitly states a bloom verb for that topic.
   If not (most Indian syllabi list topics as bare nouns), judge the level the topic is genuinely
   TAUGHT at from its own subtopics, using the CO it supports as the CEILING — never the default:

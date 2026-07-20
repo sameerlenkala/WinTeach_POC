@@ -990,9 +990,9 @@ export default function WinTeachGenerate() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Subtopics ({concepts.length})</div>
                 {concepts.length > 1 && (
-                  <span className="max-md:hidden" title="j/k move between subtopics · g generate all Notes · a approve all ready"
-                    style={{ fontSize: 11, color: W.text3, border: `1px solid ${W.border}`, borderRadius: 6, padding: '1px 7px', fontFamily: W.fontDisplay }}>
-                    ⌨ j k · g · a
+                  <span className="max-md:hidden" title="Keyboard shortcuts: j/k move between subtopics · g generate all Notes · a approve all ready"
+                    style={{ fontSize: 12, color: W.text3, cursor: 'default' }}>
+                    ⌨
                   </span>
                 )}
                 {planStatus.ok ? <Badge variant="green" dot>Plan validated</Badge> : <Badge variant="orange">Plan needs revision</Badge>}

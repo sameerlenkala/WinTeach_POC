@@ -337,7 +337,7 @@ export default function WinTeachCreateCourse() {
       ...institutes.map(i => i.regulation).filter(Boolean),
       ...REGULATIONS,
     ]));
-    const [sem, setSem] = useState(String(d.sem || ''));
+    const [sem, setSem] = useState(numericField(d.sem));
     const [credits, setCredits] = useState(String(d.credits || ''));
 
     const PROGRAMS = [
@@ -713,7 +713,7 @@ export default function WinTeachCreateCourse() {
       d0.major && d0.major !== 'All' ? d0.major.split(',').map(s => s.trim()) : ['CSE']
     );
     const [regulation, setRegulation] = useState(String(e?.regulation || d0.regulation || 'R24'));
-    const [sem, setSem] = useState(String(e?.sem || d0.sem || ''));
+    const [sem, setSem] = useState(numericField(e?.sem ?? d0.sem));
     const [credits, setCredits] = useState(String(e?.credits || d0.credits || ''));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [majorOpen, setMajorOpen] = useState(false);
@@ -1358,10 +1358,22 @@ export default function WinTeachCreateCourse() {
 // Courses carry at most this many Industry Outcomes.
 const MAX_IOS = 2;
 
+// Semester (and similar) fields render as <input type="number">, which shows
+// BLANK for a non-numeric value — extraction sometimes yields "II Year II
+// Semester", which then looked empty, passed the non-empty check, and shipped
+// silently. Sanitize to digits-or-empty so validation actually fires.
+function numericField(v: unknown): string {
+  const s = String(v ?? '').trim();
+  return /^\d+$/.test(s) ? s : '';
+}
+
 // ---- Best-effort default topic mapping for an injected IO ----
-// Scores every topic by keyword overlap with the IO text, boosted when a
-// matching P3 industry skill explicitly names the topic. Unmapped topics are
-// preferred; an already-mapped topic is reassigned only as a last resort.
+// Scores every topic by keyword overlap with the IO text, weighting each word
+// by how RARE it is across topics — "indexing" (one topic) is evidence,
+// "database" (half the course) is not. A P3 industry skill that explicitly
+// names the topic is the strongest signal. Topics the syllabus already mapped
+// to a CO are only reassigned on strong evidence (hint or a rare-word match);
+// mapping an IO to zero topics is fine — faculty can wire it manually.
 function autoMapIoTopics(course: Course, io: CO, ioText: string): void {
   const STOP = new Set(['with', 'using', 'apply', 'build', 'design', 'develop', 'implement', 'industry', 'modern', 'based', 'their', 'through', 'tools', 'workflows', 'students', 'techniques', 'solutions', 'real', 'world', 'production', 'services']);
   const ioNorm = normCo(ioText);
@@ -1376,12 +1388,24 @@ function autoMapIoTopics(course: Course, io: CO, ioText: string): void {
     }
   });
 
-  const scored = course.units.flatMap(u => u.topics).map(t => {
-    const hay = normCo(t.name + ' ' + t.subs.join(' '));
-    let score = words.filter(w => hay.includes(w)).length;
-    if (hinted.has(normCo(t.name))) score += 3;
-    return { t, score };
-  }).filter(x => x.score > 0);
+  // Exact word-token matching — substring matching made "executions" match
+  // "execution" and a subtopic's "Users" match "users", stealing unrelated
+  // topics. Subtopic hits count half; title hits full.
+  const tok = (s: string) => new Set(normCo(s).split(' ').filter(Boolean));
+  const topics = course.units.flatMap(u => u.topics);
+  const titleToks = topics.map(t => tok(t.name));
+  const subToks = topics.map(t => tok(t.subs.join(' ')));
+  const df = (w: string) => topics.filter((_, i) => titleToks[i].has(w) || subToks[i].has(w)).length || 1;
+
+  const scored = topics.map((t, i) => {
+    const isHinted = hinted.has(normCo(t.name));
+    const score = words.reduce((s, w) =>
+      s + (titleToks[i].has(w) ? 1 / df(w) : subToks[i].has(w) ? 0.5 / df(w) : 0), 0) + (isHinted ? 3 : 0);
+    // Overriding a syllabus-declared CO mapping needs strong evidence: a P3
+    // skill hint, or an IO word unique to this topic's TITLE.
+    const strongEvidence = isHinted || words.some(w => titleToks[i].has(w) && df(w) === 1);
+    return { t, score, strongEvidence };
+  }).filter(x => (x.t.coKey ? x.strongEvidence : x.score >= 0.5));
 
   scored.sort((a, b) => (Number(!!a.t.coKey) - Number(!!b.t.coKey)) || (b.score - a.score));
   scored.slice(0, 2).forEach(x => { x.t.coKey = io.key; });
