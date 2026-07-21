@@ -306,6 +306,34 @@ def edit_plan(job_id: str, payload: PlanEditRequest,
     return gen.save_plan_edits(db, topic_id, [c.model_dump() for c in payload.concepts])
 
 
+class PlanSectionsRequest(BaseModel):
+    tlo_set: list[dict] | None = None
+    session_plan: list[dict] | None = None
+
+
+@router.put("/jobs/{job_id}/plan/sections")
+def edit_plan_sections(job_id: str, payload: PlanSectionsRequest,
+                       user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Persist faculty edits to whole plan sections (TLOs, session plan) from
+    the plan modal. Only whitelisted sections are merged."""
+    topic_id = _managed_topic_of(db, user, job_id)
+    return gen.save_plan_sections(db, topic_id, payload.model_dump(exclude_none=True))
+
+
+@router.post("/jobs/{job_id}/plan/regenerate", status_code=202)
+def regenerate_plan(job_id: str, user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Re-run the Topic Plan node on the existing job. Concept ids are
+    re-derived, so already-generated concept artifacts may no longer match the
+    new inventory — the UI warns before calling this."""
+    topic_id = _managed_topic_of(db, user, job_id)
+    course = _course_of_topic(db, topic_id)
+    db.table("generation_jobs").update(
+        {"status": "queued", "phase": "generating_topic_plan", "error_msg": None}
+    ).eq("id", job_id).execute()
+    gen.enqueue_topic_job(job_id, course["id"], topic_id)
+    return {"status": "generating_topic_plan", "job_id": job_id}
+
+
 @router.post("/jobs/{job_id}/concepts/{concept_id}/{artifact_type}/generate", status_code=202)
 def gen_concept(job_id: str, concept_id: str, artifact_type: str,
                 user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):

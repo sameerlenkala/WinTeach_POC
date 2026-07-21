@@ -158,6 +158,14 @@ export const generationApi = {
   savePlan: (jobId: string, concepts: any[]) =>
     api.put<any>(`/generate/jobs/${jobId}/plan`, { concepts }),
 
+  /** Persist edited whole plan sections (TLOs, session plan) from the plan modal. */
+  savePlanSections: (jobId: string, sections: { tlo_set?: any[]; session_plan?: any[] }) =>
+    api.put<any>(`/generate/jobs/${jobId}/plan/sections`, sections),
+
+  /** Re-run the Topic Plan node on the existing job (concept ids re-derived). */
+  regeneratePlan: (jobId: string) =>
+    api.post<any>(`/generate/jobs/${jobId}/plan/regenerate`),
+
   genConcept: (jobId: string, conceptId: string, type: ConceptArtType) =>
     api.post<any>(`/generate/jobs/${jobId}/concepts/${conceptId}/${type}/generate`),
 

@@ -2318,6 +2318,23 @@ def _topic_plan_content(db, topic_id: str) -> dict:
     return (r.data[0]["content"] if r.data else {}) or {}
 
 
+_EDITABLE_PLAN_SECTIONS = {"tlo_set", "session_plan"}
+
+
+def save_plan_sections(db, topic_id: str, sections: dict) -> dict:
+    """Merge faculty-edited whole sections (TLOs, session plan) into the stored
+    Topic Plan. Only whitelisted list sections are accepted — everything else in
+    the plan stays as generated."""
+    plan = _topic_plan_content(db, topic_id)
+    for key, value in sections.items():
+        if key in _EDITABLE_PLAN_SECTIONS and isinstance(value, list):
+            plan[key] = value
+    art_id = _artifact_id_by_topic(db, topic_id, "topic_plan")
+    if art_id:
+        db.table("artifacts").update({"content": plan}).eq("id", art_id).execute()
+    return plan
+
+
 def save_plan_edits(db, topic_id: str, concept_patches: list[dict]) -> dict:
     """Apply faculty edits (content type, secondary blocks, flags, complexity,
     scope) to the stored Topic Plan concepts so later per-concept generation

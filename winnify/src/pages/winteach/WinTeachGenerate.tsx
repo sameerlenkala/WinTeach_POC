@@ -984,7 +984,7 @@ export default function WinTeachGenerate() {
               </div>
 
               {/* topic plan — every section the plan prompt produces, read-only */}
-              <TopicPlanPanel plan={plan} />
+              <TopicPlanPanel plan={plan} jobId={job?.id} onChanged={refetch} />
 
               {/* concepts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>
