@@ -1355,8 +1355,24 @@ export default function WinTeachCreateCourse() {
   }
 }
 
-// Courses carry at most this many Industry Outcomes.
+// Courses carry at most this many Industry Outcomes. The cap limits how many
+// IO rows a course declares — it never limits how many topics can be added:
+// once reached, new industry topics attach to the closest EXISTING IO.
 const MAX_IOS = 2;
+
+// Existing industry outcome with the strongest word overlap with the topic's
+// name/description (first IO as fallback). Used when the IO cap is reached.
+function closestIndustryOutcome(cos: CO[], text: string): CO | null {
+  const ios = cos.filter(c => c.isIndustry);
+  if (!ios.length) return null;
+  const words = new Set(normCo(text).split(' ').filter(w => w.length > 3));
+  let best = ios[0], bestScore = -1;
+  for (const io of ios) {
+    const score = normCo(io.text).split(' ').filter(w => words.has(w)).length;
+    if (score > bestScore) { best = io; bestScore = score; }
+  }
+  return best;
+}
 
 // Semester (and similar) fields render as <input type="number">, which shows
 // BLANK for a non-numeric value — extraction sometimes yields "II Year II
@@ -1663,8 +1679,8 @@ function AddIndustryTopicsSection({ extracted, onChange }: { extracted: Course; 
             Suggested from your syllabus. Adding one creates the topic in an <strong>Electives</strong> unit with its own Industry Outcome (IO) attached.
           </div>
           {capReached && addCount > 0 && (
-            <div style={{ fontSize: 11.5, color: W.orangeFg, background: W.orangeBg, borderRadius: 7, padding: '7px 10px', marginBottom: 10, lineHeight: 1.45 }}>
-              IO limit reached — a course carries at most {MAX_IOS} Industry Outcomes. Remove one to add another topic.
+            <div style={{ fontSize: 11.5, color: W.text2, background: W.surfaceMuted, borderRadius: 7, padding: '7px 10px', marginBottom: 10, lineHeight: 1.45 }}>
+              This course already carries {MAX_IOS} Industry Outcomes (the cap) — new industry topics will attach to the closest existing IO instead of creating another.
             </div>
           )}
           {addCount === 0 ? (
@@ -1689,23 +1705,28 @@ function AddIndustryTopicsSection({ extracted, onChange }: { extracted: Course; 
                   <span style={{ fontSize: 11.5, color: W.text3 }}>Dismissed</span>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button disabled={capReached}
-                      title={capReached ? `A course carries at most ${MAX_IOS} Industry Outcomes` : undefined}
+                    <button
                       onClick={() => {
-                        if (capReached) return;
                         s.state = 'added';
                         const u = getElectivesUnit(e as Course);
-                        // Each added industry topic carries its own Industry Outcome (IO), mapped to it
-                        const io: CO = { id: 'IO', key: ckey(), text: s.co, bloom: s.bloom, isIndustry: true };
                         e.cos = e.cos || [];
-                        e.cos.push(io);
-                        renumberCos(e.cos);
-                        u.topics.push({ id: nid(), name: s.name, subs: s.subs ?? [], co: { text: s.co, bloom: s.bloom }, coKey: io.key, artifacts: newArtifacts() });
+                        // Under the cap each industry topic carries its own IO;
+                        // at the cap the topic attaches to the closest existing
+                        // IO — the cap limits outcomes, never topics.
+                        let io: CO | null;
+                        if ((e.cos as CO[]).filter((c: CO) => c.isIndustry).length < MAX_IOS) {
+                          io = { id: 'IO', key: ckey(), text: s.co, bloom: s.bloom, isIndustry: true };
+                          e.cos.push(io);
+                          renumberCos(e.cos);
+                        } else {
+                          io = closestIndustryOutcome(e.cos as CO[], `${s.name} ${s.co}`);
+                        }
+                        u.topics.push({ id: nid(), name: s.name, subs: s.subs ?? [], co: { text: s.co, bloom: s.bloom }, coKey: io?.key ?? null, artifacts: newArtifacts() });
                         onChange();
                         forceUpdate(n => n + 1);
                       }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--brand)', color: '#fff', borderRadius: 6, padding: '4px 11px', fontSize: 11.5, fontWeight: 600, fontFamily: W.fontDisplay, cursor: capReached ? 'not-allowed' : 'pointer', opacity: capReached ? 0.45 : 1 }}>
-                      <span style={{ width: 12, height: 12, display: 'inline-flex' }}><IPlus /></span>Add topic + IO
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--brand)', color: '#fff', borderRadius: 6, padding: '4px 11px', fontSize: 11.5, fontWeight: 600, fontFamily: W.fontDisplay, cursor: 'pointer' }}>
+                      <span style={{ width: 12, height: 12, display: 'inline-flex' }}><IPlus /></span>{capReached ? 'Add topic' : 'Add topic + IO'}
                     </button>
                     <button onClick={() => { s.state = 'dismissed'; forceUpdate(n => n + 1); }} title="Dismiss"
                       style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, border: `1px solid ${W.border}`, background: 'var(--card)', color: W.text3, borderRadius: 6, cursor: 'pointer' }}>
@@ -1921,27 +1942,43 @@ function TopicEditorModal({ extracted, ui, ti, onClose, onChange }: {
   const editing = ti !== null;
   const unit = extracted.units[ui];
   const t = editing ? unit.topics[ti!] : { name: '', subs: [], co: { text: '', bloom: 'Understand' }, artifacts: newArtifacts(), id: '' };
+  // Keys must exist before the picker can preselect the topic's mapping.
+  linkCoKeys(extracted);
+  const cos: CO[] = extracted.cos ?? [];
   const [name, setName] = useState(t.name);
   const [subs, setSubs] = useState(t.subs.join('\n'));
-  const [coText, setCoText] = useState(t.co.text);
   const [bloom, setBloom] = useState(t.co.bloom);
+  // The old free-text "Mapped course outcome" box showed t.co.text (usually
+  // blank) and ignored the real mapping — this picker shows the course's
+  // actual outcomes and preselects the one the topic is wired to.
+  const [coKey, setCoKey] = useState<string | null>(t.coKey ?? null);
+
+  const regulars = cos.filter(c => !c.isIndustry);
+  const ios = cos.filter(c => c.isIndustry);
+  const coLabel = (co: CO) => co.isIndustry ? `IO${ios.indexOf(co) + 1}` : `CO${regulars.indexOf(co) + 1}`;
 
   const save = () => {
     if (!name.trim()) return;
     const subsArr = subs.split('\n').map(s => s.trim()).filter(Boolean);
-    const co = { text: coText.trim() || ('Understand ' + name + '.'), bloom };
+    const sel = coKey ? cos.find(c => c.key === coKey) ?? null : null;
+    const co = { text: sel?.text ?? '', bloom };
     if (editing) {
-      t.name = name; t.subs = subsArr; t.co = co;
+      t.name = name; t.subs = subsArr; t.co = co; t.coKey = sel?.key ?? null;
     } else {
-      const newTopic: Topic = { id: nid(), name, subs: subsArr, co, artifacts: newArtifacts() };
-      // Topics added to the electives unit carry their own Industry Outcome (IO),
-      // as long as the course is under the IO cap.
-      if ((unit.isElective || unit.n === 'E') && (extracted.cos ?? []).filter(c => c.isIndustry).length < MAX_IOS) {
-        const io: CO = { id: 'IO', key: ckey(), text: co.text, bloom: co.bloom, isIndustry: true };
+      const newTopic: Topic = { id: nid(), name, subs: subsArr, co, coKey: sel?.key ?? null, artifacts: newArtifacts() };
+      // Unmapped topics added to the electives unit carry an Industry Outcome:
+      // a new IO under the cap, otherwise the closest existing IO — the cap
+      // limits outcomes, never how many topics can be added.
+      if (!sel && (unit.isElective || unit.n === 'E')) {
         extracted.cos = extracted.cos || [];
-        extracted.cos.push(io);
-        renumberCos(extracted.cos);
-        newTopic.coKey = io.key;
+        if ((extracted.cos as CO[]).filter(c => c.isIndustry).length < MAX_IOS) {
+          const io: CO = { id: 'IO', key: ckey(), text: `Apply ${name} in industry contexts.`, bloom, isIndustry: true };
+          extracted.cos.push(io);
+          renumberCos(extracted.cos);
+          newTopic.coKey = io.key;
+        } else {
+          newTopic.coKey = closestIndustryOutcome(extracted.cos as CO[], name)?.key ?? null;
+        }
       }
       unit.topics.push(newTopic);
     }
@@ -1949,12 +1986,63 @@ function TopicEditorModal({ extracted, ui, ti, onClose, onChange }: {
     onClose();
   };
 
+  const outcomeRow = (co: CO | null) => {
+    const key = co?.key ?? null;
+    const active = coKey === key;
+    return (
+      <div key={key ?? 'none'} onClick={() => setCoKey(key)}
+        style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start', padding: '9px 12px', borderRadius: 8,
+          border: `1.5px solid ${active ? W.brand : W.border}`, cursor: 'pointer', marginBottom: 6,
+          background: active ? 'var(--tint-brand-bg)' : 'var(--card)', transition: 'border-color .12s, background .12s',
+        }}>
+        <span style={{
+          width: 15, height: 15, borderRadius: '50%', flexShrink: 0, marginTop: 2, boxSizing: 'border-box',
+          border: `${active ? 5 : 1.5}px solid ${active ? W.brand : W.borderStrong}`, background: 'var(--card)', transition: 'border .12s',
+        }} />
+        {co ? (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <span style={{
+                fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 10.5, borderRadius: 5, padding: '1px 7px',
+                color: co.isIndustry ? W.blueFg : 'var(--tint-brand-fg)',
+                background: co.isIndustry ? W.blueBg : 'var(--tint-brand-bg)',
+              }}>{coLabel(co)}</span>
+              {co.isIndustry && <span style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 9, letterSpacing: '.06em', textTransform: 'uppercase', color: W.blueFg }}>Industry</span>}
+              <BloomBadge bloom={co.bloom} />
+            </div>
+            <div style={{
+              fontSize: 12.5, color: active ? W.text : W.text2, lineHeight: 1.5,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>{co.text}</div>
+          </div>
+        ) : (
+          <span style={{ fontSize: 12.5, color: W.text2, lineHeight: 1.5 }}>
+            Not mapped — this topic won't count toward any outcome's attainment
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Modal onClose={onClose} title={`${editing ? 'Edit topic' : 'Add topic'} · Unit ${unit.n}`}>
       <Field label="Topic name"><Input value={name} onChange={setName} placeholder="e.g. Functions" /></Field>
       <Field label="Subtopics" optional><Textarea value={subs} onChange={setSubs} placeholder="One per line" /></Field>
-      <Field label="Mapped course outcome"><Textarea value={coText} onChange={setCoText} placeholder="Implement... / Understand... / Analyze..." /></Field>
       <Field label="Bloom's level"><Select value={bloom} onChange={setBloom} options={[...BLOOM]} /></Field>
+      <div style={{ marginBottom: 18 }}>
+        <label style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: W.text }}>Mapped course outcome</label>
+        {cos.length ? (
+          <div style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 2 }}>
+            {outcomeRow(null)}
+            {cos.map(co => outcomeRow(co))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: W.text3, fontStyle: 'italic', padding: '6px 2px' }}>
+            No course outcomes yet — add outcomes first, then map this topic.
+          </div>
+        )}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
         <Btn variant="primary" onClick={save}>
