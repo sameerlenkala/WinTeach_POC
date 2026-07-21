@@ -9,6 +9,7 @@ import {
   ArrowRight, Eye, EyeOff, GraduationCap, KeyRound, Loader2, Lock, Mail, Rocket, User,
 } from 'lucide-react';
 import { WfHero } from './SignIn';
+import logo from '@/assets/winnify-logo.png';
 import './auth/auth.css';
 
 export default function SignUp() {
@@ -43,9 +44,8 @@ export default function SignUp() {
 
       <div className="wf-panel">
         <div className="wf-card wf-rise">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 22 }}>
-            <span className="wf-mark" style={{ width: 38, height: 38, borderRadius: 12, fontSize: 19 }}>W</span>
-            <span className="wf-wordmark" style={{ fontSize: 21 }}>Winnify</span>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 22 }}>
+            <img src={logo} alt="Winnify" style={{ height: 34, width: 'auto' }} />
           </div>
 
           <h1 className="wf-h1">Create your account</h1>

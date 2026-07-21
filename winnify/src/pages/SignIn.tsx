@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { GoogleIcon } from '@/components/common/SocialIcons';
 import { authApi } from '@/api/auth';
+import logo from '@/assets/winnify-logo.png';
 import './auth/auth.css';
 
 type ForgotStep = 'email' | 'code' | 'reset' | 'done';
@@ -19,9 +20,8 @@ type ForgotStep = 'email' | 'code' | 'reset' | 'done';
 export function WfHero() {
   return (
     <aside className="wf-hero">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
-        <span className="wf-mark">W</span>
-        <span className="wf-wordmark">Winnify</span>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <img src={logo} alt="Winnify" style={{ height: 44, width: 'auto' }} />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative' }}>
         <div className="wf-hero-tagline">The Career Intelligence Layer for Talent</div>
@@ -239,9 +239,8 @@ export default function SignIn() {
       {/* Right panel */}
       <div className="wf-panel">
         <div className="wf-card wf-rise">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 22 }}>
-            <span className="wf-mark" style={{ width: 38, height: 38, borderRadius: 12, fontSize: 19 }}>W</span>
-            <span className="wf-wordmark" style={{ fontSize: 21 }}>Winnify</span>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 22 }}>
+            <img src={logo} alt="Winnify" style={{ height: 34, width: 'auto' }} />
           </div>
 
           <h1 className="wf-h1">Welcome back</h1>

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Building2, Users, BarChart3, Bell, Settings, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import PageTopbar from '@/components/layout/PageTopbar';
+import logo from '@/assets/winnify-logo.png';
 
 const NAV = [
   { to: '/superadmin',         label: 'Dashboard',  Icon: LayoutDashboard, end: true },
@@ -35,8 +36,8 @@ export default function SuperAdminLayout() {
             <ShieldCheck size={18} color="#fff" />
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: '#1A1A22' }}>Winnify</div>
-            <div style={{ fontSize: 10, color: '#E84393', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Super Admin</div>
+            <img src={logo} alt="Winnify" style={{ height: 18, width: 'auto', display: 'block' }} />
+            <div style={{ fontSize: 10, color: '#E84393', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>Super Admin</div>
           </div>
         </div>
 

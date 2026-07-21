@@ -1,6 +1,7 @@
 // Public landing (/) — the Winnify hero, ported from the winnify_website_2
 // design. Standalone full-screen hero; CTAs route into this app.
 import { Link } from 'react-router-dom';
+import logo from '@/assets/winnify-logo.png';
 import './landing/landing.css';
 
 const MARQUEE = [
@@ -18,7 +19,9 @@ export default function Landing() {
         {/* nav */}
         <nav className="wl-nav">
           <div className="wrap wl-nav-inner">
-            <Link to="/" className="wl-logo">winnif<b>y</b></Link>
+            <Link to="/" className="wl-logo" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <img src={logo} alt="Winnify" style={{ height: 34, width: 'auto', display: 'block' }} />
+            </Link>
             <div className="wl-nav-links">
               <Link to="/signin">Sign in</Link>
               <Link to="/study/login">Course studio</Link>

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, BookOpen, BarChart3, Settings, LogOut, Building2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import PageTopbar from '@/components/layout/PageTopbar';
+import logo from '@/assets/winnify-logo.png';
 
 const NAV = [
   { to: '/admin',          label: 'Dashboard', Icon: LayoutDashboard, end: true },
@@ -31,7 +32,7 @@ export default function CollegeAdminLayout() {
             <Building2 size={18} color="#fff" />
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: '#1A1A22' }}>Winnify</div>
+            <img src={logo} alt="Winnify" style={{ height: 18, width: 'auto', display: 'block' }} />
             <div style={{ fontSize: 10, color: '#00B894', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>College Admin</div>
           </div>
         </div>
