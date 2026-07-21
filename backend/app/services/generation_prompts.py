@@ -107,8 +107,10 @@ Produce, in this order:
   Bloom level never exceeds the parent's. Approved verb-bank verbs only. Foundational or
   definitional concepts still get a TLO — just at L1/L2 (e.g. "List the components of a
   database schema"); a concept left with zero TLOs is a compliance failure.
-- concept_inventory: ONE row per subtopic, EXACTLY as the subtopics are written — never
-  split a bundled subtopic into multiple rows and never merge two subtopics into one.
+- concept_inventory: ONE row per subtopic, EXACTLY as the subtopics are written and in the
+  SAME ORDER as they are listed — the syllabus sequence is the teaching sequence; never
+  reorder rows, never split a bundled subtopic into multiple rows and never merge two
+  subtopics into one.
   concept_name = the subtopic title verbatim. Each row carries concepts_covered — the
   atomic concepts bundled inside that subtopic (provided below) — and its scope_in MUST
   include every one of them: the Notes stage must teach each listed concept within this

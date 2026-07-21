@@ -2168,7 +2168,12 @@ def _load_topic_context(db, course_id: str, topic_id: str) -> dict:
     course = _row(db, "courses", course_id)
     topic = _row(db, "topics", topic_id)
     unit = _row(db, "units", topic.get("unit_id")) if topic.get("unit_id") else {}
-    subtopics = db.table("subtopics").select("title").eq("topic_id", topic_id).execute()
+    # Syllabus order matters: the topic plan's concept inventory (C1, C2, …)
+    # is built from this list, and every downstream surface (studio board,
+    # lesson sequence) follows the plan. Without ORDER BY, Postgres returns
+    # rows in arbitrary order and lessons came out shuffled.
+    subtopics = db.table("subtopics").select("title").eq("topic_id", topic_id) \
+        .order("order").execute()
 
     operative_co = None
     if topic.get("co_id"):
