@@ -156,6 +156,7 @@ def login(db: Client, email: str, password: str) -> LoginResponse:
 
     return LoginResponse(
         access_token=session.access_token,
+        refresh_token=session.refresh_token,
         role=role,
         redirect=ROLE_REDIRECT[role],
         user={

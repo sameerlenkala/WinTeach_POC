@@ -28,6 +28,28 @@ export class ApiError extends Error {
   }
 }
 
+// On a 401, try once to refresh the Supabase session before giving up — the
+// proactive refresh timer doesn't fire while the laptop/tab was asleep, so
+// the first request after waking can carry an expired token even though the
+// refresh token is still perfectly valid.
+let refreshing: Promise<string | null> | null = null;
+async function tryRefreshToken(): Promise<string | null> {
+  refreshing ??= (async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data } = await supabase.auth.refreshSession();
+      const fresh = data.session?.access_token ?? null;
+      if (fresh) localStorage.setItem('winnify_token', fresh);
+      return fresh;
+    } catch {
+      return null;
+    } finally {
+      setTimeout(() => { refreshing = null; }, 0);
+    }
+  })();
+  return refreshing;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -36,7 +58,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers });
+  let res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers });
+
+  if (res.status === 401 && token) {
+    const fresh = await tryRefreshToken();
+    if (fresh && fresh !== token) {
+      headers['Authorization'] = `Bearer ${fresh}`;
+      res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers });
+    }
+  }
 
   if (res.status === 401) {
     localStorage.removeItem('winnify_token');

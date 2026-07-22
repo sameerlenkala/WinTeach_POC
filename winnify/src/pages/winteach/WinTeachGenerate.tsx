@@ -469,6 +469,9 @@ export default function WinTeachGenerate() {
   const [queueRun, setQueueRun] = useState<string | null>(null); // currently generating via queue
   const [queueDone, setQueueDone] = useState<Record<string, 'done' | 'failed'>>({});
   const [queuePaused, setQueuePaused] = useState(false);
+  // Generation board (subtopic cards) is collapsed by default — the header
+  // count chips carry the status; expand to work per-subtopic.
+  const [boardOpen, setBoardOpen] = useState(false);
   const [resumed, setResumed] = useState(false);
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -535,6 +538,11 @@ export default function WinTeachGenerate() {
   const topicArt = (t: TopicArtType) => (job?.artifacts ?? []).find(a => a.type === t);
   const concepts = plan?.concept_inventory ?? [];
   const anyNotesReady = (job?.concept_artifacts ?? []).some(c => c.artifact_type === 'student_notes' && c.status === 'ready');
+  const allNotesReady = (plan?.concept_inventory ?? []).length > 0
+    && (plan?.concept_inventory ?? []).every((c: any) => {
+      const s = (job?.concept_artifacts ?? []).find(a => a.concept_id === c.concept_id && a.artifact_type === 'student_notes');
+      return s?.status === 'ready' || s?.approval_status === 'approved';
+    });
   const planGenerating = job && (job.phase === 'generating_topic_plan' || job.phase === 'topic_plan_validate');
 
   // pipeline + board rollups
@@ -652,6 +660,35 @@ export default function WinTeachGenerate() {
   const queueRemove = (i: number) => setQueue(q => q.filter((_, x) => x !== i));
   const queueVisible = queueRun !== null || queue.length > 0 || Object.keys(queueDone).length > 0;
 
+  // "Generate all artifacts": chain the queues Notes → Slides → Quizzes. When
+  // the current type's queue drains, the effect starts the next type that
+  // still has pending concepts (slides/quiz only become pending once their
+  // notes are ready, so the fresh refetch after the notes phase feeds them in).
+  const [chainAll, setChainAll] = useState(false);
+  useEffect(() => {
+    if (!chainAll || queueBusy) return;
+    const order: ConceptArtType[] = ['student_notes', 'slides', 'quiz'];
+    for (let k = order.indexOf(queueType) + 1; k < order.length; k++) {
+      if (pendingFor(order[k]).length > 0) {
+        setQueueType(order[k]);
+        setQueueDone({});
+        setQueuePaused(false);
+        setQueue(pendingFor(order[k]).map((c: any) => c.concept_id));
+        return;
+      }
+    }
+    setChainAll(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chainAll, queueBusy, queueType, job]);
+  const generateAllArtifacts = () => {
+    const order: ConceptArtType[] = ['student_notes', 'slides', 'quiz'];
+    const first = order.find(t => pendingFor(t).length > 0);
+    if (!first) return;
+    setChainAll(true);
+    enqueueAll(first);
+  };
+  const allPendingTotal = conceptCount * 3 - notesDone - slidesDone - quizDone;
+
   // Persist the queue per topic so navigating away (e.g. View → notes reader)
   // doesn't silently abandon a running batch; restore it on mount.
   const queueKey = `wt-notes-queue:${topicId}`;
@@ -666,6 +703,7 @@ export default function WinTeachGenerate() {
         setQueueRun(saved.queueRun ?? null);
         setQueueDone(saved.queueDone ?? {});
         setQueuePaused(saved.queuePaused ?? false);
+        setChainAll(saved.chainAll ?? false);
       }
     } catch { /* */ }
     setQueueRestored(true);
@@ -673,10 +711,10 @@ export default function WinTeachGenerate() {
   }, [topicId]);
   useEffect(() => {
     if (!topicId || !queueRestored) return;
-    if (queueVisible) sessionStorage.setItem(queueKey, JSON.stringify({ queue, queueType, queueRun, queueDone, queuePaused }));
+    if (queueVisible) sessionStorage.setItem(queueKey, JSON.stringify({ queue, queueType, queueRun, queueDone, queuePaused, chainAll }));
     else sessionStorage.removeItem(queueKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId, queueRestored, queue, queueType, queueRun, queueDone, queuePaused, queueVisible]);
+  }, [topicId, queueRestored, queue, queueType, queueRun, queueDone, queuePaused, queueVisible, chainAll]);
 
   // topic context (this page is the topic's home — no separate topic page)
   const tp = topic as any;
@@ -988,7 +1026,23 @@ export default function WinTeachGenerate() {
 
               {/* concepts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>
-                <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Subtopics ({concepts.length})</div>
+                <button onClick={() => setBoardOpen(o => !o)} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent',
+                  cursor: 'pointer', padding: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text,
+                }}>
+                  <span style={{ fontSize: 11, color: W.text3, transition: 'transform .15s', transform: boardOpen ? 'rotate(90deg)' : 'none', display: 'inline-flex' }}>▶</span>
+                  Subtopics ({concepts.length})
+                </button>
+                {/* generation progress at a glance — visible collapsed or open */}
+                {([['Notes', notesDone], ['Slides', slidesDone], ['Quizzes', quizDone]] as [string, number][]).map(([label, done]) => (
+                  <span key={label} style={{
+                    fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, borderRadius: 99, padding: '2px 9px',
+                    fontVariantNumeric: 'tabular-nums',
+                    background: done === conceptCount && conceptCount > 0 ? W.greenBg : W.surfaceMuted,
+                    color: done === conceptCount && conceptCount > 0 ? W.greenFg : W.text2,
+                    border: `1px solid ${W.border}`,
+                  }}>{label} {done}/{conceptCount}</span>
+                ))}
                 {concepts.length > 1 && (
                   <span className="max-md:hidden" title="Keyboard shortcuts: j/k move between subtopics · g generate all Notes · a approve all ready"
                     style={{ fontSize: 12, color: W.text3, cursor: 'default' }}>
@@ -997,7 +1051,7 @@ export default function WinTeachGenerate() {
                 )}
                 {planStatus.ok ? <Badge variant="green" dot>Plan validated</Badge> : <Badge variant="orange">Plan needs revision</Badge>}
                 {plan.front_matter?.topic_plan_version && <Badge variant="muted">v{plan.front_matter.topic_plan_version}</Badge>}
-                {(pendingNotes.length > 0 || pendingSlides.length > 0 || pendingQuiz.length > 0 || approvables.length > 0) && (
+                {(allPendingTotal > 0 || approvables.length > 0) && (
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {approvables.length > 0 && (
                       <Btn sm onClick={approveAll} disabled={approvingAll}>
@@ -1005,9 +1059,14 @@ export default function WinTeachGenerate() {
                         {approvingAll ? 'Approving…' : `Approve all ready (${approvables.length})`}
                       </Btn>
                     )}
-                    {pendingNotes.length > 0 && (
-                      <Btn sm variant="primary" onClick={() => enqueueAll('student_notes')} disabled={queueBusy && queueType !== 'student_notes'}>
+                    {allPendingTotal > 0 && (
+                      <Btn sm variant="primary" onClick={generateAllArtifacts} disabled={queueBusy || chainAll}>
                         <span style={{ width: 14, height: 14, display: 'inline-flex' }}><ISpark /></span>
+                        {chainAll || queueBusy ? 'Generating…' : `Generate all artifacts (${allPendingTotal})`}
+                      </Btn>
+                    )}
+                    {pendingNotes.length > 0 && (
+                      <Btn sm onClick={() => enqueueAll('student_notes')} disabled={queueBusy && queueType !== 'student_notes'}>
                         Generate all Notes ({pendingNotes.length})
                       </Btn>
                     )}
@@ -1110,27 +1169,43 @@ export default function WinTeachGenerate() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                {concepts.length > 1 && (
-                  <ConceptRail concepts={concepts} stateFor={stateFor} onJump={scrollToConcept} />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {concepts.map((c: any, i: number) => (
-                    <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
-                      onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
-                      onEditingChange={setEditingConcept}
-                      onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
-                  ))}
+              {boardOpen ? (
+                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  {concepts.length > 1 && (
+                    <ConceptRail concepts={concepts} stateFor={stateFor} onJump={scrollToConcept} />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {concepts.map((c: any, i: number) => (
+                      <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
+                        onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
+                        onEditingChange={setEditingConcept}
+                        onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <button onClick={() => setBoardOpen(true)} style={{
+                  width: '100%', textAlign: 'left', background: 'var(--card)', border: `1px dashed ${W.borderStrong}`,
+                  borderRadius: 10, padding: '11px 16px', cursor: 'pointer', fontSize: 12.5, color: W.text2,
+                  fontFamily: W.fontSans,
+                }}>
+                  ▸ Expand to review, edit or generate each subtopic individually
+                </button>
+              )}
 
               {/* topic-level artifacts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 10px' }}>
                 <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Topic-wide artifacts</div>
                 <Badge variant={topicArtsDone === TOPIC_ART_TYPES.length ? 'green' : 'muted'}>{topicArtsDone}/{TOPIC_ART_TYPES.length} ready</Badge>
               </div>
-              {!anyNotesReady && <div style={{ fontSize: 12.5, color: W.text3, marginBottom: 10 }}>Generate at least one subtopic's Notes first.</div>}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, opacity: anyNotesReady ? 1 : 0.55, pointerEvents: anyNotesReady ? 'auto' : 'none' }}>
+              {/* Backend hard-gates these on EVERY subtopic having Notes — the
+                  UI gate must match or clicking just produces an error. */}
+              {!allNotesReady && (
+                <div style={{ fontSize: 12.5, color: 'var(--tint-orange-fg)', background: 'var(--tint-orange-bg)', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+                  Topic-wide artifacts compile from every subtopic's notes — generate all Notes ({notesDone}/{conceptCount} ready) to unlock them.
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, opacity: allNotesReady ? 1 : 0.55, pointerEvents: allNotesReady ? 'auto' : 'none' }}>
                 {TOPIC_ART_TYPES.map(t => <TopicArtCard key={t} jobId={job!.id} type={t} artifact={topicArt(t)} onChanged={refetch}
                   onOpenPage={() => navigate(t === 'summary'
                     ? `/winteach/courses/${courseId}/topic/${topicId}/cheatsheet`

@@ -1277,15 +1277,20 @@ _MERMAID_STARTS = ("graph", "flowchart", "sequenceDiagram", "stateDiagram",
                    "erDiagram", "classDiagram")
 
 
-def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict) -> dict:
+def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
+                       heartbeat=None) -> dict:
     """Generate one concept's deck in phase chunks (1–3, 4–6, 7–8): long single
     outputs decay toward the tail. Each chunk sees prior titles and the running
-    example thread; slide_no is renumbered after assembly."""
+    example thread; slide_no is renumbered after assembly. `heartbeat` (optional
+    zero-arg callable) is invoked between chunks so long decks keep refreshing
+    their row's updated_at and never look like orphans to the stale reaper."""
     from app.services import generation_prompts as p  # lazy
     slides: list[dict] = []
     running_example: str | None = None
     prior_titles: list[str] = []
     for lo, hi in p.SLIDE_PHASE_CHUNKS:
+        if heartbeat:
+            heartbeat()
         data = _chat_json(client, *p.build_concept_slides_chunk_prompt(
             unit, ctx, notes, phase_lo=lo, phase_hi=hi,
             running_example=running_example, prior_titles=prior_titles),
@@ -2375,7 +2380,12 @@ def _concept_row(db, topic_id: str, concept_id: str, artifact_type: str) -> dict
 # and the studio polls it forever. A healthy per-concept run finishes in ~2-4 min, so
 # any "generating" row untouched for longer than this is unrecoverable and is flipped
 # to "error" so the UI stops looping and offers a retry.
-_GENERATION_STALE_AFTER_SEC = 600
+# A live worker heartbeats between LLM stages (see generate_concept_artifact's
+# beat()), so updated_at only goes quiet when the worker is really gone. The
+# window must still exceed one un-beaten stage — a single slides chunk with a
+# JSON-retry can run ~10 minutes — or healthy long runs get error-flipped
+# mid-generation, which read as "slides generating in a loop" to faculty.
+_GENERATION_STALE_AFTER_SEC = 1200
 
 
 def reconcile_stale_generations(db, concept_artifacts: list[dict]) -> list[dict]:
@@ -2510,6 +2520,14 @@ def enqueue_concept_artifact(job_id, topic_id, concept_id, artifact_type) -> Non
 
 def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -> None:
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, status="generating", error=None)
+    # Heartbeat between long LLM stages: re-writing status refreshes updated_at,
+    # so reconcile_stale_generations can tell a live multi-minute run (slides
+    # decks take 10+ minutes across chunks) from a genuinely dead worker.
+    def beat() -> None:
+        try:
+            _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, status="generating")
+        except Exception:
+            pass
     client = _openai_client()
     if client is None:
         _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
@@ -2538,12 +2556,15 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
         out = gen_notes_unit(client, ctx, plan, unit, prev_title=prev, next_title=nxt,
                              prior_terms=_prior_terms(db, topic_id, plan, concept_id),
                              grounding=grounding or None)
+        beat()
         v = validate_and_expand_unit(client, out, unit, ctx)
         log_check_outcomes(job_id, f"notes:{concept_id}", v, db=db)
+        beat()
         critique = critique_and_polish_unit(client, out, unit, ctx)
         if critique.get("polished"):
             # Polish can shrink fields below the word minimums — re-gate and
             # re-expand so the stored validation matches the shipped note.
+            beat()
             v = validate_and_expand_unit(client, out, unit, ctx)
         content = {**out, "unit_hash": canonical_hash(out),
                    "critique": critique,
@@ -2563,9 +2584,10 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
             return
         from app.services import generation_prompts as p
         if artifact_type == "slides":
-            content = gen_concept_slides(client, unit, ctx, notes)
+            content = gen_concept_slides(client, unit, ctx, notes, heartbeat=beat)
             dv = validate_slides_deck(content, unit)
             log_check_outcomes(job_id, f"slides:{concept_id}", dv, db=db)
+            beat()
             content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
             content["validation"] = {"all_pass": dv.all_pass,
                                      "failures": [c.model_dump() for c in dv.failures]}

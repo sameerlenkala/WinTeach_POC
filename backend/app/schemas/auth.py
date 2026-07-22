@@ -9,6 +9,11 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    # Supabase access tokens expire in ~1 hour; the refresh token lets the
+    # frontend hand the session to supabase-js, which then auto-refreshes.
+    # Without it every login silently died after an hour. None for the
+    # backend-signed demo JWT path.
+    refresh_token: str | None = None
     token_type: str = "bearer"
     role: UserRole
     redirect: str

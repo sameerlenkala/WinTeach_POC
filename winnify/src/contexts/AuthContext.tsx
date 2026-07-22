@@ -69,12 +69,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Hydrate on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setSession(session);
+      if (session) {
+        setSession(session);
+        // Keep the API token in step with the supabase-js session — this is
+        // what the backend actually validates.
+        localStorage.setItem('winnify_token', session.access_token);
+      }
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSession(session);
+      // TOKEN_REFRESHED fires here every ~hour: without this sync the stored
+      // token expired while supabase-js silently held a fresh one, and every
+      // request 401'd into a forced logout.
+      if (session?.access_token) localStorage.setItem('winnify_token', session.access_token);
       if (!session && !localStorage.getItem('winnify_user')) setUser(null);
     });
 
@@ -99,6 +108,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         avatar: data.user.avatar_url,
       });
       localStorage.setItem('winnify_token', data.access_token);
+      // Hand the session to supabase-js so it persists it and auto-refreshes
+      // the hourly-expiring access token (synced back via onAuthStateChange).
+      // Backend-signed demo JWTs carry no refresh token — skip for those.
+      if (data.refresh_token) {
+        supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        }).catch(() => { /* session still works until the token expires */ });
+      }
       return data.user.role as UserRole;
     } finally {
       setLoading(false);
@@ -125,6 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         avatar: data.user.avatar_url,
       });
       localStorage.setItem('winnify_token', data.access_token);
+      if (data.refresh_token) {
+        supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        }).catch(() => { /* session still works until the token expires */ });
+      }
       return (data.user.role ?? data.role) as UserRole;
     } finally {
       setLoading(false);
