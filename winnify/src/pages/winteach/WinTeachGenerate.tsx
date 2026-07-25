@@ -469,8 +469,8 @@ export default function WinTeachGenerate() {
   const [queueRun, setQueueRun] = useState<string | null>(null); // currently generating via queue
   const [queueDone, setQueueDone] = useState<Record<string, 'done' | 'failed'>>({});
   const [queuePaused, setQueuePaused] = useState(false);
-  // Generation board (subtopic cards) is collapsed by default — the header
-  // count chips carry the status; expand to work per-subtopic.
+  // Generation board (the status-dot grid) is collapsed by default — its
+  // header count chips carry the status; expand for the per-artifact dots.
   const [boardOpen, setBoardOpen] = useState(false);
   const [resumed, setResumed] = useState(false);
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -721,7 +721,9 @@ export default function WinTeachGenerate() {
   const linkedCo = tp?.linked_co;
   const bloom = tp?.bloom_level ?? linkedCo?.bloom_level;
   const subtopics: string[] = (tp?.subtopics ?? []).map((s: any) => s.title ?? s);
-  const hours = tp?.contact_hours ?? tp?.hours;
+  // Topic rows never carried hours, so the badge was permanently hidden — the
+  // plan's realized allocation is the truthful fallback now that hours flow.
+  const hours = tp?.contact_hours || tp?.hours || plan?.hero_block?.total_hours || null;
 
   const scrollToConcept = (cid: string) =>
     document.getElementById(`concept-${cid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -948,22 +950,44 @@ export default function WinTeachGenerate() {
           {/* ── artifacts board + concept cards ── */}
           {plan && (
             <>
-              {/* generation board — every artifact's status at a glance */}
+              {/* generation board — every artifact's status at a glance.
+                  Collapsible: the header count chips carry the summary, the
+                  dot grid expands on demand. */}
               <div className="ds-rise" style={{
                 background: 'var(--card)', border: `1px solid ${W.border}`, borderRadius: 10,
-                boxShadow: W.shadowCard, padding: '18px 22px', marginBottom: 20,
+                boxShadow: W.shadowCard, padding: boardOpen ? '18px 22px' : '13px 22px', marginBottom: 20,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div onClick={() => setBoardOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: boardOpen ? 12 : 0, flexWrap: 'wrap', cursor: 'pointer', userSelect: 'none' }}>
+                  <span style={{ fontSize: 10, color: W.text3, transition: 'transform .15s', transform: boardOpen ? 'rotate(90deg)' : 'none', display: 'inline-flex' }}>▶</span>
                   <div style={{ fontFamily: W.fontDisplay, fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: W.brandTintFg }}>Generation board</div>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {(['approved', 'ready', 'generating', 'pending'] as DotState[]).map(s => (
-                      <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: W.text2 }}>
-                        <StatusDot state={s} /> {DOT_META[s].label.split(' — ')[0]}
-                      </span>
-                    ))}
-                  </div>
+                  {/* x/y generated counts — the collapsed summary */}
+                  {([['Notes', notesDone], ['Slides', slidesDone], ['Quizzes', quizDone]] as [string, number][]).map(([label, done]) => (
+                    <span key={label} style={{
+                      fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, borderRadius: 99, padding: '2px 9px',
+                      fontVariantNumeric: 'tabular-nums',
+                      background: done === conceptCount && conceptCount > 0 ? W.greenBg : W.surfaceMuted,
+                      color: done === conceptCount && conceptCount > 0 ? W.greenFg : W.text2,
+                      border: `1px solid ${W.border}`,
+                    }}>{label} {done}/{conceptCount}</span>
+                  ))}
+                  <span style={{
+                    fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, borderRadius: 99, padding: '2px 9px',
+                    fontVariantNumeric: 'tabular-nums',
+                    background: topicArtsDone === TOPIC_ART_TYPES.length ? W.greenBg : W.surfaceMuted,
+                    color: topicArtsDone === TOPIC_ART_TYPES.length ? W.greenFg : W.text2,
+                    border: `1px solid ${W.border}`,
+                  }}>Topic-wide {topicArtsDone}/{TOPIC_ART_TYPES.length}</span>
+                  {boardOpen && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {(['approved', 'ready', 'generating', 'pending'] as DotState[]).map(s => (
+                        <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: W.text2 }}>
+                          <StatusDot state={s} /> {DOT_META[s].label.split(' — ')[0]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflowX: 'auto', display: boardOpen ? 'block' : 'none' }}>
                   <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 420 }}>
                     <thead>
                       <tr>
@@ -1026,23 +1050,7 @@ export default function WinTeachGenerate() {
 
               {/* concepts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px', flexWrap: 'wrap' }}>
-                <button onClick={() => setBoardOpen(o => !o)} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent',
-                  cursor: 'pointer', padding: 0, fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text,
-                }}>
-                  <span style={{ fontSize: 11, color: W.text3, transition: 'transform .15s', transform: boardOpen ? 'rotate(90deg)' : 'none', display: 'inline-flex' }}>▶</span>
-                  Subtopics ({concepts.length})
-                </button>
-                {/* generation progress at a glance — visible collapsed or open */}
-                {([['Notes', notesDone], ['Slides', slidesDone], ['Quizzes', quizDone]] as [string, number][]).map(([label, done]) => (
-                  <span key={label} style={{
-                    fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 11, borderRadius: 99, padding: '2px 9px',
-                    fontVariantNumeric: 'tabular-nums',
-                    background: done === conceptCount && conceptCount > 0 ? W.greenBg : W.surfaceMuted,
-                    color: done === conceptCount && conceptCount > 0 ? W.greenFg : W.text2,
-                    border: `1px solid ${W.border}`,
-                  }}>{label} {done}/{conceptCount}</span>
-                ))}
+                <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 16, color: W.text }}>Subtopics ({concepts.length})</div>
                 {concepts.length > 1 && (
                   <span className="max-md:hidden" title="Keyboard shortcuts: j/k move between subtopics · g generate all Notes · a approve all ready"
                     style={{ fontSize: 12, color: W.text3, cursor: 'default' }}>
@@ -1169,29 +1177,19 @@ export default function WinTeachGenerate() {
                 </div>
               )}
 
-              {boardOpen ? (
-                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                  {concepts.length > 1 && (
-                    <ConceptRail concepts={concepts} stateFor={stateFor} onJump={scrollToConcept} />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {concepts.map((c: any, i: number) => (
-                      <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
-                        onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
-                        onEditingChange={setEditingConcept}
-                        onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
-                    ))}
-                  </div>
+              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                {concepts.length > 1 && (
+                  <ConceptRail concepts={concepts} stateFor={stateFor} onJump={scrollToConcept} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {concepts.map((c: any, i: number) => (
+                    <ConceptCard key={c.concept_id} index={i} job={job!} concept={c} edit={edits[c.concept_id] ?? {}}
+                      onEdit={(patch) => editConcept(c.concept_id, patch)} stateFor={stateFor} onChanged={refetch}
+                      onEditingChange={setEditingConcept}
+                      onViewArtifact={(cid, t) => navigate(`/winteach/courses/${courseId}/topic/${topicId}/${t === 'student_notes' ? 'notes' : t}/${cid}`)} />
+                  ))}
                 </div>
-              ) : (
-                <button onClick={() => setBoardOpen(true)} style={{
-                  width: '100%', textAlign: 'left', background: 'var(--card)', border: `1px dashed ${W.borderStrong}`,
-                  borderRadius: 10, padding: '11px 16px', cursor: 'pointer', fontSize: 12.5, color: W.text2,
-                  fontFamily: W.fontSans,
-                }}>
-                  ▸ Expand to review, edit or generate each subtopic individually
-                </button>
-              )}
+              </div>
 
               {/* topic-level artifacts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 10px' }}>

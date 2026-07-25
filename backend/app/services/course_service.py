@@ -85,6 +85,23 @@ def get_course(db: Client, user: dict, course_id: str) -> dict:
     return row.data
 
 
+def update_unit(db: Client, user: dict, course_id: str, unit_id: str, payload) -> dict:
+    """Faculty edit of a unit's lecture hours (and title). Changed hours apply
+    to topic plans generated or regenerated afterwards — existing plans keep
+    their stored minutes until regenerated."""
+    course = db.table("courses").select("*").eq("id", course_id).single().execute()
+    if not course.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    _check_access(user, course.data)
+    unit = db.table("units").select("id, course_id").eq("id", unit_id).single().execute()
+    if not unit.data or unit.data.get("course_id") != course_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
+    updates = payload.model_dump(exclude_none=True)
+    if updates:
+        db.table("units").update(updates).eq("id", unit_id).execute()
+    return db.table("units").select("*").eq("id", unit_id).single().execute().data
+
+
 def update_course(db: Client, user: dict, course_id: str, payload: CourseUpdate) -> dict:
     row = db.table("courses").select("*").eq("id", course_id).single().execute()
     if not row.data:

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from supabase import Client
 from app.core.dependencies import get_db, get_current_user, require_role
-from app.schemas.course import CourseCreate, CourseUpdate, CourseStatusPatch, COCreate, COUpdate, COMappingUpdate
+from app.schemas.course import CourseCreate, CourseUpdate, CourseStatusPatch, UnitUpdate, COCreate, COUpdate, COMappingUpdate
 from app.schemas.generation import ScopePatchRequest
 from app.services import course_service
 from app.services import generation_service
@@ -72,6 +72,14 @@ def scope_patches(course_id: str, payload: ScopePatchRequest,
 
 
 # ── Units & Topics ───────────────────────────────────────────────────────────
+
+@router.patch("/{course_id}/units/{unit_id}")
+def update_unit(course_id: str, unit_id: str, payload: UnitUpdate,
+                user: dict = Depends(_faculty_above), db: Client = Depends(get_db)):
+    """Edit a unit's lecture hours (and title). Hours drive the topic plans'
+    time split for plans generated or regenerated after the change."""
+    return course_service.update_unit(db, user, course_id, unit_id, payload)
+
 
 @router.get("/{course_id}/units")
 def list_units(course_id: str, user: dict = Depends(get_current_user), db: Client = Depends(get_db)):

@@ -838,7 +838,7 @@ export default function WinTeachCreateCourse() {
           units: e.units.map((u, ui) => ({
             unit_number: ui + 1,
             title: u.title || `Unit ${ui + 1}`,
-            hours: (u as any).hours || 0,
+            hours: u.hours || 0,
             // Send the wizard's CO mapping and bloom along — a bare name list
             // dropped both, so every later surface fell back to guessing the
             // CO from the unit position.
@@ -1153,6 +1153,16 @@ export default function WinTeachCreateCourse() {
                         style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 12.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}>{u.title}</span>
                     )}
                     {(u.isElective || u.n === 'E') && <ElectiveTag />}
+                    {/* Lecture hours — pre-filled from the syllabus/derivation,
+                        editable; drives the topic plan's time split downstream. */}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}
+                      title="Lecture hours for this unit — the topic plans split this time across the unit's topics">
+                      <input type="number" min={1} max={20} step={0.5} defaultValue={u.hours || ''} placeholder="9"
+                        onBlur={ev => { const v = parseFloat(ev.target.value); u.hours = Number.isFinite(v) && v > 0 ? v : 0; forceUpdate(n => n + 1); }}
+                        onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+                        style={{ width: 46, background: 'var(--input-bg)', border: `1px solid ${W.border}`, borderRadius: 6, padding: '2px 5px', fontFamily: W.fontSans, fontSize: 11.5, color: 'var(--input-fg)', outline: 'none', textAlign: 'right' }} />
+                      <span style={{ fontSize: 10.5, color: W.text3 }}>hrs</span>
+                    </span>
                     <button onClick={() => setTopicModal({ ui, ti: null })} title="Add topic"
                       style={{ marginLeft: 'auto', width: 22, height: 22, flexShrink: 0, border: `1px solid ${W.border}`, background: 'var(--card)', color: W.text2, borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ width: 12, height: 12, display: 'inline-flex' }}><IPlus /></span>
@@ -1458,6 +1468,12 @@ function courseFromResult(result: any, details: any): Course {
         artifacts: newArtifacts(),
       })),
     }));
+    // Belt-and-braces for drafts extracted before the backend deriver: when
+    // every unit landed 0 but the course-level total is known, split it evenly.
+    if (units.length && units.every(u => !(u.hours && u.hours > 0)) && Number(ai.total_hours) > 0) {
+      const share = Math.max(2, Math.min(15, Math.round((Number(ai.total_hours) / units.length) * 2) / 2));
+      units.forEach(u => { u.hours = share; });
+    }
     const cos: CO[] = (ai.course_outcomes ?? []).map((c: any, i: number) => ({
       id: `CO${i + 1}`,
       text: c.text,

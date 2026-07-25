@@ -988,10 +988,20 @@ code, complexity facts, and mistakes — never contradict them. You MAY addition
 write your own examples, analogies, practice questions, and explanations relevant to
 the concept; slides built mostly from your own material use source_ref "generated".
 
-8-PHASE LECTURE STRUCTURE (adapt to Content Type {content_type}; 16–28 slides total).
+8-PHASE LECTURE STRUCTURE (adapt to Content Type {content_type}; {slide_lo}–{slide_hi}
+slides total — budgeted from this lesson's allocated lecture time{minutes_note} at
+roughly 2 minutes of classroom time per slide; a lesson that is one small slice of its
+topic gets a lean deck, not the same deck as a full-session concept).
 Every slide must be complete and informative — no shallow filler. If one slide cannot
 hold the content, split into "… — Part 1" / "… — Part 2". Skip a slide ONLY where its
 condition says so.
+
+LEAN DECKS: when the budget is under 15 slides, COMPRESS the arc — do not produce
+shallow versions of every slide. ONE worked example (not three), at most two
+mechanics slides in phase 3, ONE practice slide and ONE quiz slide (3 questions +
+answers on the same slide), summary OR recall (not both), and skip optional 6.x
+slides whose condition is marginal. Never skip: title, outcomes, definition, one
+worked example, one misconception, quiz, assignment.
 
 PHASE 1 — INTRODUCTION
  1.1 Title [statement]: title = the subtopic name itself; kicker = course name;
@@ -1131,17 +1141,47 @@ Return ONLY JSON:
   "build_steps": ["one reveal each"],
   "speaker_notes": "60-150 word teaching script",
   "source_ref": "notes section, or 'generated' for your own material"
-}}]}}. 16–28 slides; phases in order 1→8; title slide first, assignment last; ≥1
+}}]}}. {slide_lo}–{slide_hi} slides; phases in order 1→8; title slide first, assignment last; ≥1
 myth_reality slide; unused fields null/[] per slide."""
+
+
+def slide_budget(unit: dict) -> tuple[int, int, int]:
+    """Slide-count budget from the plan's lecture-time allocation for this
+    concept (~2 classroom minutes per slide). The plan already splits the
+    unit's 8–10 lecture hours across topics and each topic's minutes across
+    concepts by weight/proficiency (validated to reconcile) — so a 60-minute
+    single-subtopic concept earns a full deck while a 15-minute slice of a
+    ten-subtopic topic gets a lean one. Returns (lo, hi, minutes); minutes is
+    0 when the plan carries no allocation (older plans) → moderate default."""
+    try:
+        minutes = int(float(unit.get("time_minutes") or 0))
+    except (TypeError, ValueError):
+        minutes = 0
+    if minutes <= 0:
+        return 14, 22, 0
+    target = round(minutes / 2)
+    lo = max(8, min(26, target - 3))
+    hi = max(lo + 2, min(28, target + 3))
+    return lo, hi, minutes
+
+
+def _slides_system(ctx: dict, unit: dict) -> str:
+    lo, hi, minutes = slide_budget(unit)
+    return preamble(ctx) + "\n\n" + _CONCEPT_SLIDES_SYSTEM.format(
+        subject_domain=ctx.get("subject_domain") or "the discipline",
+        audience_level=ctx.get("audience_level", "UG"),
+        content_type=unit.get("primary_content_type", "P1"),
+        slide_lo=lo, slide_hi=hi,
+        minutes_note=f" ({minutes} minutes)" if minutes else "")
 
 
 def build_concept_slides_prompt(unit: dict, ctx: dict, notes: dict) -> tuple[str, str]:
     ct_ = unit.get("primary_content_type", "P1")
-    system = preamble(ctx) + "\n\n" + _CONCEPT_SLIDES_SYSTEM.format(
-        subject_domain=ctx.get("subject_domain") or "the discipline",
-        audience_level=ctx.get("audience_level", "UG"), content_type=ct_)
+    lo, hi, _ = slide_budget(unit)
+    system = _slides_system(ctx, unit)
     user = _CONCEPT_SLIDES_USER.format(concept_id=unit.get("concept_id", ""),
-        concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes))
+        concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes),
+        slide_lo=lo, slide_hi=hi)
     return system, user
 
 
@@ -1155,6 +1195,8 @@ approved notes for this concept (primary source):
 {notes}
 
 You are generating the deck in parts. Generate ONLY phases {phase_lo}–{phase_hi} now.
+Deck budget: {slide_lo}–{slide_hi} slides TOTAL across all phases — keep this chunk's
+share proportional so the assembled deck lands inside the budget.
 {thread_block}{prior_block}
 Return ONLY JSON:
 {{"running_example": "one-sentence description of the deck's running example scenario",
@@ -1188,9 +1230,8 @@ def build_concept_slides_chunk_prompt(unit: dict, ctx: dict, notes: dict, *,
                                       running_example: str | None,
                                       prior_titles: list[str]) -> tuple[str, str]:
     ct_ = unit.get("primary_content_type", "P1")
-    system = preamble(ctx) + "\n\n" + _CONCEPT_SLIDES_SYSTEM.format(
-        subject_domain=ctx.get("subject_domain") or "the discipline",
-        audience_level=ctx.get("audience_level", "UG"), content_type=ct_)
+    lo, hi, _ = slide_budget(unit)
+    system = _slides_system(ctx, unit)
     thread_block = (f"Running example thread (established earlier — keep using it): {running_example}\n"
                     if running_example else
                     "Establish the running example thread in this chunk and describe it in running_example.\n")
@@ -1198,7 +1239,7 @@ def build_concept_slides_chunk_prompt(unit: dict, ctx: dict, notes: dict, *,
                    if prior_titles else "")
     user = _CONCEPT_SLIDES_CHUNK_USER.format(
         concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes),
-        phase_lo=phase_lo, phase_hi=phase_hi,
+        phase_lo=phase_lo, phase_hi=phase_hi, slide_lo=lo, slide_hi=hi,
         thread_block=thread_block, prior_block=prior_block)
     return system, user
 

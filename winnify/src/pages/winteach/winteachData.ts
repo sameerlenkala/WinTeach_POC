@@ -381,7 +381,9 @@ export function getElectivesUnit(c: Course): Unit {
     return String((nums.length ? Math.max(...nums) : c.units.length) + 1);
   };
   if (!u) {
-    u = { n: nextN(), title: 'Industry & AI Electives', topics: [], isElective: true };
+    // 3 lecture hours: an injected add-on unit, not a full 8-10h syllabus unit —
+    // keeps its topic plans (and slide decks) proportionate.
+    u = { n: nextN(), title: 'Industry & AI Electives', topics: [], isElective: true, hours: 3 };
     c.units.push(u);
   } else if (u.n === 'E') {
     // Migrate the legacy letter label to sequential numbering

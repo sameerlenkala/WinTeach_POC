@@ -846,6 +846,34 @@ def _p4b_to_p4_format(p4b: dict) -> dict:
 
 # ── Convert pipeline result → AIExtraction-compatible dict ───────────────────
 
+def derive_unit_hours(units: list[dict], *, total_hours: float | int = 0,
+                      credits: float | int = 0) -> None:
+    """Fill in lecture hours for units the syllabus left silent (hours <= 0),
+    in priority order: (1) explicitly stated per-unit hours are never touched;
+    (2) the course-level contact-hours total (L-T-P parse / per-unit sum /
+    (L+T)×15 weeks from P1-META) minus the explicitly-known hours, split
+    evenly across the remaining units; (3) credits × 15 weeks when no total is
+    known. Values are rounded to half-hours and clamped to 2–15; when nothing
+    is derivable, hours stay 0 and generation's safety-net default applies.
+    Mutates `units` in place."""
+    missing = [u for u in units if float(u.get("hours") or 0) <= 0]
+    if not missing:
+        return
+    known = sum(float(u.get("hours") or 0) for u in units if float(u.get("hours") or 0) > 0)
+    pool = 0.0
+    if total_hours and float(total_hours) > known:
+        pool = float(total_hours) - known
+    elif credits and float(credits) > 0 and not total_hours:
+        pool = float(credits) * 15.0
+    if pool <= 0:
+        return
+    share = pool / len(missing)
+    share = round(share * 2) / 2                    # half-hour steps
+    share = max(2.0, min(15.0, share))              # sane band, not one institution's 8-10
+    for u in missing:
+        u["hours"] = share
+
+
 def _to_ai_extraction(p1: dict, p4_result: dict, p5_result: dict | None = None) -> dict:
     """
     Build the ai_extraction dict that the frontend already knows how to consume.
@@ -950,6 +978,13 @@ def _to_ai_extraction(p1: dict, p4_result: dict, p5_result: dict | None = None) 
         elif isinstance(b, dict):
             parts = [b.get("author", ""), b.get("title", ""), b.get("edition", ""), b.get("publisher", "")]
             ref_books.append(", ".join(p for p in parts if p))
+
+    # Units whose hours the syllabus didn't state get a derived value here, so
+    # units.hours stops being 0 and the whole downstream chain (topic plan
+    # minutes → notes/slide budgets) runs on real allocations.
+    derive_unit_hours(units,
+                      total_hours=ch.get("total", 0) if isinstance(ch, dict) else 0,
+                      credits=p1.get("credits", 0))
 
     return {
         "course_name": p1.get("course_name", ""),

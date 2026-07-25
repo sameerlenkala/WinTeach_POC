@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal
 
 
@@ -16,7 +16,7 @@ class TopicIn(BaseModel):
 class UnitIn(BaseModel):
     title: str
     unit_number: int
-    hours: int = 0
+    hours: float = 0   # lecture hours; float — wizard allows half-hour steps
     topics: list[str | TopicIn] = []
 
 
@@ -49,6 +49,13 @@ class CourseUpdate(BaseModel):
 
 class CourseStatusPatch(BaseModel):
     status: CourseStatus
+
+
+class UnitUpdate(BaseModel):
+    # hours 0 means "reset to estimated" — the UI shows the safety-net default
+    # and generation derives the value.
+    hours: float | None = Field(default=None, ge=0, le=20)
+    title: str | None = None
 
 
 class COCreate(BaseModel):

@@ -30,6 +30,10 @@ export const coursesApi = {
 
   update: (id: string, data: Partial<CourseCreatePayload>) => api.patch<Course>(`/courses/${id}`, data),
 
+  /** Edit a unit's lecture hours/title — applies to plans (re)generated afterwards. */
+  updateUnit: (courseId: string, unitId: string, data: { hours?: number; title?: string }) =>
+    api.patch<{ id: string; hours?: number; title?: string }>(`/courses/${courseId}/units/${unitId}`, data),
+
   delete: (id: string) => api.delete<void>(`/courses/${id}`),
 
   setStatus: (id: string, status: 'draft' | 'active' | 'archived') =>

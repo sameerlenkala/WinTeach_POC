@@ -1277,6 +1277,25 @@ _MERMAID_STARTS = ("graph", "flowchart", "sequenceDiagram", "stateDiagram",
                    "erDiagram", "classDiagram")
 
 
+def _slides_digest(notes: dict) -> dict:
+    """The deck prompt's working copy of the notes: full teaching content minus
+    pipeline metadata (critique/validation/hashes) and the closing sections the
+    deck spec never reads (glossary, flashcards, related-topics). The notes
+    payload is re-sent once per phase chunk, so every stripped token is saved
+    three times — this is the single biggest lever on slide generation cost."""
+    if not isinstance(notes, dict):
+        return notes
+    d = {k: v for k, v in notes.items()
+         if k not in ("critique", "validation", "unit_hash", "grounded_in", "prompt_version")}
+    closing = d.get("closing")
+    if isinstance(closing, dict) and isinstance(closing.get("sections"), dict):
+        closing = dict(closing)
+        closing["sections"] = {k: v for k, v in closing["sections"].items()
+                               if k not in ("glossary_section", "flashcard_section", "related_topics")}
+        d["closing"] = closing
+    return d
+
+
 def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
                        heartbeat=None) -> dict:
     """Generate one concept's deck in phase chunks (1–3, 4–6, 7–8): long single
@@ -1285,6 +1304,7 @@ def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
     zero-arg callable) is invoked between chunks so long decks keep refreshing
     their row's updated_at and never look like orphans to the stale reaper."""
     from app.services import generation_prompts as p  # lazy
+    notes = _slides_digest(notes)
     slides: list[dict] = []
     running_example: str | None = None
     prior_titles: list[str] = []
@@ -1321,7 +1341,12 @@ def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
     slides: list[dict] = [s for s in (content.get("slides") or []) if isinstance(s, dict)]
     checks: list[CheckResult] = []
     n = len(slides)
-    checks.append(CheckResult(name="deck:count", passed=14 <= n <= 30, detail=f"{n} slides"))
+    # Count gate follows the concept's lecture-time budget (±2 tolerance), not
+    # a fixed range — a 15-minute concept and a 60-minute one earn different decks.
+    from app.services.generation_prompts import slide_budget
+    lo, hi, _minutes = slide_budget(unit)
+    checks.append(CheckResult(name="deck:count", passed=(lo - 2) <= n <= (hi + 2),
+                              detail=f"{n} slides (budget {lo}–{hi})"))
 
     phases = [s.get("phase") for s in slides if isinstance(s.get("phase"), int)]
     checks.append(CheckResult(name="deck:phase_order",
@@ -2199,8 +2224,39 @@ def _load_topic_context(db, course_id: str, topic_id: str) -> dict:
         digits = "".join(ch for ch in str(course.get("semester") or "") if ch.isdigit())
         sem = int(digits) if digits else None
     academic_year = math.ceil(int(sem) / 2) if sem else 2
-    unit_hours = unit.get("contact_hours") or unit.get("hours") or 0
-    topic_hours = float(topic.get("contact_hours") or 0) or max(round(unit_hours / 3, 1), 2)
+    # Hour resolution. Syllabi frequently omit per-unit hours (this course's
+    # units all stored 0), and the old fallback gave EVERY topic a flat 2h —
+    # so a 2-topic unit planned as 4h against the real 8-10 lecture hours.
+    # Ground truth: a unit carries 8-10 lecture hours; default to the midpoint
+    # when the syllabus is silent, and split it across the unit's topics
+    # weighted by subtopic count (a 13-subtopic topic earns more of the unit
+    # than a 2-subtopic one). Explicit stored hours always win.
+    _DEFAULT_UNIT_HOURS = 9.0
+    _DEFAULT_ELECTIVE_HOURS = 3.0   # the injected add-on unit is not a full syllabus unit
+    unit_hours = float(unit.get("contact_hours") or unit.get("hours") or 0)
+    if unit_hours <= 0:
+        _is_elective = ("electives" in str(unit.get("title") or "").lower()
+                        or str(unit.get("unit_number")) == "E")
+        unit_hours = _DEFAULT_ELECTIVE_HOURS if _is_elective else _DEFAULT_UNIT_HOURS
+    topic_hours = float(topic.get("contact_hours") or 0)
+    if topic_hours <= 0:
+        try:
+            siblings = (db.table("topics").select("id").eq("unit_id", topic.get("unit_id"))
+                        .execute().data or [])
+            sib_ids = [s["id"] for s in siblings]
+            subs = (db.table("subtopics").select("topic_id").in_("topic_id", sib_ids)
+                    .execute().data or []) if sib_ids else []
+            counts = {sid: 0 for sid in sib_ids}
+            for s in subs:
+                counts[s["topic_id"]] = counts.get(s["topic_id"], 0) + 1
+            # A topic with no subtopics still teaches something — weight ≥ 1.
+            weights = {sid: max(c, 1) for sid, c in counts.items()}
+            total = sum(weights.values()) or 1
+            share = unit_hours * weights.get(topic_id, 1) / total
+            topic_hours = max(round(share * 2) / 2, 1.0)   # half-hour steps, ≥1h
+        except Exception:
+            logger.warning("topic-hours split failed for %s; using equal-ish share", topic_id, exc_info=True)
+            topic_hours = max(round(unit_hours / 2, 1), 2)
 
     # Industry skills from the committed upload's pipeline run (P3) — the notes
     # closing prompt uses them to ground industry_relevance in the course's own

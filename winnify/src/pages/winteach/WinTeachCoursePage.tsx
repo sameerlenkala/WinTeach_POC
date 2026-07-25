@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWinTeach } from './WinTeachContext';
 import { useCourse, useCOs, useCOMap, useSetCourseStatus, useUnits, useSaveCOMap, useUpdateCO, useCourseProgress } from '@/api/hooks';
+import { coursesApi } from '@/api/courses';
 import { W } from './winteachStyles';
 import { WinTopbar, WinContent } from './WinTeachLayout';
 import { BloomBadge, ProgressBar, Btn, Breadcrumb, CoMapTag, Badge, Modal } from './WinTeachUI';
@@ -106,7 +107,9 @@ export default function WinTeachCoursePage() {
   // Real API data
   const { data: apiCourse, isLoading: courseLoading } = useCourse(id);
   const { data: apiCOs = [], isLoading: cosLoading } = useCOs(id);
-  const { data: apiUnits = [], isLoading: unitsLoading } = useUnits(id);
+  const { data: apiUnits = [], isLoading: unitsLoading, refetch: refetchUnits } = useUnits(id);
+  // Unit whose lecture hours are being edited inline (unit id).
+  const [hoursEdit, setHoursEdit] = useState<string | null>(null);
   const { data: apiMap = [], isLoading: mapLoading } = useCOMap(id);
   const { data: genProgress = [] } = useCourseProgress(id);
   const progById: Record<string, TopicProgress> = {};
@@ -526,7 +529,9 @@ export default function WinTeachCoursePage() {
               const unitArtReady = topics.reduce((s, t) => s + (progById[t.id]?.artifact_ready || 0), 0);
               const unitArtTotal = topics.reduce((s, t) => s + (progById[t.id]?.artifact_total || 0), 0);
               const unitPct = unitArtTotal ? Math.round((unitArtReady / unitArtTotal) * 100) : 0;
-              const unitHours = topics.reduce((s, t) => s + (t.contact_hours ?? t.hours ?? 0), 0);
+              // The unit's OWN hours (topics never carried hours, so the old
+              // topic-sum was always 0 and the display stayed hidden).
+              const unitHours = Number(u.hours ?? u.contact_hours ?? 0);
               return (
               <div key={unitNum} className="ds-rise" style={{
                 border: `1px solid ${W.border}`, borderRadius: 12, marginBottom: 16, overflow: 'hidden',
@@ -543,8 +548,33 @@ export default function WinTeachCoursePage() {
                   }}>{unitNum}</div>
                   <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                     <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 15.5, color: W.text, lineHeight: 1.25 }}>{u.title}</div>
-                    <div style={{ fontSize: 12, color: W.text2, marginTop: 1 }}>
-                      {topics.length} topic{topics.length !== 1 ? 's' : ''}{unitHours > 0 && <> · {unitHours} hrs</>} · {unitDone} complete
+                    <div style={{ fontSize: 12, color: W.text2, marginTop: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <span>{topics.length} topic{topics.length !== 1 ? 's' : ''}</span>
+                      <span>·</span>
+                      {hoursEdit === u.id ? (
+                        <input autoFocus type="number" min={1} max={20} step={0.5} defaultValue={unitHours || ''}
+                          onBlur={async ev => {
+                            const v = parseFloat(ev.target.value);
+                            setHoursEdit(null);
+                            if (!Number.isFinite(v) || v <= 0 || v === unitHours) return;
+                            try {
+                              await coursesApi.updateUnit(id, u.id, { hours: v });
+                              await refetchUnits();
+                              toast('Hours saved — applies to newly generated or regenerated topic plans');
+                            } catch { toast('Could not save hours'); }
+                          }}
+                          onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); if (ev.key === 'Escape') setHoursEdit(null); }}
+                          style={{ width: 52, background: 'var(--input-bg)', border: `1px solid ${W.brand}`, borderRadius: 5, padding: '1px 5px', fontFamily: W.fontSans, fontSize: 12, color: 'var(--input-fg)', outline: 'none' }} />
+                      ) : (
+                        <span
+                          onClick={u.id ? (ev) => { ev.stopPropagation(); setHoursEdit(u.id); } : undefined}
+                          title={u.id ? 'Click to edit lecture hours — the topic plans split this time across the unit\'s topics' : undefined}
+                          style={{ cursor: u.id ? 'pointer' : 'default', textDecoration: u.id ? 'underline dotted' : 'none', textUnderlineOffset: 2 }}>
+                          {unitHours > 0 ? `${unitHours} hrs` : '~9 hrs (estimated)'}
+                        </span>
+                      )}
+                      <span>·</span>
+                      <span>{unitDone} complete</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
