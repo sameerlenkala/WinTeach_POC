@@ -3,20 +3,25 @@
 // (/home/courses/…), which owns notes/slides/quiz rendering.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ChevronRight, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight } from 'lucide-react';
 import { studentApi, track, type StudentCourseDetail } from '@/api/student';
+import StudioError from './StudioError';
+import { useStudioTitle } from './useStudioTitle';
 
 export default function StudioCourse() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [course, setCourse] = useState<StudentCourseDetail | null>(null);
   const [error, setError] = useState('');
+  useStudioTitle(course?.name);
 
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     if (!id) return;
+    setError('');
     studentApi.course(id).then(setCourse).catch(() => setError('Could not load this course.'));
     track('studio_course_viewed', { course_id: id });
-  }, [id]);
+  }, [id, reloadKey]);
 
   // topic_id -> lessons viewed / completed (same interpretation as /home/courses/:id).
   const progressByTopic = useMemo(() => {
@@ -30,6 +35,15 @@ export default function StudioCourse() {
     }
     return out;
   }, [course]);
+
+  // Only topics with at least one approved (published) lesson are shown; units
+  // whose topics are all unpublished disappear with them.
+  const visibleUnits = useMemo(
+    () => (course?.units ?? [])
+      .map(u => ({ ...u, topics: u.topics.filter(t => t.published_lessons > 0) }))
+      .filter(u => u.topics.length > 0),
+    [course],
+  );
 
   const overall = useMemo(() => {
     let total = 0, read = 0;
@@ -67,7 +81,7 @@ export default function StudioCourse() {
         </div>
       </div>
 
-      {error && <div style={{ font: '600 13.5px var(--st-sans)', color: 'var(--st-red)' }}>{error}</div>}
+      {error && <StudioError message={error} onRetry={() => setReloadKey(k => k + 1)} />}
 
       {!course && !error && (
         <>
@@ -99,7 +113,7 @@ export default function StudioCourse() {
       )}
 
       {/* Units → topics roadmap */}
-      {course?.units.map((u, ui) => (
+      {visibleUnits.map((u, ui) => (
         <div key={u.id} className="st-rise" style={{ animationDelay: `${0.12 + ui * 0.06}s` }}>
           <div className="st-eyebrow" style={{ padding: '0 2px', marginBottom: 10 }}>
             {u.unit_number != null ? `Unit ${u.unit_number}` : 'Unit'}{u.title ? ` — ${u.title}` : ''}
@@ -107,19 +121,17 @@ export default function StudioCourse() {
           <div className="st-card" style={{ overflow: 'hidden' }}>
             {u.topics.map((t, ti) => {
               const prog = progressByTopic[t.id];
-              const open = t.published_lessons > 0;
-              const done = open && (prog?.viewed ?? 0) >= t.published_lessons;
+              const done = (prog?.viewed ?? 0) >= t.published_lessons;
               return (
                 <button
                   key={t.id}
-                  disabled={!open}
                   onClick={() => { track('studio_topic_tapped', { topic_id: t.id }); navigate(`/study/courses/${id}/topic/${t.id}`); }}
-                  className={open ? 'st-press' : undefined}
+                  className="st-press"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 13, width: '100%', textAlign: 'left',
                     padding: '15px 16px', border: 'none', background: 'transparent',
                     borderBottom: ti < u.topics.length - 1 ? '1px solid var(--st-border)' : 'none',
-                    color: 'var(--st-text)', opacity: open ? 1 : 0.45, cursor: open ? 'pointer' : 'default',
+                    color: 'var(--st-text)',
                   }}
                 >
                   <div
@@ -132,19 +144,21 @@ export default function StudioCourse() {
                       color: done ? 'var(--st-lime)' : 'var(--st-text-2)',
                     }}
                   >
-                    {done ? <CheckCircle2 size={17} /> : !open ? <Lock size={14} /> : ti + 1}
+                    {done ? <CheckCircle2 size={17} /> : ti + 1}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: '600 14.5px/1.35 var(--st-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t.title}
                     </div>
                     <div style={{ font: '500 11.5px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 2 }}>
-                      {open
-                        ? `${Math.min(prog?.viewed ?? 0, t.published_lessons)}/${t.published_lessons} read${t.published_quizzes > 0 ? ` · ${t.published_quizzes} quiz${t.published_quizzes === 1 ? '' : 'zes'}` : ''}`
-                        : 'Not published yet'}
+                      {[
+                        `${Math.min(prog?.viewed ?? 0, t.published_lessons)}/${t.published_lessons} read`,
+                        t.published_quizzes > 0 ? `${t.published_quizzes} quiz${t.published_quizzes === 1 ? '' : 'zes'}` : null,
+                        t.est_minutes ? `~${t.est_minutes} min` : null,
+                      ].filter(Boolean).join(' · ')}
                     </div>
                   </div>
-                  {open && <ChevronRight size={17} color="var(--st-text-3)" style={{ flexShrink: 0 }} />}
+                  <ChevronRight size={17} color="var(--st-text-3)" style={{ flexShrink: 0 }} />
                 </button>
               );
             })}
@@ -152,7 +166,7 @@ export default function StudioCourse() {
         </div>
       ))}
 
-      {course && course.units.every(u => u.topics.length === 0) && (
+      {course && visibleUnits.length === 0 && (
         <div className="st-card" style={{ padding: '36px 20px', textAlign: 'center' }}>
           <div style={{ font: '700 16px var(--st-display)' }}>Nothing here yet</div>
           <div style={{ font: '500 13px var(--st-sans)', color: 'var(--st-text-2)', marginTop: 4 }}>

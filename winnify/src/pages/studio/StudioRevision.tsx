@@ -8,6 +8,7 @@ import {
   ArrowRight, Check, ChevronLeft, Layers, RotateCcw, Sigma, Sparkles, X,
 } from 'lucide-react';
 import { studentApi, track, type RevisionPayload } from '@/api/student';
+import { SESSION_CARDS } from './constants';
 import { StudioRichText } from './StudioLesson';
 
 type Tab = 'cards' | 'formulas' | 'practice';
@@ -25,19 +26,30 @@ function Segs({ total, done }: { total: number; done: number }) {
 
 /* ── Cards: SRS deck ─────────────────────────────────────────────────────── */
 
-function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId: string; onExit: () => void }) {
+function CardsDeck({ data, courseId, onExit, onTab }: {
+  data: RevisionPayload; courseId: string; onExit: () => void; onTab: (t: Tab) => void;
+}) {
   // Snapshot the due queue once — grading must not reshuffle mid-run.
-  const [queue] = useState(() => data.due_cards);
+  const [all] = useState(() => data.due_cards);
+  // A hundred-odd due cards is a backlog, not a session. Deal a fixed sitting
+  // at a time so there is always a visible finish line, and let the student
+  // choose to keep going.
+  const [chunk, setChunk] = useState(0);
+  const queue = useMemo(
+    () => all.slice(chunk * SESSION_CARDS, chunk * SESSION_CARDS + SESSION_CARDS),
+    [all, chunk],
+  );
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const reviewed = useRef(0);
 
   const card = queue[idx];
+  const remaining = Math.max(all.length - (chunk * SESSION_CARDS + queue.length), 0);
 
-  const grade = (result: 'again' | 'got_it') => {
+  const grade = (result: 'again' | 'hard' | 'got_it') => {
     if (!card) return;
     reviewed.current += 1;
-    try { navigator.vibrate?.(result === 'got_it' ? 10 : [30, 40, 30]); } catch { /* unsupported */ }
+    try { navigator.vibrate?.(result === 'again' ? [30, 40, 30] : 10); } catch { /* unsupported */ }
     studentApi.reviewCard({
       course_id: courseId, topic_id: card.topic_id, concept_id: card.concept_id,
       card_key: card.card_key, result,
@@ -48,14 +60,40 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
   };
 
   if (!queue.length) {
+    // Nothing due is good news, but it used to be a dead end — offer the other
+    // two ways to revise, and the weakest topic to go re-read.
+    const weakest = data.weak_topics?.[0];
     return (
       <div className="st-player-body" style={{ display: 'flex' }}>
-        <div className="st-page-in" style={{ margin: 'auto', textAlign: 'center' }}>
+        <div className="st-page-in" style={{ margin: 'auto', textAlign: 'center', width: '100%' }}>
           <Sparkles size={30} color="var(--st-lime)" style={{ margin: '0 auto 12px' }} />
           <div style={{ font: '700 20px var(--st-display)', letterSpacing: '-0.02em' }}>You're ahead of schedule</div>
-          <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 6, maxWidth: 250 }}>
+          <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', margin: '6px auto 0', maxWidth: 250 }}>
             No cards due right now. New cards appear as you complete lessons.
           </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 20 }}>
+            <button className="st-chip st-press" onClick={() => onTab('formulas')}><Sigma size={13} /> Formulas</button>
+            <button className="st-chip st-press" onClick={() => onTab('practice')}><Layers size={13} /> Practice</button>
+          </div>
+          {weakest && (
+            <button
+              className="st-card st-press"
+              onClick={() => onExit()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 11, width: '100%', marginTop: 20,
+                padding: '13px 15px', textAlign: 'left', color: 'var(--st-text)',
+                borderLeft: '3px solid rgba(251,113,133,.6)',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="st-eyebrow" style={{ marginBottom: 3 }}>Weakest topic</div>
+                <div style={{ font: '600 13.5px/1.35 var(--st-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {weakest.title}
+                </div>
+              </div>
+              <ArrowRight size={16} color="var(--st-text-3)" style={{ flexShrink: 0 }} />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -75,15 +113,43 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
             }}>
               <Check size={34} color="var(--st-ink-on-lime)" strokeWidth={3} />
             </div>
-            <div style={{ font: '700 24px var(--st-display)', letterSpacing: '-0.02em' }}>Deck cleared</div>
-            <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 6 }}>
-              {reviewed.current} card{reviewed.current === 1 ? '' : 's'} reviewed — spaced repetition will bring the tricky ones back sooner.
+            <div style={{ font: '700 24px var(--st-display)', letterSpacing: '-0.02em' }}>
+              {remaining > 0 ? 'Session done' : 'Deck cleared'}
+            </div>
+            <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', margin: '6px auto 0', maxWidth: 264 }}>
+              {remaining > 0
+                ? `${reviewed.current} reviewed. ${remaining} card${remaining === 1 ? '' : 's'} still due — carry on, or come back later.`
+                : `${reviewed.current} card${reviewed.current === 1 ? '' : 's'} reviewed — spaced repetition will bring the tricky ones back sooner.`}
             </div>
           </div>
         </div>
         <div className="st-player-foot">
-          <FootIcon onClick={() => { setIdx(0); reviewed.current = 0; }} label="Review again"><RotateCcw size={20} /></FootIcon>
-          <button className="st-cta" style={{ flex: 1 }} onClick={onExit}>Done</button>
+          {remaining > 0 ? (
+            <>
+              <button
+                className="st-press"
+                onClick={onExit}
+                style={{
+                  flex: 1, minHeight: 56, borderRadius: 999, cursor: 'pointer',
+                  border: '1px solid var(--st-border-2)', background: 'var(--st-glass)',
+                  color: 'var(--st-text-2)', font: '700 15px var(--st-display)',
+                }}
+              >
+                Done for now
+              </button>
+              <button
+                className="st-cta" style={{ flex: 1 }}
+                onClick={() => { setChunk(c => c + 1); setIdx(0); setFlipped(false); }}
+              >
+                Keep going
+              </button>
+            </>
+          ) : (
+            <>
+              <FootIcon onClick={() => { setChunk(0); setIdx(0); reviewed.current = 0; }} label="Review again"><RotateCcw size={20} /></FootIcon>
+              <button className="st-cta" style={{ flex: 1 }} onClick={onExit}>Done</button>
+            </>
+          )}
         </div>
       </>
     );
@@ -94,7 +160,7 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 22px 10px' }}>
         <Segs total={queue.length} done={idx} />
         <span style={{ font: '700 11px var(--st-display)', color: 'var(--st-text-3)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-          {idx + 1}/{queue.length}
+          {idx + 1}/{queue.length}{remaining > 0 ? ` · +${remaining}` : ''}
         </span>
       </div>
       <div className="st-player-body" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -119,6 +185,10 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
       </div>
       <div className="st-player-foot">
         {flipped ? (
+          // Three grades, not two: "Again" and "Got it" force a student who
+          // recalled a card slowly to either wipe its interval or claim mastery
+          // of it. "Hard" keeps the interval, which is the honest answer most
+          // of the time and gives the scheduler a usable middle signal.
           <>
             <button
               onClick={() => grade('again')} className="st-press"
@@ -130,7 +200,17 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
             >
               Again
             </button>
-            <button onClick={() => grade('got_it')} className="st-cta" style={{ flex: 1 }}>Got it ✓</button>
+            <button
+              onClick={() => grade('hard')} className="st-press"
+              style={{
+                flex: 1, minHeight: 56, borderRadius: 999, cursor: 'pointer',
+                border: '1.5px solid rgba(251,191,36,.45)', background: 'rgba(251,191,36,.1)',
+                color: '#fbbf24', font: '700 15px var(--st-display)',
+              }}
+            >
+              Hard
+            </button>
+            <button onClick={() => grade('got_it')} className="st-cta" style={{ flex: 1 }}>Got it</button>
           </>
         ) : (
           <button className="st-cta" style={{ flex: 1 }} onClick={() => setFlipped(true)}>Reveal</button>
@@ -143,16 +223,49 @@ function CardsDeck({ data, courseId, onExit }: { data: RevisionPayload; courseId
 /* ── Formulas ────────────────────────────────────────────────────────────── */
 
 function Formulas({ data }: { data: RevisionPayload }) {
+  // A full course's formula sheet runs to dozens of entries across every
+  // topic; scrolling for one is the wrong interaction on a phone.
+  const [q, setQ] = useState('');
   const byTopic = useMemo(() => {
+    const needle = q.trim().toLowerCase();
     const m = new Map<string, string[]>();
     for (const f of data.formulas) {
       if (!f.formula) continue;
+      if (needle && !`${f.topic_title} ${f.formula}`.toLowerCase().includes(needle)) continue;
       const list = m.get(f.topic_title) ?? [];
       list.push(f.formula);
       m.set(f.topic_title, list);
     }
     return [...m.entries()];
-  }, [data]);
+  }, [data, q]);
+
+  const filter = (
+    <div style={{ padding: '0 22px 10px' }}>
+      <input
+        value={q} onChange={e => setQ(e.target.value)}
+        placeholder="Filter formulas" aria-label="Filter formulas"
+        style={{
+          width: '100%', minHeight: 42, padding: '0 16px', borderRadius: 999,
+          border: '1px solid var(--st-border)', background: 'var(--st-glass)',
+          color: 'var(--st-text)', outline: 'none',
+          font: '500 15px var(--st-sans)', caretColor: 'var(--st-lime)',
+        }}
+      />
+    </div>
+  );
+
+  if (!byTopic.length && q.trim()) {
+    return (
+      <>
+        {filter}
+        <div className="st-player-body" style={{ display: 'flex' }}>
+          <div style={{ margin: 'auto', textAlign: 'center', font: '500 13.5px var(--st-sans)', color: 'var(--st-text-2)' }}>
+            Nothing matches “{q.trim()}”.
+          </div>
+        </div>
+      </>
+    );
+  }
 
   if (!byTopic.length) {
     return (
@@ -168,6 +281,8 @@ function Formulas({ data }: { data: RevisionPayload }) {
     );
   }
   return (
+    <>
+    {data.formulas.length > 6 && filter}
     <div className="st-player-body">
       <div className="st-page-in" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {byTopic.map(([topic, formulas]) => (
@@ -182,6 +297,7 @@ function Formulas({ data }: { data: RevisionPayload }) {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -342,7 +458,12 @@ export default function StudioRevision() {
         </div>
       )}
 
-      {data && tab === 'cards' && <CardsDeck key={courseId} data={data} courseId={courseId!} onExit={() => navigate('/study')} />}
+      {data && tab === 'cards' && (
+        <CardsDeck
+          key={courseId} data={data} courseId={courseId!}
+          onExit={() => navigate('/study')} onTab={setTab}
+        />
+      )}
       {data && tab === 'formulas' && <Formulas data={data} />}
       {data && tab === 'practice' && <Practice data={data} />}
 

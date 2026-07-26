@@ -7,6 +7,7 @@ quiz attempt history, flashcard SRS, computed mastery, revision hub, analytics."
 
 import hashlib
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -43,6 +44,19 @@ def _scope_courses(q, user: dict):
     return q.or_(f"institute_id.eq.{inst},institute_id.is.null") if inst else q
 
 
+def _as_minutes(v) -> int | None:
+    """Coerce a plan's `time_minutes` to a positive int, or None.
+
+    Plans generated before the time-budget work omit the field entirely, and
+    older ones sometimes carry it as a string — callers hide the estimate
+    rather than showing a wrong or zero one."""
+    try:
+        n = int(float(v))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def _concept_sort_key(cid: str):
     digits = "".join(ch for ch in cid if ch.isdigit())
     return (int(digits) if digits else 0, cid)
@@ -62,8 +76,12 @@ def _progress_rows(db: Client, user_id: str, *, course_id: str | None = None,
 
 
 def _topic_mastery(rows: list[dict], published_lessons: int, published_quizzes: int) -> int:
-    """Computed mastery 0..100 for one topic: 0.5·read + 0.3·best-quiz + 0.2·checkins.
-    Quiz weight redistributes to reading when a topic has no quiz."""
+    """Computed mastery 0..100 for one topic: 0.25·read + 0.55·quiz + 0.20·completed.
+
+    Assessment carries most of the weight — reading alone should not read as
+    mastery. The quiz term is the mean ratio across attempts (not the best), so
+    a lucky retake doesn't erase a weak first pass. When a topic has no quiz the
+    quiz weight redistributes proportionally across reading and completion."""
     if published_lessons <= 0:
         return 0
     notes = [r for r in rows if r.get("artifact_type") == "student_notes"]
@@ -77,11 +95,13 @@ def _topic_mastery(rows: list[dict], published_lessons: int, published_quizzes: 
         # The quiz counts even when unattempted — an untaken assessment is 0, not
         # redistributed. Only a quizless topic reallocates the weight to reading.
         ratios = [(r["quiz_score"] or 0) / r["quiz_total"] for r in quiz if r.get("quiz_total")]
-        best = sum(ratios) / len(ratios) if ratios else 0.0
-        score = 0.5 * read + 0.3 * best + 0.2 * completed
+        mean = sum(ratios) / len(ratios) if ratios else 0.0
+        score = 0.25 * read + 0.55 * mean + 0.20 * completed
     else:
-        # No quiz exists — reading + completion carry the whole weight.
-        score = 0.7 * read + 0.3 * completed
+        # No quiz exists — reading + completion split the whole weight in the
+        # same 0.25:0.20 proportion, so a quizless topic can't outrank a topic
+        # whose quiz was attempted and failed.
+        score = 0.55 * read + 0.45 * completed
     return round(min(max(score, 0.0), 1.0) * 100)
 
 
@@ -149,6 +169,19 @@ def course_detail(course_id: str, user: dict = Depends(get_current_user),
     except Exception:
         pass  # table optional in older environments
 
+    # Per-concept time budgets from each topic's plan, so the roadmap can show
+    # "~35 min" per topic. Only published concepts count toward the estimate.
+    plan_minutes: dict[str, dict[str, int]] = {}
+    if tids:
+        for row in (db.table("artifacts").select("topic_id, content")
+                    .in_("topic_id", tids).eq("type", "topic_plan")
+                    .execute().data or []):
+            slot = plan_minutes.setdefault(row["topic_id"], {})
+            for c in (row.get("content") or {}).get("concept_inventory") or []:
+                cid, m = c.get("concept_id"), _as_minutes(c.get("time_minutes"))
+                if cid and m and cid not in slot:
+                    slot[cid] = m
+
     def concept_sort_key(cid: str):
         digits = "".join(ch for ch in cid if ch.isdigit())
         return (int(digits) if digits else 0, cid)
@@ -159,11 +192,14 @@ def course_detail(course_id: str, user: dict = Depends(get_current_user),
         for t in u.get("topics") or []:
             slot = approved.get(t["id"], {"notes": [], "slides": 0, "quiz": 0})
             notes_ids = sorted(slot["notes"], key=concept_sort_key)
+            mins = plan_minutes.get(t["id"], {})
+            est = sum(mins.get(cid) or 0 for cid in notes_ids)
             topics_out.append({
                 "id": t["id"], "title": t["title"], "bloom_level": t.get("bloom_level"),
                 "published_lessons": len(notes_ids),
                 "published_slides": slot["slides"], "published_quizzes": slot["quiz"],
                 "first_concept_id": notes_ids[0] if notes_ids else None,
+                "est_minutes": est or None,
             })
         units_out.append({"id": u["id"], "unit_number": u.get("unit_number"),
                           "title": u.get("title"), "topics": topics_out})
@@ -232,6 +268,7 @@ def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current
     # topic page shows the same complete structure the course page does.
     names: dict[str, str] = {}
     order: list[str] = []
+    minutes: dict[str, int] = {}
     plan_rows = (db.table("artifacts").select("content")
                  .eq("topic_id", topic_id).eq("type", "topic_plan")
                  .limit(1).execute().data or [])
@@ -241,6 +278,9 @@ def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current
             if cid and cid not in names:
                 names[cid] = c.get("concept_name") or cid
                 order.append(cid)
+                m = _as_minutes(c.get("time_minutes"))
+                if m:
+                    minutes[cid] = m
     # Any approved concept missing from the plan (older topics, plan edits) still
     # gets listed so a published lesson is never hidden.
     for cid in sorted(by_concept, key=_concept_sort_key):
@@ -256,8 +296,20 @@ def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current
             "concept_id": cid, "title": names.get(cid, cid),
             "published": published, "has_notes": published,
             "has_slides": "slides" in types, "has_quiz": "quiz" in types,
+            "est_minutes": minutes.get(cid),
         })
     first_published = next((s["concept_id"] for s in subtopics if s["published"]), None)
+    est_total = sum(minutes.get(s["concept_id"]) or 0 for s in subtopics if s["published"])
+
+    # This student's rows for the topic, so the lesson list can show read state
+    # without a second round trip to the course endpoint.
+    progress_rows = []
+    try:
+        progress_rows = (db.table("student_progress").select("*")
+                         .eq("user_id", user["id"]).eq("topic_id", topic_id)
+                         .execute().data or [])
+    except Exception:
+        pass  # table optional in older environments
 
     # Topic artifacts are "published" for students once review_status is ready —
     # they derive from already-approved notes, so there is no separate approval.
@@ -273,6 +325,8 @@ def topic_detail(course_id: str, topic_id: str, user: dict = Depends(get_current
         "topic_id": topic_id, "title": topic["title"], "bloom_level": topic.get("bloom_level"),
         "subtopics": subtopics,
         "first_concept_id": first_published,
+        "est_minutes": est_total or None,
+        "progress": progress_rows,
         "artifacts": {k: (k in ready) for k in _STUDENT_TOPIC_ARTS},
     }
 
@@ -513,6 +567,7 @@ def learn_home(user: dict = Depends(get_current_user), db: Client = Depends(get_
     # NOT updated_at — telemetry flushes rewrite updated_at on old completions.
     week_start = _now() - timedelta(days=7)
     completed_this_week, active_days = 0, set()
+    all_days: set = set()
     for p in prog:
         if p.get("artifact_type") == "student_notes" and p.get("status") == "completed":
             ts = p.get("completed_at") or p.get("updated_at")
@@ -520,9 +575,20 @@ def learn_home(user: dict = Depends(get_current_user), db: Client = Depends(get_
                 dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
             except Exception:
                 continue
+            all_days.add(dt.date())
             if dt >= week_start:
                 completed_this_week += 1
                 active_days.add(dt.date().isoformat())
+
+    # Consecutive days ending today (or yesterday — a streak shouldn't die
+    # until a full day has been missed, otherwise it reads as broken all
+    # morning before the day's first lesson).
+    streak_days = 0
+    today = _now().date()
+    cursor = today if today in all_days else today - timedelta(days=1)
+    while cursor in all_days:
+        streak_days += 1
+        cursor -= timedelta(days=1)
 
     # Resume pointer, enriched with names the ContinueCard needs.
     resume = None
@@ -554,6 +620,10 @@ def learn_home(user: dict = Depends(get_current_user), db: Client = Depends(get_
     # it has cards due, else the course with the most due.
     due_by_course = _due_by_course(db, uid, courses, approved)
     due_cards = sum(due_by_course.values())
+    # Also hang the count on each course so a multi-course picker can show
+    # "12 due" per row without a request per course.
+    for c in courses_out:
+        c["due_cards"] = due_by_course.get(c["id"], 0)
     resume_cid = resume["course_id"] if resume else None
     if resume_cid and due_by_course.get(resume_cid, 0) > 0:
         target = resume_cid
@@ -567,7 +637,8 @@ def learn_home(user: dict = Depends(get_current_user), db: Client = Depends(get_
 
     return {"resume": resume, "due_cards": due_cards, "revision": revision,
             "week": {"lessons_completed": completed_this_week,
-                     "active_days": len(active_days)},
+                     "active_days": len(active_days),
+                     "streak_days": streak_days},
             "courses": courses_out}
 
 
@@ -828,14 +899,19 @@ class FlashcardReviewIn(BaseModel):
     topic_id: str
     concept_id: str
     card_key: str
-    result: str  # "again" | "got_it"
+    # Validated, not free text: the handler used to treat any value that wasn't
+    # exactly "got_it" as a lapse, so a typo or a new client grade would have
+    # silently reset the student's interval.
+    result: Literal["again", "hard", "got_it"]
 
 
 @router.post("/flashcards/review")
 def review_flashcard(payload: FlashcardReviewIn, user: dict = Depends(get_current_user),
                      db: Client = Depends(get_db)):
-    """SM-2-lite: 'got_it' advances the bucket (longer interval), 'again' resets
-    to bucket 0 (due now) and records a lapse."""
+    """SM-2-lite: 'got_it' advances the bucket (longer interval), 'hard' holds
+    it at the current interval, 'again' resets to bucket 0 (due now) and
+    records a lapse. Only 'again' counts as a lapse — a card recalled with
+    effort was still recalled."""
     if user.get("role") != "student":
         return {"skipped": True}
     uid = user["id"]
@@ -852,6 +928,8 @@ def review_flashcard(payload: FlashcardReviewIn, user: dict = Depends(get_curren
     reviews = (prev.get("reviews", 0)) + 1
     if payload.result == "got_it":
         bucket = min(bucket + 1, len(SRS_INTERVALS_DAYS) - 1)
+    elif payload.result == "hard":
+        pass  # same interval again — neither promoted nor reset
     else:
         bucket = 0
         lapses += 1

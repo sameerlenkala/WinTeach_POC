@@ -1,5 +1,6 @@
 // Student delivery: published-content browsing + reading/quiz progress.
-import { api } from './client';
+import { api, ApiError } from './client';
+import { flushPending, queueWrite } from './pendingWrites';
 
 export interface StudentCourse {
   id: string;
@@ -20,6 +21,15 @@ export interface StudentTopic {
   published_slides: number;
   published_quizzes: number;
   first_concept_id: string | null;
+  // Summed time budget of the published lessons; null on plans generated
+  // before time budgets existed, so callers must hide the estimate.
+  est_minutes?: number | null;
+}
+
+export interface StudentProgressRow {
+  topic_id: string; concept_id: string; artifact_type: string;
+  status: string; quiz_score?: number; quiz_total?: number;
+  scroll_pct?: number; dwell_sec?: number;
 }
 
 export interface StudentCourseDetail {
@@ -28,10 +38,7 @@ export interface StudentCourseDetail {
   code?: string;
   semester?: string;
   units: { id: string; unit_number?: number; title?: string; topics: StudentTopic[] }[];
-  progress: {
-    topic_id: string; concept_id: string; artifact_type: string;
-    status: string; quiz_score?: number; quiz_total?: number;
-  }[];
+  progress: StudentProgressRow[];
 }
 
 export interface StudentSubtopic {
@@ -42,6 +49,7 @@ export interface StudentSubtopic {
   has_notes: boolean;
   has_slides: boolean;
   has_quiz: boolean;
+  est_minutes?: number | null;
 }
 
 export interface StudentTopicDetail {
@@ -53,6 +61,10 @@ export interface StudentTopicDetail {
   bloom_level?: string;
   subtopics: StudentSubtopic[];
   first_concept_id: string | null;
+  est_minutes?: number | null;
+  // This student's rows for this topic — served here so the lesson list can
+  // show read state without a second request to the course endpoint.
+  progress: StudentProgressRow[];
   // Which topic-level artifacts are published (ready) for this topic.
   artifacts: { summary: boolean; assignment: boolean; flashcards: boolean };
 }
@@ -73,10 +85,11 @@ export interface LearnHome {
   // The single course the Revision chip opens, and its due count — so the
   // number shown always matches the deck the tap lands on.
   revision: { course_id: string; due_cards: number } | null;
-  week: { lessons_completed: number; active_days: number };
+  week: { lessons_completed: number; active_days: number; streak_days: number };
   courses: {
     id: string; name: string; code?: string; semester?: string;
     published_lessons: number; read_lessons: number; mastery_pct: number;
+    due_cards: number;
   }[];
 }
 
@@ -96,6 +109,19 @@ export interface MasteryPayload {
   weak_topics: { id: string; title: string; mastery_pct: number }[];
 }
 
+// Writes that carry a student's earned progress. If the network drops these
+// are parked in localStorage and replayed later rather than lost silently —
+// all three endpoints are idempotent, so a duplicate replay is harmless.
+function durablePost<T>(path: string, body: unknown, init?: RequestInit): Promise<T | null> {
+  return api.post<T>(path, body, init).catch((err: unknown) => {
+    // A 401 means the session ended; the app redirects to login and the write
+    // would be rejected on replay too, so don't queue it.
+    if (err instanceof ApiError && err.status === 401) return null;
+    queueWrite(path, body);
+    return null;
+  });
+}
+
 export const studentApi = {
   courses: () => api.get<StudentCourse[]>('/student/courses'),
   course: (courseId: string) => api.get<StudentCourseDetail>(`/student/courses/${courseId}`),
@@ -110,15 +136,15 @@ export const studentApi = {
     course_id?: string; topic_id: string; concept_id: string;
     artifact_type?: string; status?: string; quiz_score?: number; quiz_total?: number;
     scroll_pct?: number; dwell_sec?: number;
-  }) => api.post<{ status: string }>('/student/progress', payload),
+  }, init?: RequestInit) => durablePost<{ status: string }>('/student/progress', payload, init),
   quizAttempt: (payload: {
     course_id?: string; topic_id: string; concept_id: string;
     score: number; total: number; answers?: unknown[]; duration_sec?: number;
-  }) => api.post<{ attempt_no: number }>('/student/quiz/attempts', payload),
+  }) => durablePost<{ attempt_no: number }>('/student/quiz/attempts', payload),
   reviewCard: (payload: {
     course_id?: string; topic_id: string; concept_id: string;
-    card_key: string; result: 'again' | 'got_it';
-  }) => api.post<{ bucket: number; due_at: string }>('/student/flashcards/review', payload),
+    card_key: string; result: 'again' | 'hard' | 'got_it';
+  }) => durablePost<{ bucket: number; due_at: string }>('/student/flashcards/review', payload),
   events: (events: Record<string, unknown>[]) =>
     api.post<{ accepted: number }>('/student/events', { events }),
 };
@@ -137,6 +163,16 @@ export function track(event: string, props: Record<string, unknown> = {}) {
   _evtTimer = setTimeout(_flush, 4000);
   if (_evtQueue.length >= 12) _flush();
 }
+// Replay any progress writes stranded by an earlier network failure: on load,
+// when the browser reports it is back online, and when the tab is refocused
+// (covers a phone that slept through the online event).
+const replay = () => { flushPending((p, b) => api.post(p, b)).catch(() => {}); };
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('visibilitychange', () => { if (document.hidden) _flush(); });
+  window.addEventListener('visibilitychange', () => {
+    if (document.hidden) _flush();
+    else replay();
+  });
+  window.addEventListener('online', replay);
+  setTimeout(replay, 2000);
 }

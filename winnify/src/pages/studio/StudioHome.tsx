@@ -6,7 +6,10 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, ChevronRight, Flame, Layers, LogOut, Monitor, Moon, Play, Sun } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { studentApi, track, type LearnHome, type StudentCourse } from '@/api/student';
-import { useStudioTheme, type ThemePref } from './studioTheme';
+import { SESSION_CARDS } from './constants';
+import StudioError from './StudioError';
+import { useStudioTextScale, useStudioTheme, type TextScale, type ThemePref } from './studioTheme';
+import { useStudioTitle } from './useStudioTitle';
 
 // System / Light / Dark segmented switcher for the profile menu.
 function ThemeSwitch() {
@@ -43,6 +46,41 @@ function ThemeSwitch() {
   );
 }
 
+// Reader text size. Scoped to lesson prose, so a student who finds the default
+// tight can enlarge it without breaking the chrome's layout.
+function TextSizeSwitch() {
+  const [scale, setScale] = useStudioTextScale();
+  const opts: { v: TextScale; label: string; px: number }[] = [
+    { v: 0.92, label: 'Small', px: 11 },
+    { v: 1, label: 'Default', px: 13 },
+    { v: 1.12, label: 'Large', px: 15 },
+  ];
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="st-eyebrow" style={{ marginBottom: 7 }}>Reading size</div>
+      <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 12, background: 'var(--st-glass)', border: '1px solid var(--st-border)' }}>
+        {opts.map(({ v, label, px }) => {
+          const on = scale === v;
+          return (
+            <button
+              key={label} onClick={() => setScale(v)} className="st-press"
+              aria-pressed={on} aria-label={`${label} text`}
+              style={{
+                flex: 1, padding: '8px 4px', borderRadius: 9, cursor: 'pointer', border: 'none',
+                background: on ? 'var(--st-lime)' : 'transparent',
+                color: on ? 'var(--st-ink-on-lime)' : 'var(--st-text-2)',
+                font: `700 ${px}px var(--st-display)`, transition: 'background .15s, color .15s',
+              }}
+            >
+              A
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Animated mastery ring: sweeps from 0 to pct on mount.
 function Ring({ pct, size = 48 }: { pct: number; size?: number }) {
   const [drawn, setDrawn] = useState(0);
@@ -65,11 +103,11 @@ function Ring({ pct, size = 48 }: { pct: number; size?: number }) {
       </svg>
       <span
         style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          font: '700 12px var(--st-display)', color: 'var(--st-text)',
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'center',
+          paddingTop: size / 2 - 7, font: '700 12px var(--st-display)', color: 'var(--st-text)',
         }}
       >
-        {pct}
+        {pct}<span style={{ font: '700 7.5px var(--st-display)', color: 'var(--st-text-3)' }}>%</span>
       </span>
     </div>
   );
@@ -91,12 +129,15 @@ export default function StudioHome() {
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  useStudioTitle(null);
 
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
+    setError('');
     studentApi.courses().then(setCourses).catch(() => setError('Could not load your courses.'));
     studentApi.home().then(setHome).catch(() => {});
     track('studio_home_viewed');
-  }, []);
+  }, [reloadKey]);
 
   // Close the profile menu on outside tap.
   useEffect(() => {
@@ -116,6 +157,13 @@ export default function StudioHome() {
 
   const resume = home?.resume;
   const firstName = (user?.name ?? 'there').split(' ')[0];
+
+  // Only courses with at least one approved (published) lesson are shown —
+  // an enrolled-but-empty course is noise a student can do nothing with.
+  const visibleCourses = useMemo(
+    () => courses?.filter(c => c.published_lessons > 0) ?? null,
+    [courses],
+  );
 
   return (
     <div style={{ padding: 'calc(18px + env(safe-area-inset-top)) 20px 12px', display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -155,6 +203,7 @@ export default function StudioHome() {
               <div style={{ font: '700 14px var(--st-display)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name}</div>
               <div style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
               <ThemeSwitch />
+              <TextSizeSwitch />
               <button
                 onClick={async () => { await signOut(); navigate('/study/login', { replace: true }); }}
                 className="st-press"
@@ -210,15 +259,28 @@ export default function StudioHome() {
       {home && (
         <div className="st-rise st-d2" style={{ display: 'flex', gap: 12 }}>
           <div className="st-card" style={{ flex: 1, padding: '14px 16px' }}>
+            {/* Streak when there is one to show, this week's count otherwise —
+                "0-day streak" is a worse opening line than a lesson count. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Flame size={13} color={home.week.active_days > 0 ? 'var(--st-lime)' : 'var(--st-text-3)'} />
-              <span className="st-eyebrow">This week</span>
+              <Flame size={13} color={home.week.streak_days > 0 ? 'var(--st-lime)' : 'var(--st-text-3)'} />
+              <span className="st-eyebrow">{home.week.streak_days > 0 ? 'Streak' : 'This week'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
-              <span style={{ font: '700 26px var(--st-display)' }}>{home.week.lessons_completed}</span>
-              <span style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-2)' }}>
-                lesson{home.week.lessons_completed === 1 ? '' : 's'} done
-              </span>
+              {home.week.streak_days > 0 ? (
+                <>
+                  <span style={{ font: '700 26px var(--st-display)' }}>{home.week.streak_days}</span>
+                  <span style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-2)' }}>
+                    day{home.week.streak_days === 1 ? '' : 's'} running
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span style={{ font: '700 26px var(--st-display)' }}>{home.week.lessons_completed}</span>
+                  <span style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-2)' }}>
+                    lesson{home.week.lessons_completed === 1 ? '' : 's'} done
+                  </span>
+                </>
+              )}
             </div>
             {/* 7-day strip: filled dots = active days this week */}
             <div style={{ display: 'flex', gap: 5, marginTop: 9 }} aria-label={`${home.week.active_days} active days this week`}>
@@ -244,12 +306,22 @@ export default function StudioHome() {
                 <Layers size={13} color="var(--st-violet)" />
                 <span className="st-eyebrow">Revision</span>
               </div>
+              {/* A raw "126 cards due" reads as a debt no one starts paying.
+                  Show the session the tap actually opens, and keep the backlog
+                  as a quiet second line. */}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
-                <span style={{ font: '700 26px var(--st-display)' }}>{home.revision.due_cards}</span>
+                <span style={{ font: '700 26px var(--st-display)' }}>
+                  {Math.min(home.revision.due_cards, SESSION_CARDS)}
+                </span>
                 <span style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-2)' }}>
-                  card{home.revision.due_cards === 1 ? '' : 's'} due
+                  card{Math.min(home.revision.due_cards, SESSION_CARDS) === 1 ? '' : 's'} to review
                 </span>
               </div>
+              {home.revision.due_cards > SESSION_CARDS && (
+                <div style={{ font: '500 11px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 3 }}>
+                  +{home.revision.due_cards - SESSION_CARDS} more waiting
+                </div>
+              )}
             </button>
           )}
         </div>
@@ -259,7 +331,7 @@ export default function StudioHome() {
       <div className="st-rise st-d3" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="st-eyebrow" style={{ padding: '0 2px' }}>Your courses</div>
 
-        {error && <div style={{ font: '600 13.5px var(--st-sans)', color: 'var(--st-red)' }}>{error}</div>}
+        {error && <StudioError message={error} onRetry={() => setReloadKey(k => k + 1)} />}
 
         {!courses && !error && (
           <>
@@ -269,7 +341,7 @@ export default function StudioHome() {
           </>
         )}
 
-        {courses?.length === 0 && (
+        {visibleCourses?.length === 0 && (
           <div className="st-card" style={{ padding: '36px 20px', textAlign: 'center' }}>
             <BookOpen size={26} color="var(--st-text-3)" style={{ margin: '0 auto 10px' }} />
             <div style={{ font: '700 16px var(--st-display)' }}>No courses yet</div>
@@ -279,9 +351,8 @@ export default function StudioHome() {
           </div>
         )}
 
-        {courses?.map(c => {
+        {visibleCourses?.map(c => {
           const m = masteryById[c.id];
-          const hasLessons = c.published_lessons > 0;
           return (
             <button
               key={c.id}
@@ -308,7 +379,7 @@ export default function StudioHome() {
                 </div>
                 <div style={{ font: '500 12px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {[c.code, c.semester && /^\d+$/.test(c.semester) ? `Sem ${c.semester}` : c.semester,
-                    hasLessons ? `${c.published_lessons} lesson${c.published_lessons === 1 ? '' : 's'}` : 'No lessons yet']
+                    `${c.published_lessons} lesson${c.published_lessons === 1 ? '' : 's'}`]
                     .filter(Boolean).join(' · ')}
                 </div>
                 {m && m.total > 0 && (

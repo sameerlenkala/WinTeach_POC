@@ -6,12 +6,19 @@
 import type { ReactNode } from 'react';
 import './studio.css';
 
-export default function StudioFrame({ children }: { children: ReactNode }) {
+// `tabs` renders as a sibling of <main>, never inside it — see the note above
+// about the telemetry selector. `withTabs` goes on <main> itself rather than on
+// a wrapper, so studio.css's `.studio-scroll:has(> .st-player)` rule (which
+// gives the lesson player its full-height layout) keeps matching.
+export default function StudioFrame({ children, tabs, withTabs }: {
+  children: ReactNode; tabs?: ReactNode; withTabs?: boolean;
+}) {
   return (
     <div className="studio studio-viewport">
       <div className="studio-canvas">
         <div className="studio-aurora" />
-        <main className="studio-scroll">{children}</main>
+        <main className={`studio-scroll${withTabs ? ' has-tabbar' : ''}`}>{children}</main>
+        {tabs}
       </div>
     </div>
   );

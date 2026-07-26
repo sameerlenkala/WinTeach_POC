@@ -7,11 +7,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, HelpCircle,
+  ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, ChevronLeft, HelpCircle,
   Layers, Lightbulb, RotateCcw, SkipForward, Sparkles, X,
 } from 'lucide-react';
 import { generationApi, type GenJob, type ConceptArtType } from '@/api/generation';
-import { studentApi, track } from '@/api/student';
+import { studentApi, track, type StudentCourseDetail } from '@/api/student';
 import { sanitizeSvg } from '@/lib/sanitizeSvg';
 import StudioCelebrate from './StudioCelebrate';
 
@@ -806,6 +806,46 @@ function buildNotesPages(content: any): Page[] {
    Data
    ════════════════════════════════════════════════════════════════════════ */
 
+// Opening a lesson used to cost two serial round trips (topic job, then the
+// concept), and every hop to the next lesson paid both again even though the
+// job never changes within a topic. These module-level caches make the second
+// and subsequent lessons in a topic a single request — and let us prefetch the
+// next one while the student is still reading this one.
+const jobCache = new Map<string, Promise<{ job: GenJob; plan: any }>>();
+const conceptCache = new Map<string, Promise<any>>();
+
+function loadTopic(topicId: string) {
+  let p = jobCache.get(topicId);
+  if (!p) {
+    p = generationApi.getTopicJob(topicId).then(async job => {
+      let plan: any = null;
+      try { plan = (await generationApi.getArtifact(job.id, 'topic_plan')).content; } catch { /* plan optional */ }
+      return { job, plan };
+    });
+    // A failed load must not be cached as a permanent failure.
+    p.catch(() => jobCache.delete(topicId));
+    jobCache.set(topicId, p);
+  }
+  return p;
+}
+
+function loadConcept(jobId: string, conceptId: string, type: ConceptArtType) {
+  const key = `${jobId}:${conceptId}:${type}`;
+  let p = conceptCache.get(key);
+  if (!p) {
+    p = generationApi.getConcept(jobId, conceptId, type).then(r => r.content);
+    p.catch(() => conceptCache.delete(key));
+    conceptCache.set(key, p);
+  }
+  return p;
+}
+
+// Warm the cache for a lesson the student is likely to open next. Failures are
+// ignored — this is opportunistic, never load-bearing.
+export function prefetchConcept(jobId?: string, conceptId?: string | null, type: ConceptArtType = 'student_notes') {
+  if (jobId && conceptId) loadConcept(jobId, conceptId, type).catch(() => {});
+}
+
 function useLesson(topicId?: string, conceptId?: string, type: ConceptArtType = 'student_notes') {
   const [job, setJob] = useState<GenJob | null>(null);
   const [plan, setPlan] = useState<any>(null);
@@ -815,20 +855,23 @@ function useLesson(topicId?: string, conceptId?: string, type: ConceptArtType = 
 
   useEffect(() => {
     if (!topicId) return;
-    generationApi.getTopicJob(topicId).then(async j => {
-      setJob(j);
-      try { setPlan((await generationApi.getArtifact(j.id, 'topic_plan')).content); } catch { /* plan optional */ }
-    }).catch(() => { setError('Could not load this lesson.'); setLoading(false); });
+    let live = true;
+    loadTopic(topicId)
+      .then(({ job: j, plan: pl }) => { if (live) { setJob(j); setPlan(pl); } })
+      .catch(() => { if (live) { setError('Could not load this lesson.'); setLoading(false); } });
+    return () => { live = false; };
   }, [topicId]);
 
   const jobId = job?.id;
   useEffect(() => {
     if (!jobId || !conceptId) return;
+    let live = true;
     setLoading(true); setContent(null);
-    generationApi.getConcept(jobId, conceptId, type)
-      .then(r => setContent(r.content))
-      .catch(() => setError('This lesson isn’t available yet.'))
-      .finally(() => setLoading(false));
+    loadConcept(jobId, conceptId, type)
+      .then(c => { if (live) setContent(c); })
+      .catch(() => { if (live) setError('This lesson isn’t available yet.'); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
   }, [jobId, conceptId, type]);
 
   return { job, plan, content, loading, error };
@@ -910,14 +953,22 @@ function FootBtn({ children, primary, style, ...rest }: React.ButtonHTMLAttribut
    Notes player
    ════════════════════════════════════════════════════════════════════════ */
 
-function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onPage, onExit }: {
+// Where the player sends a student who has finished the last lesson of a
+// topic: the next topic, or the course's mastery map when the course is done.
+type Onward = { label: string; go: () => void } | null;
+
+function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onward, onRevise, onPage, onExit }: {
   content: any;
   meta: { title: string; code: string; lessonNo: number | null };
-  onDone: () => void;
+  // Reports how much of the lesson was actually opened; returns whether that
+  // (combined with dwell, which the parent owns) earned a completion.
+  onDone: (visitedRatio: number) => boolean;
   onQuiz: (() => void) | null;
   hasQuiz: boolean;
   onNext: (() => void) | null;
-  onPage?: (idx: number, total: number) => void;
+  onward: Onward;
+  onRevise: () => void;
+  onPage?: (idx: number, total: number, leaving?: { key: string; title: string }) => void;
   // Explicit exit target — never history.back(), which can pop out of the
   // studio (deep links, PWA launches, stale non-student history entries).
   onExit: () => void;
@@ -928,19 +979,33 @@ function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onPage, o
   const [dir, setDir] = useState<1 | -1>(1);
   const bodyRef = useRef<HTMLDivElement>(null);
   const total = pages.length + 2;
+  // Which content pages were actually opened. Tapping straight through still
+  // visits them all, so this alone can't earn a completion — the parent's dwell
+  // check is the other half of the gate.
+  const visited = useRef(new Set<number>());
   const go = (d: 1 | -1) => {
     setDir(d);
     setIdx(i => {
       const n = Math.max(0, Math.min(total - 1, i + d));
-      if (n !== i) onPage?.(n, total);
+      if (n !== i) {
+        visited.current.add(n);
+        // Report the section being left, so its dwell is attributable.
+        const from = pages[i - 1];
+        onPage?.(n, total, from ? { key: from.key, title: from.title } : undefined);
+      }
       return n;
     });
     bodyRef.current?.scrollTo({ top: 0 });
   };
   const doneFired = useRef(false);
+  const [earned, setEarned] = useState(true);
   useEffect(() => {
-    if (idx === total - 1 && !doneFired.current) { doneFired.current = true; onDone(); }
-  }, [idx, total, onDone]);
+    if (idx === total - 1 && !doneFired.current) {
+      doneFired.current = true;
+      const seen = [...visited.current].filter(i => i >= 1 && i <= pages.length).length;
+      setEarned(onDone(pages.length ? seen / pages.length : 1));
+    }
+  }, [idx, total, pages.length, onDone]);
 
   // Horizontal swipe advances/rewinds sections. Vertical-dominant moves are
   // ignored (that's reading scroll), as are swipes on horizontally-scrollable
@@ -1011,19 +1076,30 @@ function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onPage, o
   );
 
   const completion = (
-    <div key="end" className={anim} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', textAlign: 'center', gap: 6 }}>
-      <StudioCelebrate />
+    <div key="end" className={anim} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', textAlign: 'center', gap: 6 }} aria-live="polite">
+      {earned && <StudioCelebrate />}
       <div style={{
         width: 84, height: 84, borderRadius: '50%', marginBottom: 12,
-        background: 'linear-gradient(135deg, var(--st-lime), var(--st-aqua))',
+        background: earned
+          ? 'linear-gradient(135deg, var(--st-lime), var(--st-aqua))'
+          : 'var(--st-glass-2)',
+        border: earned ? 'none' : '1px solid var(--st-border-2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 14px 44px rgba(205,244,99,.3)',
+        boxShadow: earned ? '0 14px 44px rgba(205,244,99,.3)' : 'none',
       }}>
-        <Check size={38} color="var(--st-ink-on-lime)" strokeWidth={3} />
+        {earned
+          ? <Check size={38} color="var(--st-ink-on-lime)" strokeWidth={3} />
+          : <BookOpen size={34} color="var(--st-text-2)" />}
       </div>
-      <div style={{ font: '700 26px var(--st-display)', letterSpacing: '-0.02em' }}>Lesson complete</div>
-      <div style={{ font: '500 14px/1.6 var(--st-sans)', color: 'var(--st-text-2)', maxWidth: 260 }}>
-        {hasQuiz ? 'Great read. Lock it in with the quiz.' : 'Great read — this lesson now counts toward your mastery.'}
+      <div style={{ font: '700 26px var(--st-display)', letterSpacing: '-0.02em' }}>
+        {earned ? 'Lesson complete' : 'End of the lesson'}
+      </div>
+      <div style={{ font: '500 14px/1.6 var(--st-sans)', color: 'var(--st-text-2)', maxWidth: 264 }}>
+        {earned
+          ? (hasQuiz ? 'Great read. Lock it in with the quiz.' : 'Great read — this lesson now counts toward your mastery.')
+          : (hasQuiz
+            ? 'That was a quick skim. Take the quiz to count it, or read back through.'
+            : 'That was a quick skim — read back through and it’ll count toward your mastery.')}
       </div>
     </div>
   );
@@ -1062,7 +1138,14 @@ function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onPage, o
           ) : onNext ? (
             <FootBtn primary onClick={onNext}>Next lesson <ArrowRight size={19} strokeWidth={2.5} /></FootBtn>
           ) : (
-            <FootBtn primary onClick={onExit}>Back to topic</FootBtn>
+            // Last lesson of the topic — keep the thread going rather than
+            // dropping the student back on the list they came from.
+            <>
+              <FootBtn onClick={onRevise} aria-label="Revise this course"><Layers size={19} /></FootBtn>
+              {onward
+                ? <FootBtn primary onClick={onward.go}>{onward.label} <ArrowRight size={19} strokeWidth={2.5} /></FootBtn>
+                : <FootBtn primary onClick={onExit}>Back to topic</FootBtn>}
+            </>
           )
         ) : (
           <FootBtn primary onClick={() => go(1)}>
@@ -1107,24 +1190,34 @@ function normaliseQuestions(content: any): NormQ[] {
   return out;
 }
 
-function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
+function QuizPlayer({ content, meta, onScore, onNext, onward, onExit }: {
   content: any;
   meta: { title: string; code: string };
-  onScore: (score: number, total: number) => void;
+  onScore: (score: number, total: number, answers: unknown[]) => void;
   onNext: (() => void) | null;
+  onward: Onward;
   onExit: () => void;
 }) {
   const questions = useMemo(() => normaliseQuestions(content), [content]);
-  // idx: -1 cover, 0..n-1 questions, n = results
+  // Which questions this run covers, as indices into `questions`. A full run is
+  // every question; a "retry missed" run is the subset the student got wrong.
+  const [order, setOrder] = useState<number[]>(() => questions.map((_, i) => i));
+  // Practice runs (retry-missed) are never reported: the backend clamps a
+  // partial total up to the real question count, so posting 2/2 from a subset
+  // would read as a perfect full attempt and inflate mastery.
+  const [practice, setPractice] = useState(false);
+  // idx: -1 cover, 0..order.length-1 questions, order.length = results
   const [idx, setIdx] = useState(-1);
   const [picked, setPicked] = useState<number[]>([]);
   const [checked, setChecked] = useState(false);
   const [hintOpen, setHintOpen] = useState(false);
-  const [results, setResults] = useState<boolean[]>([]);
+  const [results, setResults] = useState<{ qi: number; ok: boolean; picked: number[] }[]>([]);
+  const [openRecap, setOpenRecap] = useState<number | null>(null);
   const reported = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const q = idx >= 0 && idx < questions.length ? questions[idx] : null;
+  const total = order.length;
+  const q = idx >= 0 && idx < total ? questions[order[idx]] : null;
   const isCorrect = q ? picked.length === q.correct.size && picked.every(p => q.correct.has(p)) : false;
 
   const advance = () => {
@@ -1138,7 +1231,7 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
     // Haptic tick where supported (Android Chrome); silently no-ops on iOS.
     try { navigator.vibrate?.(ok ? 10 : [30, 40, 30]); } catch { /* unsupported */ }
     setChecked(true);
-    setResults(r => [...r, ok]);
+    setResults(r => [...r, { qi: order[idx], ok, picked: [...picked] }]);
   };
   const isCorrectFor = (qq: NormQ, sel: number[]) => sel.length === qq.correct.size && sel.every(p => qq.correct.has(p));
   const pick = (oi: number) => {
@@ -1147,11 +1240,21 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
     else setPicked([oi]);
   };
 
-  const score = results.filter(Boolean).length;
+  const score = results.filter(r => r.ok).length;
+  const missed = results.filter(r => !r.ok).map(r => r.qi);
+  const restart = (subset: number[] | null) => {
+    setOrder(subset ?? questions.map((_, i) => i));
+    setPractice(!!subset);
+    setResults([]); setPicked([]); setChecked(false); setOpenRecap(null);
+    setIdx(subset ? 0 : -1);
+    if (!subset) reported.current = false;
+  };
   useEffect(() => {
-    if (idx === questions.length && questions.length > 0 && !reported.current) {
+    if (idx === total && total > 0 && !reported.current && !practice) {
       reported.current = true;
-      onScore(score, questions.length);
+      onScore(score, total, results.map(r => ({
+        question_index: r.qi, picked: r.picked, correct: r.ok,
+      })));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);
@@ -1185,14 +1288,14 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
   }
 
   // ── results ──
-  if (idx >= questions.length) {
-    const pct = Math.round((score / questions.length) * 100);
+  if (idx >= total) {
+    const pct = Math.round((score / total) * 100);
     const strong = pct >= 70;
     return (
       <>
-        <div className="st-player-body" style={{ display: 'flex', position: 'relative' }}>
-          {pct === 100 && <StudioCelebrate count={30} />}
-          <div className="st-page-in" style={{ margin: 'auto', textAlign: 'center' }}>
+        <div className="st-player-body" style={{ position: 'relative' }}>
+          {pct === 100 && !practice && <StudioCelebrate count={30} />}
+          <div className="st-page-in" style={{ textAlign: 'center', paddingTop: 8 }} aria-live="polite">
             <div style={{ position: 'relative', width: 132, height: 132, margin: '0 auto 18px' }}>
               <svg width={132} height={132} style={{ transform: 'rotate(-90deg)' }}>
                 <circle cx={66} cy={66} r={58} fill="none" strokeWidth={9} stroke="rgba(255,255,255,.1)" />
@@ -1205,26 +1308,91 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ font: '700 30px var(--st-display)' }}>{pct}%</span>
-                <span style={{ font: '600 11px var(--st-sans)', color: 'var(--st-text-3)' }}>{score}/{questions.length}</span>
+                <span style={{ font: '600 11px var(--st-sans)', color: 'var(--st-text-3)' }}>{score}/{total}</span>
               </div>
             </div>
             <div style={{ font: '700 24px var(--st-display)', letterSpacing: '-0.02em' }}>
-              {pct === 100 ? 'Flawless.' : strong ? 'Strong work.' : pct >= 40 ? 'Getting there.' : 'Worth a re-read.'}
+              {practice ? (pct === 100 ? 'Nailed them.' : 'Practice run.')
+                : pct === 100 ? 'Flawless.' : strong ? 'Strong work.' : pct >= 40 ? 'Getting there.' : 'Worth a re-read.'}
             </div>
-            <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 6, maxWidth: 260 }}>
-              Your attempt has been recorded{strong ? ' — this topic is looking solid.' : '. Re-read the lesson and try again.'}
+            <div style={{ font: '500 13.5px/1.6 var(--st-sans)', color: 'var(--st-text-2)', margin: '6px auto 0', maxWidth: 264 }}>
+              {practice
+                ? 'Practice isn’t recorded — retake the full quiz to update your score.'
+                : `Your attempt has been recorded${strong ? ' — this topic is looking solid.' : '. Re-read the lesson and try again.'}`}
+            </div>
+          </div>
+
+          {/* Answer review. Without it the score is a verdict with no lesson
+              attached — the student can't tell which ideas they missed. */}
+          <div style={{ marginTop: 22 }}>
+            <div className="st-eyebrow" style={{ marginBottom: 8 }}>Your answers</div>
+            <div className="st-card" style={{ overflow: 'hidden' }}>
+              {results.map((r, i) => {
+                const qq = questions[r.qi];
+                const open = openRecap === i;
+                return (
+                  <div key={i} style={{ borderBottom: i < results.length - 1 ? '1px solid var(--st-border)' : 'none' }}>
+                    <button
+                      onClick={() => setOpenRecap(open ? null : i)}
+                      className="st-press"
+                      aria-expanded={open}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%', textAlign: 'left',
+                        padding: '12px 14px', border: 'none', background: 'transparent', color: 'var(--st-text)',
+                      }}
+                    >
+                      <span style={{
+                        width: 22, height: 22, borderRadius: 99, flexShrink: 0, marginTop: 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: r.ok ? 'rgba(74,222,128,.16)' : 'rgba(251,113,133,.16)',
+                        color: r.ok ? '#4ade80' : '#fb7185',
+                      }}>
+                        {r.ok ? <Check size={13} strokeWidth={3} /> : <X size={13} strokeWidth={3} />}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, font: '500 12.5px/1.5 var(--st-sans)', color: 'var(--st-text-2)' }}>
+                        {qq.question}
+                      </span>
+                      <ChevronDown
+                        size={15} color="var(--st-text-3)"
+                        style={{ flexShrink: 0, marginTop: 3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}
+                      />
+                    </button>
+                    {open && (
+                      <div style={{ padding: '0 14px 13px 46px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {!r.ok && (
+                          <div style={{ font: '500 12px/1.5 var(--st-sans)', color: '#fb7185' }}>
+                            You chose {r.picked.map(p => LETTERS[p]).join(', ') || '—'}
+                          </div>
+                        )}
+                        <div style={{ font: '600 12px/1.5 var(--st-sans)', color: '#4ade80' }}>
+                          Correct: {[...qq.correct].sort((a, b) => a - b).map(c => LETTERS[c]).join(', ')} — {[...qq.correct].sort((a, b) => a - b).map(c => qq.options[c]).join(' / ')}
+                        </div>
+                        {qq.explanation && (
+                          <div style={{ font: '500 12px/1.6 var(--st-sans)', color: 'var(--st-text-3)' }}>{inline(qq.explanation)}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
         <div className="st-player-foot">
-          <FootBtn onClick={() => { setIdx(-1); setResults([]); setPicked([]); setChecked(false); reported.current = false; }} aria-label="Retry quiz">
+          <FootBtn onClick={() => restart(null)} aria-label="Retake the full quiz">
             <RotateCcw size={20} />
           </FootBtn>
-          {onNext ? (
+          {missed.length > 0 ? (
+            <FootBtn primary onClick={() => restart(missed)}>
+              Retry {missed.length} missed <ArrowRight size={19} strokeWidth={2.5} />
+            </FootBtn>
+          ) : onNext ? (
             <>
               <FootBtn onClick={onExit} aria-label="Back to topic"><X size={20} /></FootBtn>
               <FootBtn primary onClick={onNext}>Next lesson <ArrowRight size={19} strokeWidth={2.5} /></FootBtn>
             </>
+          ) : onward ? (
+            <FootBtn primary onClick={onward.go}>{onward.label} <ArrowRight size={19} strokeWidth={2.5} /></FootBtn>
           ) : (
             <FootBtn primary onClick={onExit}>Done</FootBtn>
           )}
@@ -1237,12 +1405,14 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
   return (
     <>
       <div style={{ padding: '2px 22px 10px' }}>
-        <Segs total={questions.length} done={idx + (checked ? 1 : 0)} />
+        <Segs total={total} done={idx + (checked ? 1 : 0)} />
       </div>
       <div className="st-player-body" ref={bodyRef}>
         <div key={idx} className="st-page-in">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span className="st-eyebrow" style={{ color: 'var(--st-aqua)' }}>Question {idx + 1} of {questions.length}</span>
+            <span className="st-eyebrow" style={{ color: 'var(--st-aqua)' }}>
+              {practice ? 'Practice · ' : ''}Question {idx + 1} of {total}
+            </span>
             {q!.difficulty && <span className="st-chip" style={{ padding: '3px 10px', fontSize: 11 }}>{q!.difficulty}</span>}
           </div>
           <h2 style={{ font: '700 21px/1.35 var(--st-display)', letterSpacing: '-0.015em', margin: '0 0 18px', color: 'var(--st-text)' }}>
@@ -1304,7 +1474,15 @@ function QuizPlayer({ content, meta, onScore, onNext, onExit }: {
    Slides player — horizontal snap deck
    ════════════════════════════════════════════════════════════════════════ */
 
-function SlidesPlayer({ content }: { content: any }) {
+function SlidesPlayer({ content, hasQuiz, onQuiz, onNotes, onSeen }: {
+  content: any;
+  hasQuiz: boolean;
+  onQuiz: (() => void) | null;
+  onNotes: () => void;
+  // Fired once when the deck is opened and once when it is finished — slides
+  // were the only format leaving no trace at all.
+  onSeen: (done: boolean) => void;
+}) {
   const slides: any[] = content?.slides ?? [];
   const deckRef = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
@@ -1327,6 +1505,21 @@ function SlidesPlayer({ content }: { content: any }) {
     if (!el) return;
     el.scrollTo({ left: (idx + d) * stride(el), behavior: 'smooth' });
   };
+
+  const seenOpen = useRef(false);
+  const seenDone = useRef(false);
+  useEffect(() => {
+    if (!slides.length || seenOpen.current) return;
+    seenOpen.current = true;
+    onSeen(false);
+  }, [slides.length, onSeen]);
+  useEffect(() => {
+    if (!slides.length || seenDone.current || idx < slides.length - 1) return;
+    seenDone.current = true;
+    onSeen(true);
+  }, [idx, slides.length, onSeen]);
+
+  const atEnd = idx === slides.length - 1;
   if (!slides.length) {
     return (
       <div className="st-player-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1462,9 +1655,23 @@ function SlidesPlayer({ content }: { content: any }) {
             </span>
           )}
         </div>
-        <FootBtn onClick={() => jump(1)} disabled={idx === slides.length - 1} aria-label="Next slide" style={{ opacity: idx === slides.length - 1 ? 0.4 : 1 }}>
-          <ArrowRight size={22} />
-        </FootBtn>
+        {/* The last slide used to be a disabled arrow — a full stop with no
+            way onward. Hand off to the quiz or the notes instead. */}
+        {atEnd ? (
+          hasQuiz && onQuiz ? (
+            <FootBtn primary onClick={onQuiz} style={{ flex: 1 }}>
+              Take the quiz <ArrowRight size={19} strokeWidth={2.5} />
+            </FootBtn>
+          ) : (
+            <FootBtn primary onClick={onNotes} style={{ flex: 1 }}>
+              Read the notes <ArrowRight size={19} strokeWidth={2.5} />
+            </FootBtn>
+          )
+        ) : (
+          <FootBtn onClick={() => jump(1)} aria-label="Next slide">
+            <ArrowRight size={22} />
+          </FootBtn>
+        )}
       </div>
     </>
   );
@@ -1485,12 +1692,23 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
   const topicPath = `/study/courses/${courseId}/topic/${topicId}`;
   const base = topicPath;
 
-  // Course code for the cover eyebrow.
-  const [code, setCode] = useState('');
+  // Course detail powers the cover eyebrow and, at the end of a topic, the
+  // hand-off to whatever comes next in the syllabus.
+  const [course, setCourse] = useState<StudentCourseDetail | null>(null);
   useEffect(() => {
     if (!courseId) return;
-    studentApi.course(courseId).then(c => setCode(c.code ?? c.name ?? '')).catch(() => {});
+    studentApi.course(courseId).then(setCourse).catch(() => {});
   }, [courseId]);
+  const code = course?.code ?? course?.name ?? '';
+
+  // The next topic a student can open once this one runs out of lessons.
+  const nextTopic = useMemo(() => {
+    if (!course || !topicId) return null;
+    const flat = course.units.flatMap(u => u.topics);
+    const here = flat.findIndex(t => t.id === topicId);
+    if (here < 0) return null;
+    return flat.slice(here + 1).find(t => t.published_lessons > 0) ?? null;
+  }, [course, topicId]);
 
   // Lessons with $…$ math (or LaTeX mis-wrapped in `code` fences) load KaTeX
   // once, then re-render.
@@ -1516,15 +1734,48 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
 
   // Page-turn telemetry: keeps the resume pointer + "% read" fresh. Page
   // turns are user-paced, so no extra throttling is needed.
-  const reportPage = useCallback((idx: number, total: number) => {
+  const lastPage = useRef(0);
+  // Per-section dwell: how long the student stayed on the page they are
+  // leaving. Lesson-level dwell can't tell a well-written section from one
+  // students bounce off, which is what the generation critic needs to know.
+  const sectionEnter = useRef(0);
+  const reportPage = useCallback((idx: number, total: number, leaving?: { key: string; title: string }) => {
     if (!topicId || !conceptId) return;
+    lastPage.current = Math.min(100, Math.round((idx / Math.max(total - 1, 1)) * 100));
     studentApi.progress({
       course_id: courseId, topic_id: topicId, concept_id: conceptId,
       artifact_type: 'student_notes',
-      scroll_pct: Math.min(100, Math.round((idx / Math.max(total - 1, 1)) * 100)),
+      scroll_pct: lastPage.current,
       dwell_sec: dwellRef.current,
     }).catch(() => {});
+
+    const spent = dwellRef.current - sectionEnter.current;
+    sectionEnter.current = dwellRef.current;
+    if (leaving && spent > 0) {
+      track('section_dwell', {
+        concept_id: conceptId, topic_id: topicId,
+        section: leaving.key, section_title: leaving.title, dwell_sec: spent,
+      });
+    }
   }, [courseId, topicId, conceptId]);
+
+  // Dwell only rode along on page turns, so a student who read one long page
+  // and then backgrounded the tab reported almost nothing. Flush on hide and
+  // on unmount, with keepalive so the request survives the page going away.
+  useEffect(() => {
+    if (type !== 'student_notes' || !content || !topicId || !conceptId) return;
+    const flush = () => {
+      if (dwellRef.current <= 0) return;
+      studentApi.progress({
+        course_id: courseId, topic_id: topicId, concept_id: conceptId,
+        artifact_type: 'student_notes',
+        scroll_pct: lastPage.current, dwell_sec: dwellRef.current,
+      }, { keepalive: true }).catch(() => {});
+    };
+    const onHide = () => { if (document.hidden) flush(); };
+    document.addEventListener('visibilitychange', onHide);
+    return () => { document.removeEventListener('visibilitychange', onHide); flush(); };
+  }, [type, content, courseId, topicId, conceptId]);
 
   // The next lesson a student can open (first later concept with approved notes).
   const nextConcept = useMemo(() => {
@@ -1536,6 +1787,31 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
   }, [concepts, cIdx, job]);
   const goNext = nextConcept ? () => navigate(`${base}/notes/${nextConcept.concept_id}`) : null;
 
+  // "Next lesson" is the primary CTA at the end of every lesson, so fetch it
+  // while the student is still reading — the tap then paints immediately.
+  useEffect(() => {
+    if (!content || !job?.id || !nextConcept) return;
+    const t = window.setTimeout(() => prefetchConcept(job.id, nextConcept.concept_id), 1500);
+    return () => window.clearTimeout(t);
+  }, [content, job?.id, nextConcept]);
+
+  // Where a student goes when this topic has no more lessons. Landing on a
+  // bare "Back to topic" at the end of a topic ends the session; the syllabus
+  // almost always has an obvious next move, so offer it.
+  const onward: Onward = useMemo(() => {
+    if (nextTopic) {
+      return {
+        label: `Next: ${nextTopic.title}`,
+        go: () => navigate(nextTopic.first_concept_id
+          ? `/study/courses/${courseId}/topic/${nextTopic.id}/notes/${nextTopic.first_concept_id}`
+          : `/study/courses/${courseId}/topic/${nextTopic.id}`),
+      };
+    }
+    if (course) return { label: 'See your mastery', go: () => navigate(`/study/courses/${courseId}/mastery`) };
+    return null;
+  }, [nextTopic, course, courseId, navigate]);
+  const goRevise = useCallback(() => navigate(`/study/courses/${courseId}/revision`), [navigate, courseId]);
+
   // Progress: viewed on load (notes), completed when the reader finishes.
   useEffect(() => {
     if (!content || !topicId || !conceptId || type !== 'student_notes') return;
@@ -1544,15 +1820,44 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, topicId, conceptId, type]);
 
-  const markComplete = useCallback(() => {
+  // A lesson counts as read only when most of it was opened AND the student
+  // spent a plausible fraction of its estimated reading time on it. Tapping
+  // Continue fifteen times in ten seconds leaves it at "viewed", so mastery
+  // measures reading rather than button presses. (A quiz submission still
+  // force-completes server-side — answering the questions is the stronger
+  // signal.) Lessons with no reading-time estimate keep the old behaviour.
+  const markComplete = useCallback((visitedRatio: number) => {
+    if (!topicId || !conceptId) return false;
+    const mins = Number(content?.opening?.sections?.topic_overview?.subtopic_metadata?.reading_time_minutes);
+    const needSec = Number.isFinite(mins) && mins > 0 ? mins * 60 * 0.4 : 0;
+    const earned = visitedRatio >= 0.85 && dwellRef.current >= needSec;
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: 'student_notes', status: earned ? 'completed' : 'viewed',
+      scroll_pct: Math.round(visitedRatio * 100), dwell_sec: dwellRef.current,
+    }).catch(() => {});
+    track(earned ? 'studio_lesson_completed' : 'studio_lesson_skimmed', {
+      concept_id: conceptId, visited_pct: Math.round(visitedRatio * 100), dwell_sec: dwellRef.current,
+    });
+    return earned;
+  }, [courseId, topicId, conceptId, content]);
+
+  // Slides progress is telemetry and UI state only — mastery is computed from
+  // notes and quizzes, so a slide row never moves a student's score.
+  const markSlidesSeen = useCallback((done: boolean) => {
     if (!topicId || !conceptId) return;
-    studentApi.progress({ course_id: courseId, topic_id: topicId, concept_id: conceptId, artifact_type: 'student_notes', status: 'completed' }).catch(() => {});
-    track('studio_lesson_completed', { concept_id: conceptId });
+    studentApi.progress({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId,
+      artifact_type: 'slides', status: done ? 'completed' : 'viewed',
+    }).catch(() => {});
+    if (done) track('studio_slides_finished', { concept_id: conceptId });
   }, [courseId, topicId, conceptId]);
 
-  const recordScore = useCallback((score: number, total: number) => {
+  const recordScore = useCallback((score: number, total: number, answers: unknown[]) => {
     if (!topicId || !conceptId || !total) return;
-    studentApi.quizAttempt({ course_id: courseId, topic_id: topicId, concept_id: conceptId, score, total }).catch(() => {});
+    studentApi.quizAttempt({
+      course_id: courseId, topic_id: topicId, concept_id: conceptId, score, total, answers,
+    }).catch(() => {});
     track('studio_quiz_submitted', { concept_id: conceptId, score, total });
   }, [courseId, topicId, conceptId]);
 
@@ -1603,14 +1908,28 @@ export default function StudioLesson({ type }: { type: ConceptArtType }) {
           hasQuiz={hasQuiz}
           onQuiz={hasQuiz ? () => navigate(`${base}/quiz/${conceptId}`) : null}
           onNext={goNext}
+          onward={onward}
+          onRevise={goRevise}
           onPage={reportPage}
           onExit={() => navigate(topicPath)}
         />
       )}
       {!loading && content && type === 'quiz' && (
-        <QuizPlayer key={conceptId} content={content} meta={{ title: conceptName, code }} onScore={recordScore} onNext={goNext} onExit={() => navigate(topicPath)} />
+        <QuizPlayer
+          key={conceptId} content={content} meta={{ title: conceptName, code }}
+          onScore={recordScore} onNext={goNext} onward={onward} onExit={() => navigate(topicPath)}
+        />
       )}
-      {!loading && content && type === 'slides' && <SlidesPlayer key={conceptId} content={content} />}
+      {!loading && content && type === 'slides' && (
+        <SlidesPlayer
+          key={conceptId}
+          content={content}
+          hasQuiz={hasQuiz}
+          onQuiz={hasQuiz ? () => navigate(`${base}/quiz/${conceptId}`) : null}
+          onNotes={() => navigate(`${base}/notes/${conceptId}`)}
+          onSeen={markSlidesSeen}
+        />
+      )}
     </div>
   );
 }

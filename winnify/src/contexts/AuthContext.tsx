@@ -21,7 +21,7 @@ export interface User {
 }
 
 export const ROLE_REDIRECT: Record<UserRole, string> = {
-  student:    '/home',
+  student:    '/study',
   superadmin: '/superadmin',
   admin:      '/admin',
   faculty:    '/winteach',

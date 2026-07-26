@@ -1,137 +1,163 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import PublicLayout from './layouts/PublicLayout';
-import DashboardLayout from './layouts/DashboardLayout';
-import NavbarOnlyLayout from './layouts/NavbarOnlyLayout';
-import CourseLayout from './layouts/CourseLayout';
+
+// Every page is code-split. The app spans five unrelated products (marketing
+// site, student studio, legacy student app, faculty studio, admin consoles);
+// statically importing them all meant a student on campus wifi downloaded the
+// superadmin console and the video SDK before their first lesson could paint.
+//
+// Kept static: routing, auth, and the studio shell — the shell paints the dark
+// phone canvas immediately, so studio routes stream in without a white flash.
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import Landing from './pages/Landing';
-import SignIn from './pages/SignIn';
-import SignUp from './pages/SignUp';
-import DailyCoPage from './pages/DailyCoPage';
-import Judge0Page from './pages/Judge0Page';
-import Judge0SolvePage from './pages/Judge0SolvePage';
-import Home from './pages/Home';
-import WinSpeak from './pages/WinSpeak';
-import Drives from './pages/Drives';
-import Journey from './pages/Journey';
-import Assessments from './pages/Assessments';
-import Mocktest from './pages/Mocktest';
-import Courses from './pages/Courses';
-import Learning from './pages/Learning';
-import Profile from './pages/Profile';
-import NinetyDayPlan from './pages/NinetyDayPlan';
-import DriveDetail from './pages/DriveDetail';
-import AptitudeTests from './pages/AptitudeTests';
-import TechnicalTests from './pages/TechnicalTests';
-import CompanyOA from './pages/CompanyOA';
-import WinSpeakChallenge from './pages/WinSpeakChallenge';
-import WinSpeakLeaderboard from './pages/WinSpeakLeaderboard';
-import WinSpeakPractice from './pages/WinSpeakPractice';
-import AIChat from './pages/AIChat';
-import RevisionCourse from './pages/RevisionCourse';
-import SkillLesson from './pages/SkillLesson';
-import MilestoneDetail from './pages/MilestoneDetail';
-import TestConfig from './pages/TestConfig';
-import TestBriefing from './pages/TestBriefing';
-import TestTaking from './pages/TestTaking';
-import TestResults from './pages/TestResults';
-import WinSpeakRecording from './pages/WinSpeakRecording';
-import WinSpeakReport from './pages/WinSpeakReport';
-import WinSpeakPracticeSetup from './pages/WinSpeakPracticeSetup';
-import WinSpeakPracticeRecording from './pages/WinSpeakPracticeRecording';
-import WinSpeakPracticeReport from './pages/WinSpeakPracticeReport';
-import WinSpeakScoreDashboard from './pages/WinSpeakScoreDashboard';
-import WinSpeakAnalysis from './pages/WinSpeakAnalysis';
-import BadgesGallery from './pages/BadgesGallery';
-import Notifications from './pages/Notifications';
-import Support from './pages/Support';
-import Settings from './pages/Settings';
-import ResumeBuilder from './pages/ResumeBuilder';
-import WinSpeakDimensionDetail from './pages/WinSpeakDimensionDetail';
-import WinSpeakTips from './pages/WinSpeakTips';
-import WinSpeakPracticeHistory from './pages/WinSpeakPracticeHistory';
-import WinSpeakChallengeDetail from './pages/WinSpeakChallengeDetail';
-import AuthCallback from './pages/AuthCallback';
-import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
-import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
-import SuperAdminColleges from './pages/superadmin/SuperAdminColleges';
-import SuperAdminUsers from './pages/superadmin/SuperAdminUsers';
-import CollegeAdminLayout from './pages/collegeadmin/CollegeAdminLayout';
-import CollegeAdminDashboard from './pages/collegeadmin/CollegeAdminDashboard';
-import CollegeAdminUsers from './pages/collegeadmin/CollegeAdminUsers';
-import CollegeAdminCourses from './pages/collegeadmin/CollegeAdminCourses';
-import SignUpInvite from './pages/SignUpInvite';
-import WinTeachLayout from './pages/winteach/WinTeachLayout';
-import WinTeachDashboard from './pages/winteach/WinTeachDashboard';
-import WinTeachCourses from './pages/winteach/WinTeachCourses';
-import WinTeachCreateCourse from './pages/winteach/WinTeachCreateCourse';
-import WinTeachCoursePage from './pages/winteach/WinTeachCoursePage';
-import WinTeachGenerate from './pages/winteach/WinTeachGenerate';
-import WinTeachConceptReader from './pages/winteach/WinTeachConceptReader';
-import WinTeachCheatSheet from './pages/winteach/WinTeachCheatSheet';
-import WinTeachTopicArtifact from './pages/winteach/WinTeachTopicArtifact';
-import StudioLogin from './pages/studio/StudioLogin';
-import StudioSignup from './pages/studio/StudioSignup';
 import StudioShell from './pages/studio/StudioShell';
-import StudioHome from './pages/studio/StudioHome';
-import StudioCourse from './pages/studio/StudioCourse';
-import StudioTopic from './pages/studio/StudioTopic';
-import StudioLesson from './pages/studio/StudioLesson';
-import StudioRevision from './pages/studio/StudioRevision';
-import StudioMastery from './pages/studio/StudioMastery';
-import StudentCourses from './pages/student/StudentCourses';
-import StudentCourseTopics from './pages/student/StudentCourseTopics';
-import StudentTopic from './pages/student/StudentTopic';
-import StudentRevision from './pages/student/StudentRevision';
-import StudentMastery from './pages/student/StudentMastery';
-import WinTeachGeneration from './pages/winteach/WinTeachGeneration';
-import WinTeachMaterialsPage from './pages/winteach/WinTeachMaterialsPage';
-import WinTeachAddLibrary from './pages/winteach/WinTeachAddLibrary';
-import WinTeachInstitutes from './pages/winteach/WinTeachInstitutes';
-import WinTeachSettings from './pages/winteach/WinTeachSettings';
-import StaffAccount from './pages/account/StaffAccount';
-import AcademicPortal from './pages/academic/AcademicPortal';
-import AcademicLayout from './layouts/AcademicLayout';
-import AdminDashboard from './pages/academic/AdminDashboard';
-import HODDashboard from './pages/academic/HODDashboard';
-import HODCourses from './pages/academic/HODCourses';
-import HODFaculty from './pages/academic/HODFaculty';
-import HODStudents from './pages/academic/HODStudents';
-import HODApprovals from './pages/academic/HODApprovals';
-import HODAnalytics from './pages/academic/HODAnalytics';
-import HODCalendar from './pages/academic/HODCalendar';
-import HODReports from './pages/academic/HODReports';
-import HODDepartment from './pages/academic/HODDepartment';
-import HODSettings from './pages/academic/HODSettings';
-import FacultyDashboard from './pages/academic/FacultyDashboard';
-import FacultyCourses from './pages/academic/FacultyCourses';
-import FacultyLectures from './pages/academic/FacultyLectures';
-import FacultyResources from './pages/academic/FacultyResources';
-import FacultyQuizzes from './pages/academic/FacultyQuizzes';
-import FacultyAttendance from './pages/academic/FacultyAttendance';
-import FacultyAnalytics from './pages/academic/FacultyAnalytics';
-import FacultyDoubts from './pages/academic/FacultyDoubts';
-import FacultySettings from './pages/academic/FacultySettings';
-import LectureDetail from './pages/academic/LectureDetail';
-import QuizBuilder from './pages/academic/QuizBuilder';
-import CourseDetail from './pages/academic/CourseDetail';
-import StudentDashboard from './pages/academic/StudentDashboard';
-import ContentTypeSelector from './pages/academic/ContentTypeSelector';
-import EnhancedCourseCreation from './pages/academic/EnhancedCourseCreation';
-import TimelineKanban from './pages/academic/TimelineKanban';
-import EnhancedQuizBuilder from './pages/academic/EnhancedQuizBuilder';
-import PlanGenerationOptions from './pages/academic/PlanGenerationOptions';
-import AutoPlanGenerator from './pages/academic/AutoPlanGenerator';
-import FacultyTimelineEditor from './pages/academic/FacultyTimelineEditor';
-import FacultyReviewPlan from './pages/academic/FacultyReviewPlan';
-import CourseSettings from './pages/academic/CourseSettings';
-import ResourceGenerator from './pages/academic/ResourceGenerator';
-import ResourceReviewPanel from './pages/academic/ResourceReviewPanel';
-import TopicView from './pages/academic/TopicView';
-import StitchedResources from './pages/academic/StitchedResources';
-import TopicFlashcards from './pages/academic/TopicFlashcards';
-import ComprehensiveQuizBuilder from './pages/academic/ComprehensiveQuizBuilder';
+
+const PublicLayout = lazy(() => import('./layouts/PublicLayout'));
+const DashboardLayout = lazy(() => import('./layouts/DashboardLayout'));
+const NavbarOnlyLayout = lazy(() => import('./layouts/NavbarOnlyLayout'));
+const CourseLayout = lazy(() => import('./layouts/CourseLayout'));
+const AcademicLayout = lazy(() => import('./layouts/AcademicLayout'));
+
+const Landing = lazy(() => import('./pages/Landing'));
+const SignIn = lazy(() => import('./pages/SignIn'));
+const SignUp = lazy(() => import('./pages/SignUp'));
+const SignUpInvite = lazy(() => import('./pages/SignUpInvite'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+
+// Student Studio
+const StudioLogin = lazy(() => import('./pages/studio/StudioLogin'));
+const StudioSignup = lazy(() => import('./pages/studio/StudioSignup'));
+const StudioHome = lazy(() => import('./pages/studio/StudioHome'));
+const StudioCourse = lazy(() => import('./pages/studio/StudioCourse'));
+const StudioTopic = lazy(() => import('./pages/studio/StudioTopic'));
+const StudioLesson = lazy(() => import('./pages/studio/StudioLesson'));
+const StudioRevision = lazy(() => import('./pages/studio/StudioRevision'));
+const StudioMastery = lazy(() => import('./pages/studio/StudioMastery'));
+const StudioPicker = lazy(() => import('./pages/studio/StudioPicker'));
+
+// Shared content engines (used by studio, legacy student app and faculty)
+const WinTeachCheatSheet = lazy(() => import('./pages/winteach/WinTeachCheatSheet'));
+const WinTeachTopicArtifact = lazy(() => import('./pages/winteach/WinTeachTopicArtifact'));
+const WinTeachConceptReader = lazy(() => import('./pages/winteach/WinTeachConceptReader'));
+
+// Consoles
+const SuperAdminLayout = lazy(() => import('./pages/superadmin/SuperAdminLayout'));
+const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
+const SuperAdminColleges = lazy(() => import('./pages/superadmin/SuperAdminColleges'));
+const SuperAdminUsers = lazy(() => import('./pages/superadmin/SuperAdminUsers'));
+const CollegeAdminLayout = lazy(() => import('./pages/collegeadmin/CollegeAdminLayout'));
+const CollegeAdminDashboard = lazy(() => import('./pages/collegeadmin/CollegeAdminDashboard'));
+const CollegeAdminUsers = lazy(() => import('./pages/collegeadmin/CollegeAdminUsers'));
+const CollegeAdminCourses = lazy(() => import('./pages/collegeadmin/CollegeAdminCourses'));
+
+// WinTeach console
+const WinTeachLayout = lazy(() => import('./pages/winteach/WinTeachLayout'));
+const WinTeachDashboard = lazy(() => import('./pages/winteach/WinTeachDashboard'));
+const WinTeachCourses = lazy(() => import('./pages/winteach/WinTeachCourses'));
+const WinTeachCreateCourse = lazy(() => import('./pages/winteach/WinTeachCreateCourse'));
+const WinTeachCoursePage = lazy(() => import('./pages/winteach/WinTeachCoursePage'));
+const WinTeachGenerate = lazy(() => import('./pages/winteach/WinTeachGenerate'));
+const WinTeachGeneration = lazy(() => import('./pages/winteach/WinTeachGeneration'));
+const WinTeachMaterialsPage = lazy(() => import('./pages/winteach/WinTeachMaterialsPage'));
+const WinTeachAddLibrary = lazy(() => import('./pages/winteach/WinTeachAddLibrary'));
+const WinTeachInstitutes = lazy(() => import('./pages/winteach/WinTeachInstitutes'));
+const WinTeachSettings = lazy(() => import('./pages/winteach/WinTeachSettings'));
+const StaffAccount = lazy(() => import('./pages/account/StaffAccount'));
+
+// Legacy student app (/home/*)
+const Home = lazy(() => import('./pages/Home'));
+const StudentCourses = lazy(() => import('./pages/student/StudentCourses'));
+const StudentCourseTopics = lazy(() => import('./pages/student/StudentCourseTopics'));
+const StudentTopic = lazy(() => import('./pages/student/StudentTopic'));
+const StudentRevision = lazy(() => import('./pages/student/StudentRevision'));
+const StudentMastery = lazy(() => import('./pages/student/StudentMastery'));
+const Judge0Page = lazy(() => import('./pages/Judge0Page'));
+const Judge0SolvePage = lazy(() => import('./pages/Judge0SolvePage'));
+const DailyCoPage = lazy(() => import('./pages/DailyCoPage'));
+const Drives = lazy(() => import('./pages/Drives'));
+const DriveDetail = lazy(() => import('./pages/DriveDetail'));
+const Journey = lazy(() => import('./pages/Journey'));
+const Assessments = lazy(() => import('./pages/Assessments'));
+const Mocktest = lazy(() => import('./pages/Mocktest'));
+const Courses = lazy(() => import('./pages/Courses'));
+const Learning = lazy(() => import('./pages/Learning'));
+const Profile = lazy(() => import('./pages/Profile'));
+const NinetyDayPlan = lazy(() => import('./pages/NinetyDayPlan'));
+const AptitudeTests = lazy(() => import('./pages/AptitudeTests'));
+const TechnicalTests = lazy(() => import('./pages/TechnicalTests'));
+const CompanyOA = lazy(() => import('./pages/CompanyOA'));
+const AIChat = lazy(() => import('./pages/AIChat'));
+const RevisionCourse = lazy(() => import('./pages/RevisionCourse'));
+const SkillLesson = lazy(() => import('./pages/SkillLesson'));
+const MilestoneDetail = lazy(() => import('./pages/MilestoneDetail'));
+const TestConfig = lazy(() => import('./pages/TestConfig'));
+const TestBriefing = lazy(() => import('./pages/TestBriefing'));
+const TestTaking = lazy(() => import('./pages/TestTaking'));
+const TestResults = lazy(() => import('./pages/TestResults'));
+const BadgesGallery = lazy(() => import('./pages/BadgesGallery'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Support = lazy(() => import('./pages/Support'));
+const Settings = lazy(() => import('./pages/Settings'));
+const ResumeBuilder = lazy(() => import('./pages/ResumeBuilder'));
+
+// WinSpeak
+const WinSpeak = lazy(() => import('./pages/WinSpeak'));
+const WinSpeakChallenge = lazy(() => import('./pages/WinSpeakChallenge'));
+const WinSpeakLeaderboard = lazy(() => import('./pages/WinSpeakLeaderboard'));
+const WinSpeakPractice = lazy(() => import('./pages/WinSpeakPractice'));
+const WinSpeakRecording = lazy(() => import('./pages/WinSpeakRecording'));
+const WinSpeakReport = lazy(() => import('./pages/WinSpeakReport'));
+const WinSpeakPracticeSetup = lazy(() => import('./pages/WinSpeakPracticeSetup'));
+const WinSpeakPracticeRecording = lazy(() => import('./pages/WinSpeakPracticeRecording'));
+const WinSpeakPracticeReport = lazy(() => import('./pages/WinSpeakPracticeReport'));
+const WinSpeakScoreDashboard = lazy(() => import('./pages/WinSpeakScoreDashboard'));
+const WinSpeakAnalysis = lazy(() => import('./pages/WinSpeakAnalysis'));
+const WinSpeakDimensionDetail = lazy(() => import('./pages/WinSpeakDimensionDetail'));
+const WinSpeakTips = lazy(() => import('./pages/WinSpeakTips'));
+const WinSpeakPracticeHistory = lazy(() => import('./pages/WinSpeakPracticeHistory'));
+const WinSpeakChallengeDetail = lazy(() => import('./pages/WinSpeakChallengeDetail'));
+
+// Academic LMS
+const AcademicPortal = lazy(() => import('./pages/academic/AcademicPortal'));
+const AdminDashboard = lazy(() => import('./pages/academic/AdminDashboard'));
+const HODDashboard = lazy(() => import('./pages/academic/HODDashboard'));
+const HODCourses = lazy(() => import('./pages/academic/HODCourses'));
+const HODFaculty = lazy(() => import('./pages/academic/HODFaculty'));
+const HODStudents = lazy(() => import('./pages/academic/HODStudents'));
+const HODApprovals = lazy(() => import('./pages/academic/HODApprovals'));
+const HODAnalytics = lazy(() => import('./pages/academic/HODAnalytics'));
+const HODCalendar = lazy(() => import('./pages/academic/HODCalendar'));
+const HODReports = lazy(() => import('./pages/academic/HODReports'));
+const HODDepartment = lazy(() => import('./pages/academic/HODDepartment'));
+const HODSettings = lazy(() => import('./pages/academic/HODSettings'));
+const FacultyDashboard = lazy(() => import('./pages/academic/FacultyDashboard'));
+const FacultyCourses = lazy(() => import('./pages/academic/FacultyCourses'));
+const FacultyLectures = lazy(() => import('./pages/academic/FacultyLectures'));
+const FacultyResources = lazy(() => import('./pages/academic/FacultyResources'));
+const FacultyQuizzes = lazy(() => import('./pages/academic/FacultyQuizzes'));
+const FacultyAttendance = lazy(() => import('./pages/academic/FacultyAttendance'));
+const FacultyAnalytics = lazy(() => import('./pages/academic/FacultyAnalytics'));
+const FacultyDoubts = lazy(() => import('./pages/academic/FacultyDoubts'));
+const FacultySettings = lazy(() => import('./pages/academic/FacultySettings'));
+const LectureDetail = lazy(() => import('./pages/academic/LectureDetail'));
+const QuizBuilder = lazy(() => import('./pages/academic/QuizBuilder'));
+const CourseDetail = lazy(() => import('./pages/academic/CourseDetail'));
+const StudentDashboard = lazy(() => import('./pages/academic/StudentDashboard'));
+const ContentTypeSelector = lazy(() => import('./pages/academic/ContentTypeSelector'));
+const EnhancedCourseCreation = lazy(() => import('./pages/academic/EnhancedCourseCreation'));
+const TimelineKanban = lazy(() => import('./pages/academic/TimelineKanban'));
+const EnhancedQuizBuilder = lazy(() => import('./pages/academic/EnhancedQuizBuilder'));
+const PlanGenerationOptions = lazy(() => import('./pages/academic/PlanGenerationOptions'));
+const AutoPlanGenerator = lazy(() => import('./pages/academic/AutoPlanGenerator'));
+const FacultyTimelineEditor = lazy(() => import('./pages/academic/FacultyTimelineEditor'));
+const FacultyReviewPlan = lazy(() => import('./pages/academic/FacultyReviewPlan'));
+const CourseSettings = lazy(() => import('./pages/academic/CourseSettings'));
+const ResourceGenerator = lazy(() => import('./pages/academic/ResourceGenerator'));
+const ResourceReviewPanel = lazy(() => import('./pages/academic/ResourceReviewPanel'));
+const TopicView = lazy(() => import('./pages/academic/TopicView'));
+const StitchedResources = lazy(() => import('./pages/academic/StitchedResources'));
+const TopicFlashcards = lazy(() => import('./pages/academic/TopicFlashcards'));
+const ComprehensiveQuizBuilder = lazy(() => import('./pages/academic/ComprehensiveQuizBuilder'));
 
 // Staff consoles (WinTeach / SuperAdmin / CollegeAdmin) are never shown to
 // students or logged-out visitors: students bounce to their studio, everyone
@@ -158,7 +184,11 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        {/* No visible fallback: chunks resolve in a frame or two on a warm
+            connection, and a spinner that flashes reads worse than nothing.
+            Route shells (studio canvas, dashboard chrome) paint underneath. */}
+        <Suspense fallback={null}>
+          <Routes>
           {/* OAuth callback — must be public, no layout */}
           <Route path="/auth/callback" element={<AuthCallback />} />
 
@@ -177,6 +207,9 @@ export default function App() {
           <Route path="/study/signup" element={<StudioSignup />} />
           <Route path="/study" element={<StudioShell />}>
             <Route index element={<StudioHome />} />
+            {/* Tab-bar destinations: resolve to the right course, or pick one */}
+            <Route path="revise" element={<StudioPicker mode="revision" />} />
+            <Route path="progress" element={<StudioPicker mode="mastery" />} />
             <Route path="courses/:id" element={<StudioCourse />} />
             <Route path="courses/:id/revision" element={<StudioRevision />} />
             <Route path="courses/:id/mastery" element={<StudioMastery />} />
@@ -318,7 +351,7 @@ export default function App() {
           >
             <Route path="/academic" element={<AcademicPortal />} />
             <Route path="/academic/admin" element={<AdminDashboard />} />
-            
+
             {/* HOD Routes */}
             <Route path="/academic/hod" element={<HODDashboard />} />
             <Route path="/academic/hod/courses" element={<HODCourses />} />
@@ -337,7 +370,7 @@ export default function App() {
             <Route path="/academic/hod/settings" element={<HODSettings />} />
             <Route path="/academic/hod/course/select-type" element={<ContentTypeSelector />} />
             <Route path="/academic/hod/course/create" element={<EnhancedCourseCreation />} />
-            
+
             {/* Faculty Routes */}
             <Route path="/academic/faculty" element={<FacultyDashboard />} />
             <Route path="/academic/faculty/courses" element={<FacultyCourses />} />
@@ -363,7 +396,7 @@ export default function App() {
             <Route path="/academic/faculty/analytics" element={<FacultyAnalytics />} />
             <Route path="/academic/faculty/doubts" element={<FacultyDoubts />} />
             <Route path="/academic/faculty/settings" element={<FacultySettings />} />
-            
+
             <Route path="/academic/student" element={<StudentDashboard />} />
           </Route>
 
@@ -378,7 +411,8 @@ export default function App() {
             <Route path="/home/90-day-plan/revision" element={<RevisionCourse />} />
             <Route path="/home/90-day-plan/revision/:skillSlug" element={<SkillLesson />} />
           </Route>
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

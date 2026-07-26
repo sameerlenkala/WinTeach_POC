@@ -3,7 +3,7 @@
 // topic deep-links back into the studio topic page.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Crosshair } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Crosshair, Layers } from 'lucide-react';
 import { studentApi, track, type MasteryPayload } from '@/api/student';
 
 // Large animated mastery ring (sweeps in on mount).
@@ -88,11 +88,43 @@ export default function StudioMastery() {
                 : data.mastery_pct >= 40 ? 'Solid base — push the weak spots below.'
                   : 'Early days — the weak spots below are the fastest wins.'}
             </div>
+            {/* An unexplained score invites students to distrust it. Name its
+                inputs, in the order they carry weight. */}
+            <div style={{ font: '500 11.5px/1.5 var(--st-sans)', color: 'var(--st-text-3)', marginTop: 10 }}>
+              Based on your quiz results, lessons read, and lessons finished.
+            </div>
           </div>
+
+          {/* Revision is a sibling route under the same course, but nothing
+              linked the two — a student looking at weak topics had no way to
+              act on them from here. */}
+          <button
+            onClick={() => navigate(`/study/courses/${courseId}/revision`)}
+            className="st-card st-press st-rise st-d2"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '15px 16px',
+              textAlign: 'left', color: 'var(--st-text)',
+            }}
+          >
+            <div style={{
+              width: 40, height: 40, borderRadius: 13, flexShrink: 0,
+              background: 'rgba(167,139,250,.14)', border: '1px solid rgba(167,139,250,.26)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Layers size={18} color="var(--st-violet)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ font: '700 14.5px var(--st-display)', letterSpacing: '-0.01em' }}>Revise this course</div>
+              <div style={{ font: '500 11.5px var(--st-sans)', color: 'var(--st-text-3)', marginTop: 2 }}>
+                Flashcards, formulas and past questions
+              </div>
+            </div>
+            <ChevronRight size={16} color="var(--st-text-3)" style={{ flexShrink: 0 }} />
+          </button>
 
           {/* Weakest topics */}
           {data.weak_topics.length > 0 && (
-            <div className="st-rise st-d2" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="st-rise st-d3" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div className="st-eyebrow" style={{ padding: '0 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Crosshair size={12} color="#fb7185" /> Focus here first
               </div>
@@ -117,7 +149,7 @@ export default function StudioMastery() {
           )}
 
           {/* Per-topic bars */}
-          <div className="st-rise st-d3" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="st-rise st-d4" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div className="st-eyebrow" style={{ padding: '0 2px' }}>All topics</div>
             <div className="st-card" style={{ overflow: 'hidden' }}>
               {data.topics.map((t, i) => (

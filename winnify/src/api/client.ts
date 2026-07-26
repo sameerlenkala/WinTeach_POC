@@ -89,7 +89,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   get:    <T>(path: string)                      => request<T>(path, { method: 'GET' }),
-  post:   <T>(path: string, body?: unknown)      => request<T>(path, { method: 'POST',  body: body ? JSON.stringify(body) : undefined }),
+  // `init` exists for keepalive writes — a POST fired from a visibilitychange
+  // or unmount handler is otherwise cancelled when the page goes away.
+  post:   <T>(path: string, body?: unknown, init?: RequestInit) =>
+    request<T>(path, { ...init, method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   patch:  <T>(path: string, body?: unknown)      => request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   put:    <T>(path: string, body?: unknown)      => request<T>(path, { method: 'PUT',   body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string)                      => request<T>(path, { method: 'DELETE' }),

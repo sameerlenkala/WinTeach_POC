@@ -7,12 +7,11 @@
 // not the backend JWT the student APIs authenticate with.
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Sparkles } from 'lucide-react';
 import { useAuth, ROLE_REDIRECT } from '@/contexts/AuthContext';
-import { authApi } from '@/api/auth';
 import StudioFrame from './StudioFrame';
 
-type View = 'login' | 'forgot-email' | 'forgot-code' | 'forgot-reset' | 'forgot-done';
+type View = 'login' | 'forgot-email';
 
 export function StField({ id, label, type = 'text', value, onChange, autoComplete, autoFocus, right, inputMode }: {
   id: string; label: string; type?: string; value: string; onChange: (v: string) => void;
@@ -51,10 +50,6 @@ export default function StudioLogin() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [shake, setShake] = useState(0);
-  // Forgot-password state
-  const [fCode, setFCode] = useState('');
-  const [fNewPw, setFNewPw] = useState('');
-  const [fBusy, setFBusy] = useState(false);
 
   // Where to land after sign-in: an interrupted studio location (?next=) or home.
   const rawNext = params.get('next');
@@ -79,23 +74,7 @@ export default function StudioLogin() {
     }
   };
 
-  const submitForgotReset = async (e: FormEvent) => {
-    e.preventDefault();
-    if (fNewPw.length < 6) { fail('Password must be at least 6 characters.'); return; }
-    setError('');
-    setFBusy(true);
-    try {
-      await authApi.resetPassword(email.trim(), fNewPw);
-      setPassword(fNewPw);
-      setView('forgot-done');
-    } catch {
-      fail('Could not update the password. Try again.');
-    } finally {
-      setFBusy(false);
-    }
-  };
-
-  const backToLogin = () => { setView('login'); setError(''); setFCode(''); setFNewPw(''); };
+  const backToLogin = () => { setView('login'); setError(''); };
 
   return (
     <StudioFrame>
@@ -190,70 +169,33 @@ export default function StudioLogin() {
           </>
         )}
 
-        {/* ── FORGOT: email ── */}
+        {/* ── FORGOT ──
+            Self-serve reset needs Supabase email recovery plus a route that
+            consumes the recovery session; neither exists yet, and the backend's
+            /auth/reset-password is demo-gated (404s in any real deployment).
+            Rather than walk a student through screens that end in a failure,
+            point them at the person who can actually reset it. */}
         {view === 'forgot-email' && (
-          <ForgotShell title="Reset your password" sub="We'll verify it's you, then you set a new one." onBack={backToLogin} error={error}>
-            <form onSubmit={e => { e.preventDefault(); if (email.trim()) { setError(''); setView('forgot-code'); } else fail('Enter your email first.'); }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <StField id="st-femail" label="Email" type="email" inputMode="email" value={email} onChange={setEmail} autoComplete="email" autoFocus />
-              <button type="submit" className="st-cta">Send reset code</button>
-            </form>
-          </ForgotShell>
-        )}
-
-        {/* ── FORGOT: code ── */}
-        {view === 'forgot-code' && (
-          <ForgotShell title="Enter your code" sub={`Use the reset code from your institution.`} onBack={() => setView('forgot-email')} error={error}>
-            <form onSubmit={e => { e.preventDefault(); if (fCode === '0000') { setError(''); setView('forgot-reset'); } else fail('Invalid code. Try again.'); }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <input
-                value={fCode} onChange={e => setFCode(e.target.value)} maxLength={4} required autoFocus
-                inputMode="numeric" placeholder="0000" aria-label="Reset code"
-                style={{
-                  minHeight: 64, borderRadius: 18, border: '1px solid var(--st-border-2)',
-                  background: 'var(--st-glass)', textAlign: 'center', outline: 'none',
-                  font: '700 30px var(--st-display)', letterSpacing: '0.4em',
-                  color: 'var(--st-text)', width: '100%', caretColor: 'var(--st-lime)',
-                }}
-              />
-              <button type="submit" className="st-cta"><KeyRound size={18} /> Verify code</button>
-            </form>
-          </ForgotShell>
-        )}
-
-        {/* ── FORGOT: new password ── */}
-        {view === 'forgot-reset' && (
-          <ForgotShell title="Set a new password" sub="At least 6 characters." onBack={() => setView('forgot-code')} error={error}>
-            <form onSubmit={submitForgotReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <StField
-                id="st-fnewpw" label="New password" type={showPw ? 'text' : 'password'} value={fNewPw}
-                onChange={setFNewPw} autoComplete="new-password" autoFocus
-                right={<StEye show={showPw} onToggle={() => setShowPw(v => !v)} />}
-              />
-              <button type="submit" className="st-cta" disabled={fBusy}>
-                {fBusy ? <Loader2 size={20} className="st-spin" /> : 'Save new password'}
-              </button>
-            </form>
-          </ForgotShell>
-        )}
-
-        {/* ── FORGOT: done ── */}
-        {view === 'forgot-done' && (
-          <div className="st-rise" style={{ margin: '10vh 0 0', textAlign: 'center' }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: '50%', margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, var(--st-lime), var(--st-aqua))',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 14px 40px rgba(205,244,99,.3)',
-            }}>
-              <Check size={32} color="var(--st-ink-on-lime)" strokeWidth={3} />
+          <ForgotShell
+            title="Reset your password"
+            sub="Password resets are handled by your institution."
+            onBack={backToLogin}
+            error={error}
+          >
+            <div className="st-card" style={{ padding: '18px 18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                <KeyRound size={16} color="var(--st-aqua)" />
+                <span className="st-eyebrow">What to do</span>
+              </div>
+              <p style={{ font: '500 14px/1.65 var(--st-sans)', color: 'var(--st-text-2)', margin: 0 }}>
+                Message your training &amp; placement office or course faculty with the email you
+                sign in with. They can issue you a new password right away.
+              </p>
             </div>
-            <div style={{ font: '700 24px var(--st-display)', letterSpacing: '-0.02em' }}>Password updated</div>
-            <p style={{ font: '500 14px/1.6 var(--st-sans)', color: 'var(--st-text-2)', margin: '8px 0 24px' }}>
-              You're all set — sign in with your new password.
-            </p>
-            <button className="st-cta" onClick={backToLogin}>Back to sign in</button>
-          </div>
+            <button className="st-cta" onClick={backToLogin} style={{ marginTop: 16 }}>
+              Back to sign in
+            </button>
+          </ForgotShell>
         )}
 
         {/* Footer */}

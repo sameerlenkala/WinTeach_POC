@@ -41,6 +41,37 @@ export function setStoredPref(pref: ThemePref) {
   applyResolvedTheme(pref);
 }
 
+/* ── Text size ──────────────────────────────────────────────────────────────
+   Reading a full lesson on a phone is the studio's core activity, and the one
+   place a fixed type scale actually costs people. Scales the reader's prose
+   only (via --st-font-scale, consumed in studio.css) so chrome and controls
+   keep their tap targets. */
+const SIZE_KEY = 'winnify_studio_text_scale';
+export const TEXT_SCALES = [0.92, 1, 1.12] as const;
+export type TextScale = (typeof TEXT_SCALES)[number];
+
+export function getStoredScale(): TextScale {
+  try {
+    const v = Number(localStorage.getItem(SIZE_KEY));
+    if (TEXT_SCALES.includes(v as TextScale)) return v as TextScale;
+  } catch { /* storage unavailable */ }
+  return 1;
+}
+
+export function applyScale(scale: TextScale) {
+  try { document.documentElement.style.setProperty('--st-font-scale', String(scale)); } catch { /* SSR */ }
+}
+
+export function useStudioTextScale(): [TextScale, (s: TextScale) => void] {
+  const [scale, setScale] = useState<TextScale>(getStoredScale);
+  useEffect(() => { applyScale(scale); }, [scale]);
+  const update = useCallback((s: TextScale) => {
+    try { localStorage.setItem(SIZE_KEY, String(s)); } catch { /* ignore */ }
+    setScale(s);
+  }, []);
+  return [scale, update];
+}
+
 // React hook for the switcher: returns the current preference + a setter, and
 // keeps `data-st-theme` in sync with the OS while the preference is "system".
 export function useStudioTheme(): [ThemePref, (p: ThemePref) => void] {

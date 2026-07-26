@@ -2,7 +2,8 @@
    Deliberately distinct from the main app (DS v4): deep-ink dark theme,
    aurora ambience, Space Grotesk display, electric-lime accent, glass cards.
    Everything is scoped under .studio so nothing leaks into other modules. */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* Space Grotesk + DM Sans are preloaded from index.html (preconnect + <link>) —
+   an @import here would delay them behind this stylesheet's own download. */
 
 .studio {
   /* palette */
@@ -12,9 +13,9 @@
   --st-glass-2: rgba(255, 255, 255, 0.095);
   --st-border: rgba(255, 255, 255, 0.1);
   --st-border-2: rgba(255, 255, 255, 0.16);
-  --st-text: #f4f5f7;
-  --st-text-2: rgba(244, 245, 247, 0.65);
-  --st-text-3: rgba(244, 245, 247, 0.4);
+  --st-text: #ffffff;
+  --st-text-2: rgba(255, 255, 255, 0.85);
+  --st-text-3: rgba(255, 255, 255, 0.62);
   --st-lime: #cdf463;
   --st-lime-deep: #9fdc2e;
   --st-ink-on-lime: #131a02;
@@ -146,6 +147,37 @@ html[data-st-theme="light"] .studio .st-cta { box-shadow: 0 10px 30px rgba(93, 1
   display: flex;
   flex-direction: column;
 }
+
+/* ---------- bottom tab bar ---------- */
+.studio { --st-tabbar-h: 58px; }
+
+/* Reserve scroll room so a screen's last card never hides under the bar.
+   Belt and braces: even on a tabbed route, a player still zeroes it out
+   above via :has(). */
+.studio-scroll.has-tabbar {
+  padding-bottom: calc(var(--st-tabbar-h) + 28px + env(safe-area-inset-bottom));
+}
+/* …except on player-layout routes that still show the bar (the revision hub).
+   The player already ends in its own action row, so the reserved strip would
+   just be a gap between the buttons and the nav. Equal specificity to the rule
+   above, so this must stay below it. */
+.studio-scroll.has-tabbar:has(> .st-player) { padding-bottom: 0; }
+
+.st-tabbar {
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  height: calc(var(--st-tabbar-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--st-border);
+  background: color-mix(in oklab, var(--st-bg) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.st-tabbar button:active { transform: scale(0.94); }
+.st-tabbar button { transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s; }
 
 /* ---------- aurora ambience ---------- */
 .studio-aurora,
@@ -384,15 +416,15 @@ html[data-st-theme="light"] .studio .st-cta { box-shadow: 0 10px 30px rgba(93, 1
   --surface-muted: #1b1e2a;
   --college-pill: #1b1e2a;
 
-  --text: #f4f5f7;
-  --text-2: rgba(244, 245, 247, 0.68);
-  --text-3: rgba(244, 245, 247, 0.42);
-  --nav-fg: rgba(244, 245, 247, 0.66);
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.85);
+  --text-3: rgba(255, 255, 255, 0.6);
+  --nav-fg: rgba(255, 255, 255, 0.8);
 
   --border: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.17);
   --input-bg: #1b1e2a;
-  --input-fg: #f4f5f7;
+  --input-fg: #ffffff;
   --nav-hover: rgba(255, 255, 255, 0.06);
   --row-hover: rgba(255, 255, 255, 0.04);
   --ring: #cdf463;
@@ -545,8 +577,11 @@ html[data-st-theme="light"] .studio .studio-content {
 .st-page-in   { animation: st-page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .st-page-back { animation: st-page-back 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-/* lesson typography — a real mobile reading measure */
-.st-prose { font: 400 16px/1.75 var(--st-sans); color: var(--st-text-2); }
+/* lesson typography — a real mobile reading measure.
+   --st-font-scale comes from the reader's text-size control (studioTheme.ts);
+   it scales body prose and page headings only, leaving controls at their
+   designed tap size. */
+.st-prose { font: 400 calc(16px * var(--st-font-scale, 1))/1.75 var(--st-sans); color: var(--st-text-2); }
 .st-prose p { margin: 0 0 14px; }
 .st-prose p:last-child { margin-bottom: 0; }
 .st-prose strong { color: var(--st-text); font-weight: 700; }
@@ -563,7 +598,7 @@ html[data-st-theme="light"] .studio .studio-content {
 .st-prose li::marker { color: var(--st-lime); }
 
 .st-h-page {
-  font: 700 24px/1.2 var(--st-display);
+  font: 700 calc(24px * var(--st-font-scale, 1))/1.2 var(--st-display);
   letter-spacing: -0.02em;
   color: var(--st-text);
   margin: 0 0 4px;
