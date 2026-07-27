@@ -96,7 +96,7 @@ function Ring({ pct, size = 48 }: { pct: number; size?: number }) {
         <circle className="st-ring-track" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={4} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={4} strokeLinecap="round"
-          stroke={pct >= 70 ? 'var(--st-lime)' : pct >= 40 ? 'var(--st-aqua)' : 'var(--st-violet)'}
+          stroke={pct >= 70 ? 'var(--st-lime-text)' : pct >= 40 ? 'var(--st-aqua)' : 'var(--st-violet)'}
           strokeDasharray={c} strokeDashoffset={c * (1 - drawn / 100)}
           style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)' }}
         />
@@ -234,7 +234,7 @@ export default function StudioHome() {
             background: 'linear-gradient(135deg, rgba(205,244,99,.16), rgba(94,234,212,.1) 55%, rgba(167,139,250,.12))',
           }}
         >
-          <div className="st-eyebrow" style={{ color: 'var(--st-lime)' }}>Continue learning</div>
+          <div className="st-eyebrow" style={{ color: 'var(--st-lime-text)' }}>Continue learning</div>
           {/* right padding keeps text clear of the floating play button */}
           <div style={{ font: '700 20px/1.25 var(--st-display)', letterSpacing: '-0.015em', margin: '8px 0 4px', color: 'var(--st-text)', paddingRight: 56 }}>
             {resume.topic_title}
@@ -262,7 +262,7 @@ export default function StudioHome() {
             {/* Streak when there is one to show, this week's count otherwise —
                 "0-day streak" is a worse opening line than a lesson count. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Flame size={13} color={home.week.streak_days > 0 ? 'var(--st-lime)' : 'var(--st-text-3)'} />
+              <Flame size={13} color={home.week.streak_days > 0 ? 'var(--st-lime-text)' : 'var(--st-text-3)'} />
               <span className="st-eyebrow">{home.week.streak_days > 0 ? 'Streak' : 'This week'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>

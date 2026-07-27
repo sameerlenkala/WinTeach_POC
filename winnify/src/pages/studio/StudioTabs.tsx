@@ -51,7 +51,7 @@ export default function StudioTabs() {
             style={{
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
               padding: '9px 4px 4px', border: 'none', background: 'transparent', cursor: 'pointer',
-              color: on ? 'var(--st-lime)' : 'var(--st-text-3)',
+              color: on ? 'var(--st-lime-text)' : 'var(--st-text-3)',
               font: '700 10px var(--st-display)', letterSpacing: '0.04em',
               transition: 'color .15s',
             }}

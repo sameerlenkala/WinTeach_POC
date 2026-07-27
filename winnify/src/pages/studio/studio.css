@@ -16,8 +16,14 @@
   --st-text: #ffffff;
   --st-text-2: rgba(255, 255, 255, 0.85);
   --st-text-3: rgba(255, 255, 255, 0.62);
+  /* Long-form lesson prose only — one step above text-2, just under white. */
+  --st-reading: rgba(255, 255, 255, 0.93);
   --st-lime: #cdf463;
   --st-lime-deep: #9fdc2e;
+  /* Lime as a *foreground* (text, icons, ring strokes). Same as the fill lime
+     in dark; the light theme overrides it darker than the fill lime because a
+     colour that works as a button background fails WCAG as 11px text. */
+  --st-lime-text: var(--st-lime);
   --st-ink-on-lime: #131a02;
   --st-violet: #a78bfa;
   --st-aqua: #5eead4;
@@ -49,11 +55,16 @@ html[data-st-theme="light"] .studio {
   --st-glass-2: rgba(255, 255, 255, 0.95);
   --st-border: rgba(20, 24, 46, 0.1);
   --st-border-2: rgba(20, 24, 46, 0.18);
+  /* Body at 0.76 → 8.0:1 (AAA for prose); tertiary at 0.62 → 4.9:1 (AA even at
+     the 11px metadata sizes it's used for). The old 0.68/0.45 left the smallest
+     text at 2.8:1 — below even the large-text bar. */
   --st-text: #16192a;
-  --st-text-2: rgba(22, 25, 42, 0.68);
-  --st-text-3: rgba(22, 25, 42, 0.45);
+  --st-text-2: rgba(22, 25, 42, 0.76);
+  --st-text-3: rgba(22, 25, 42, 0.62);
+  --st-reading: rgba(22, 25, 42, 0.82);
   --st-lime: #79a303;
   --st-lime-deep: #5d8500;
+  --st-lime-text: #55731c;
   --st-ink-on-lime: #f8ffe8;
   --st-violet: #6d3df0;
   --st-aqua: #0d9488;
@@ -369,7 +380,7 @@ html[data-st-theme="light"] .studio .st-cta { box-shadow: 0 10px 30px rgba(93, 1
   outline: none;
   color: var(--st-text);
   font: 500 16px var(--st-sans); /* 16px stops iOS zoom-on-focus */
-  caret-color: var(--st-lime);
+  caret-color: var(--st-lime-text);
 }
 .st-field input:-webkit-autofill {
   -webkit-text-fill-color: var(--st-text);
@@ -473,9 +484,9 @@ html[data-st-theme="light"] .studio .studio-content {
     --college-pill: #eef0fa;
 
     --text: #16192a;
-    --text-2: rgba(22, 25, 42, 0.68);
-    --text-3: rgba(22, 25, 42, 0.45);
-    --nav-fg: rgba(22, 25, 42, 0.66);
+    --text-2: rgba(22, 25, 42, 0.76);
+    --text-3: rgba(22, 25, 42, 0.62);
+    --nav-fg: rgba(22, 25, 42, 0.72);
 
     --border: rgba(20, 24, 46, 0.1);
     --border-strong: rgba(20, 24, 46, 0.18);
@@ -580,11 +591,17 @@ html[data-st-theme="light"] .studio .studio-content {
 /* lesson typography — a real mobile reading measure.
    --st-font-scale comes from the reader's text-size control (studioTheme.ts);
    it scales body prose and page headings only, leaving controls at their
-   designed tap size. */
-.st-prose { font: 400 calc(16px * var(--st-font-scale, 1))/1.75 var(--st-sans); color: var(--st-text-2); }
+   designed tap size.
+   Reading prose gets its own tier (--st-reading) above --st-text-2: lesson
+   body is the one place students stare for minutes, so it sits just under
+   pure white — bright enough to read effortlessly, dim enough that white-vs-
+   body still isn't the only thing separating bold. Bold itself is lime: at
+   16px a weight change plus 15% brightness was invisible, so key terms take
+   the accent instead (the reader's "This lesson covers" bolds already do). */
+.st-prose { font: 400 calc(16px * var(--st-font-scale, 1))/1.75 var(--st-sans); color: var(--st-reading); }
 .st-prose p { margin: 0 0 14px; }
 .st-prose p:last-child { margin-bottom: 0; }
-.st-prose strong { color: var(--st-text); font-weight: 700; }
+.st-prose strong { color: var(--st-lime-text); font-weight: 700; }
 .st-prose code {
   font: 500 0.86em ui-monospace, 'SF Mono', Menlo, monospace;
   background: rgba(255, 255, 255, 0.08);
@@ -595,7 +612,7 @@ html[data-st-theme="light"] .studio .studio-content {
 }
 .st-prose ul, .st-prose ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
 .st-prose li { line-height: 1.65; }
-.st-prose li::marker { color: var(--st-lime); }
+.st-prose li::marker { color: var(--st-lime-text); }
 
 .st-h-page {
   font: 700 calc(24px * var(--st-font-scale, 1))/1.2 var(--st-display);

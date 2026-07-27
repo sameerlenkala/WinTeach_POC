@@ -26,8 +26,9 @@ function Segs({ total, done }: { total: number; done: number }) {
 
 /* ── Cards: SRS deck ─────────────────────────────────────────────────────── */
 
-function CardsDeck({ data, courseId, onExit, onTab }: {
+function CardsDeck({ data, courseId, onExit, onTab, onTopic }: {
   data: RevisionPayload; courseId: string; onExit: () => void; onTab: (t: Tab) => void;
+  onTopic: (topicId: string) => void;
 }) {
   // Snapshot the due queue once — grading must not reshuffle mid-run.
   const [all] = useState(() => data.due_cards);
@@ -78,7 +79,7 @@ function CardsDeck({ data, courseId, onExit, onTab }: {
           {weakest && (
             <button
               className="st-card st-press"
-              onClick={() => onExit()}
+              onClick={() => onTopic(weakest.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 11, width: '100%', marginTop: 20,
                 padding: '13px 15px', textAlign: 'left', color: 'var(--st-text)',
@@ -248,7 +249,7 @@ function Formulas({ data }: { data: RevisionPayload }) {
           width: '100%', minHeight: 42, padding: '0 16px', borderRadius: 999,
           border: '1px solid var(--st-border)', background: 'var(--st-glass)',
           color: 'var(--st-text)', outline: 'none',
-          font: '500 15px var(--st-sans)', caretColor: 'var(--st-lime)',
+          font: '500 15px var(--st-sans)', caretColor: 'var(--st-lime-text)',
         }}
       />
     </div>
@@ -352,7 +353,7 @@ function Practice({ data }: { data: RevisionPayload }) {
                     ) : (
                       <button
                         onClick={() => { setRevealed(s => new Set(s).add(i)); track('studio_pyq_revealed', { band, index: i }); }}
-                        className="st-chip st-press" style={{ marginTop: 10, color: 'var(--st-lime)', borderColor: 'rgba(205,244,99,.35)' }}
+                        className="st-chip st-press" style={{ marginTop: 10, color: 'var(--st-lime-text)', borderColor: 'rgba(205,244,99,.35)' }}
                       >
                         Reveal answer
                       </button>
@@ -462,6 +463,7 @@ export default function StudioRevision() {
         <CardsDeck
           key={courseId} data={data} courseId={courseId!}
           onExit={() => navigate('/study')} onTab={setTab}
+          onTopic={tid => navigate(`/study/courses/${courseId}/topic/${tid}`)}
         />
       )}
       {data && tab === 'formulas' && <Formulas data={data} />}

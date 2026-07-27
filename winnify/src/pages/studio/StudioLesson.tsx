@@ -87,7 +87,7 @@ function inline(text: string, key = 'k'): ReactNode[] {
 const CALLOUTS: Record<string, { label: string; color: string }> = {
   'tip': { label: 'Tip', color: '#4ade80' },
   'warning': { label: 'Warning', color: '#fbbf24' },
-  'key idea': { label: 'Key idea', color: 'var(--st-lime)' },
+  'key idea': { label: 'Key idea', color: 'var(--st-lime-text)' },
   'recall': { label: 'Recall', color: '#60a5fa' },
   'exam tip': { label: 'Exam tip', color: 'var(--st-violet)' },
   'note': { label: 'Note', color: 'var(--st-text-3)' },
@@ -246,7 +246,7 @@ function RevealBtn({ label, children }: { label: string; children: ReactNode }) 
   const [open, setOpen] = useState(false);
   if (open) return <div style={{ marginTop: 8 }}>{children}</div>;
   return (
-    <button onClick={() => setOpen(true)} className="st-chip st-press" style={{ marginTop: 10, color: 'var(--st-lime)', borderColor: 'rgba(205,244,99,.35)' }}>
+    <button onClick={() => setOpen(true)} className="st-chip st-press" style={{ marginTop: 10, color: 'var(--st-lime-text)', borderColor: 'rgba(205,244,99,.35)' }}>
       {label}
     </button>
   );
@@ -371,7 +371,7 @@ function CheckIn({ q, index }: { q: any; index: number }) {
         <div style={{ font: '600 14.5px/1.55 var(--st-sans)', color: 'var(--st-text)' }}>{inline(asText(q.question))}</div>
       </div>
       {!open ? (
-        <button onClick={() => setOpen(true)} className="st-chip st-press" style={{ marginTop: 12, color: 'var(--st-lime)', borderColor: 'rgba(205,244,99,.35)' }}>
+        <button onClick={() => setOpen(true)} className="st-chip st-press" style={{ marginTop: 12, color: 'var(--st-lime-text)', borderColor: 'rgba(205,244,99,.35)' }}>
           Reveal answer
         </button>
       ) : (
@@ -461,7 +461,7 @@ function buildNotesPages(content: any): Page[] {
         {hasConn && (
           <div className="st-card" style={{ padding: '14px 16px', marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8, font: '450 13.5px/1.55 var(--st-sans)' }}>
             {(conn.foundation?.length ?? 0) > 0 && <div><b style={{ color: 'var(--st-aqua)' }}>You already know</b><br />{conn.foundation.join(', ')}</div>}
-            {(conn.this_subtopic?.length ?? 0) > 0 && <div><b style={{ color: 'var(--st-lime)' }}>This lesson covers</b><br />{conn.this_subtopic.join(', ')}</div>}
+            {(conn.this_subtopic?.length ?? 0) > 0 && <div><b style={{ color: 'var(--st-lime-text)' }}>This lesson covers</b><br />{conn.this_subtopic.join(', ')}</div>}
             {(conn.builds_toward?.length ?? 0) > 0 && <div><b style={{ color: 'var(--st-violet)' }}>Builds toward</b><br />{conn.builds_toward.join(', ')}</div>}
           </div>
         )}
@@ -1032,7 +1032,7 @@ function NotesPlayer({ content, meta, onDone, onQuiz, hasQuiz, onNext, onward, o
   const cover = (
     <div key="cover" className={anim} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ margin: 'auto 0', paddingTop: 12 }}>
-        <div className="st-eyebrow" style={{ color: 'var(--st-lime)' }}>
+        <div className="st-eyebrow" style={{ color: 'var(--st-lime-text)' }}>
           {meta.code}{meta.lessonNo != null ? ` · Lesson ${meta.lessonNo}` : ''}
         </div>
         <h1 style={{ font: '700 32px/1.15 var(--st-display)', letterSpacing: '-0.025em', color: 'var(--st-text)', margin: '10px 0 14px' }}>
@@ -1273,7 +1273,7 @@ function QuizPlayer({ content, meta, onScore, onNext, onward, onExit }: {
       <>
         <div className="st-player-body" style={{ display: 'flex' }}>
           <div className="st-page-in" style={{ margin: 'auto 0' }}>
-            <div className="st-eyebrow" style={{ color: 'var(--st-lime)' }}>{meta.code} · Quiz</div>
+            <div className="st-eyebrow" style={{ color: 'var(--st-lime-text)' }}>{meta.code} · Quiz</div>
             <h1 style={{ font: '700 30px/1.18 var(--st-display)', letterSpacing: '-0.025em', margin: '10px 0 12px' }}>{meta.title}</h1>
             <p style={{ font: '500 14.5px/1.65 var(--st-sans)', color: 'var(--st-text-2)', margin: 0 }}>
               {questions.length} question{questions.length === 1 ? '' : 's'} · instant feedback · your best score counts toward mastery.
@@ -1301,7 +1301,7 @@ function QuizPlayer({ content, meta, onScore, onNext, onward, onExit }: {
                 <circle cx={66} cy={66} r={58} fill="none" strokeWidth={9} stroke="rgba(255,255,255,.1)" />
                 <circle
                   cx={66} cy={66} r={58} fill="none" strokeWidth={9} strokeLinecap="round"
-                  stroke={strong ? 'var(--st-lime)' : pct >= 40 ? 'var(--st-aqua)' : '#fb7185'}
+                  stroke={strong ? 'var(--st-lime-text)' : pct >= 40 ? 'var(--st-aqua)' : '#fb7185'}
                   strokeDasharray={2 * Math.PI * 58} strokeDashoffset={2 * Math.PI * 58 * (1 - pct / 100)}
                   style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)' }}
                 />
@@ -1632,7 +1632,7 @@ function SlidesPlayer({ content, hasQuiz, onQuiz, onNotes, onSeen }: {
                 <div style={{
                   marginTop: 14, padding: '10px 14px', borderRadius: 14, flexShrink: 0,
                   background: 'rgba(205,244,99,.1)', border: '1px solid rgba(205,244,99,.3)',
-                  font: '600 13px/1.5 var(--st-sans)', color: 'var(--st-lime)',
+                  font: '600 13px/1.5 var(--st-sans)', color: 'var(--st-lime-text)',
                 }}>
                   ★ {inline(asText(s.takeaway), `tk${i}`)}
                 </div>

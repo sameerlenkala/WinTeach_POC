@@ -171,7 +171,7 @@ export default function StudioTopic() {
                       background: done ? 'rgba(205,244,99,.14)' : 'var(--st-glass-2)',
                       border: `1px solid ${done ? 'rgba(205,244,99,.4)' : started ? 'var(--st-border-2)' : 'var(--st-border)'}`,
                       font: '700 12.5px var(--st-display)',
-                      color: done ? 'var(--st-lime)' : 'var(--st-text-2)',
+                      color: done ? 'var(--st-lime-text)' : 'var(--st-text-2)',
                     }}>{done ? <Check size={15} strokeWidth={3} /> : si + 1}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -183,7 +183,7 @@ export default function StudioTopic() {
                             flexShrink: 0, padding: '2px 7px', borderRadius: 99,
                             background: 'rgba(205,244,99,.16)', border: '1px solid rgba(205,244,99,.32)',
                             font: '700 9px var(--st-display)', letterSpacing: '0.1em', textTransform: 'uppercase',
-                            color: 'var(--st-lime)',
+                            color: 'var(--st-lime-text)',
                           }}>{started ? 'Resume' : 'Up next'}</span>
                         )}
                       </div>
@@ -221,7 +221,7 @@ function FormatChip({ icon: Icon, label, onClick, done }: {
     <button
       onClick={onClick} title={label} aria-label={label} className="st-chip st-press"
       style={done
-        ? { padding: '7px 10px', color: 'var(--st-lime)', borderColor: 'rgba(205,244,99,.32)' }
+        ? { padding: '7px 10px', color: 'var(--st-lime-text)', borderColor: 'rgba(205,244,99,.32)' }
         : { padding: '7px 10px' }}
     >
       <Icon size={14} />

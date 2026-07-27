@@ -1,5 +1,5 @@
 // Student delivery: published-content browsing + reading/quiz progress.
-import { api, ApiError } from './client';
+import { api } from './client';
 import { flushPending, queueWrite } from './pendingWrites';
 
 export interface StudentCourse {
@@ -113,10 +113,10 @@ export interface MasteryPayload {
 // are parked in localStorage and replayed later rather than lost silently —
 // all three endpoints are idempotent, so a duplicate replay is harmless.
 function durablePost<T>(path: string, body: unknown, init?: RequestInit): Promise<T | null> {
-  return api.post<T>(path, body, init).catch((err: unknown) => {
-    // A 401 means the session ended; the app redirects to login and the write
-    // would be rejected on replay too, so don't queue it.
-    if (err instanceof ApiError && err.status === 401) return null;
+  return api.post<T>(path, body, init).catch(() => {
+    // Queue on any failure — entries are stamped with the signed-in user and
+    // replay only under that account, so even a 401 (session lapsed mid-write)
+    // is safe to park: it completes when the owner signs back in.
     queueWrite(path, body);
     return null;
   });

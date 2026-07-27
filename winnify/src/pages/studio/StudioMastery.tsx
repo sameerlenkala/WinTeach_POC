@@ -20,7 +20,7 @@ function BigRing({ pct }: { pct: number }) {
         <circle className="st-ring-track" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={9} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={9} strokeLinecap="round"
-          stroke={pct >= 70 ? 'var(--st-lime)' : pct >= 40 ? 'var(--st-aqua)' : 'var(--st-violet)'}
+          stroke={pct >= 70 ? 'var(--st-lime-text)' : pct >= 40 ? 'var(--st-aqua)' : 'var(--st-violet)'}
           strokeDasharray={c} strokeDashoffset={c * (1 - drawn / 100)}
           style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)' }}
         />
@@ -46,7 +46,7 @@ export default function StudioMastery() {
   }, [courseId]);
 
   const barColor = (pct: number) =>
-    pct >= 70 ? 'var(--st-lime)' : pct >= 40 ? 'var(--st-aqua)' : '#fb7185';
+    pct >= 70 ? 'var(--st-lime-text)' : pct >= 40 ? 'var(--st-aqua)' : '#fb7185';
 
   return (
     <div style={{ padding: 'calc(14px + env(safe-area-inset-top)) 20px 12px', display: 'flex', flexDirection: 'column', gap: 18 }}>

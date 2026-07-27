@@ -99,7 +99,7 @@ export default function StudioCourse() {
         >
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <span className="st-eyebrow">Your progress</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, font: '700 14px var(--st-display)', color: 'var(--st-lime)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, font: '700 14px var(--st-display)', color: 'var(--st-lime-text)' }}>
               {overall.pct}% <ChevronRight size={14} color="var(--st-text-3)" />
             </span>
           </div>
@@ -141,7 +141,7 @@ export default function StudioCourse() {
                       background: done ? 'rgba(205,244,99,.14)' : 'var(--st-glass-2)',
                       border: `1px solid ${done ? 'rgba(205,244,99,.4)' : 'var(--st-border)'}`,
                       font: '700 13px var(--st-display)',
-                      color: done ? 'var(--st-lime)' : 'var(--st-text-2)',
+                      color: done ? 'var(--st-lime-text)' : 'var(--st-text-2)',
                     }}
                   >
                     {done ? <CheckCircle2 size={17} /> : ti + 1}

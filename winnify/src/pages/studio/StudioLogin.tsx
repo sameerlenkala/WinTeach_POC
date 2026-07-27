@@ -162,7 +162,7 @@ export default function StudioLogin() {
 
             <div className="st-rise st-d4" style={{ textAlign: 'center', marginTop: 22, font: '500 13.5px var(--st-sans)', color: 'var(--st-text-2)' }}>
               New here?{' '}
-              <Link to={`/study/signup${rawNext ? `?next=${encodeURIComponent(rawNext)}` : ''}`} style={{ color: 'var(--st-lime)', fontWeight: 700, textDecoration: 'none' }}>
+              <Link to={`/study/signup${rawNext ? `?next=${encodeURIComponent(rawNext)}` : ''}`} style={{ color: 'var(--st-lime-text)', fontWeight: 700, textDecoration: 'none' }}>
                 Create your account
               </Link>
             </div>
