@@ -719,7 +719,11 @@ export default function WinTeachGenerate() {
   // topic context (this page is the topic's home — no separate topic page)
   const tp = topic as any;
   const linkedCo = tp?.linked_co;
-  const bloom = tp?.bloom_level ?? linkedCo?.bloom_level;
+  // The linked CO's CURRENT bloom wins, matching the course dashboard's topic
+  // rows — the extraction-time topics.bloom_level is only a fallback for
+  // legacy topics with no CO mapping. (The two pages used to prefer opposite
+  // sources and showed different levels for the same topic.)
+  const bloom = linkedCo?.bloom_level ?? tp?.bloom_level;
   const subtopics: string[] = (tp?.subtopics ?? []).map((s: any) => s.title ?? s);
   // Topic rows never carried hours, so the badge was permanently hidden — the
   // plan's realized allocation is the truthful fallback now that hours flow.

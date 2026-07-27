@@ -623,6 +623,11 @@ export default function WinTeachCoursePage() {
                           // editing a CO's bloom reflects here immediately.
                           // Positional unit→CO is only the fallback for legacy
                           // rows created before the mapping was persisted.
+                          // While the COs query is in flight, render no badge at
+                          // all: falling back to topics.bloom_level here made the
+                          // badge flash the stale extraction-time level for a
+                          // frame before flipping to the CO's current one.
+                          if (cosLoading) return null;
                           const bloomName: Record<string, string> = { L1: 'Remember', L2: 'Understand', L3: 'Apply', L4: 'Analyze', L5: 'Evaluate', L6: 'Create' };
                           const mapped = t.co_id ? cos.find(o => o.id === t.co_id) : undefined;
                           // units.unit_number is stored as text — coerce both
