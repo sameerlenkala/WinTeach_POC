@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { generationApi, type GenJob, type ConceptArtType } from '@/api/generation';
 import { studentApi, track, type StudentCourseDetail } from '@/api/student';
-import { sanitizeSvg } from '@/lib/sanitizeSvg';
+import { renderMermaid } from '@/lib/mermaid';
 import StudioCelebrate from './StudioCelebrate';
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -197,30 +197,17 @@ function Code({ code, language, output }: { code: string; language?: string | nu
   );
 }
 
-// Mermaid diagram — library imported on demand (same pattern as the reader).
-// The SVG sits on a white card in both themes: mermaid's neutral theme
+// Mermaid diagram — library imported on demand (same shared renderer as the
+// reader). The SVG sits on a white card in both themes: mermaid's neutral theme
 // assumes a light background. Falls back to the source on render failure.
-let mermaidSeq = 0;
 function Mermaid({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     setSvg(null); setFailed(false);
-    import('mermaid')
-      .then(async m => {
-        const mermaid = m.default;
-        // htmlLabels off: sanitizeSvg (DOMPurify) strips <foreignObject>, where
-        // mermaid puts HTML labels — with them on, diagrams render blank.
-        mermaid.initialize({
-          startOnLoad: false, theme: 'neutral', securityLevel: 'strict',
-          htmlLabels: false, flowchart: { htmlLabels: false },
-        } as any);
-        try {
-          const { svg } = await mermaid.render(`st-mmd-${++mermaidSeq}`, code);
-          if (alive) setSvg(sanitizeSvg(svg));
-        } catch { if (alive) setFailed(true); }
-      })
+    renderMermaid(code)
+      .then(out => { if (alive) setSvg(out); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [code]);

@@ -10,7 +10,7 @@ import { IBack, ICheck, INotes } from './WinTeachIcons';
 import { useCourse, useTopic } from '@/api/hooks';
 import { generationApi, CONCEPT_TYPES, type GenJob, type ConceptArtifactState, type ConceptArtType } from '@/api/generation';
 import { studentApi, track } from '@/api/student';
-import { sanitizeSvg } from '@/lib/sanitizeSvg';
+import { renderMermaid } from '@/lib/mermaid';
 
 /* ── per-type metadata ───────────────────────────────────────────────────── */
 
@@ -131,32 +131,17 @@ function DataTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
   );
 }
 
-// Mermaid diagram renderer — the library is imported on demand so it stays out
-// of the main bundle. Falls back to showing the Mermaid source if render fails.
-let mermaidSeq = 0;
+// Mermaid diagram renderer — the library is imported on demand (inside
+// renderMermaid) so it stays out of the main bundle. Falls back to showing the
+// Mermaid source if the diagram cannot be parsed.
 function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     setSvg(null); setFailed(false);
-    import('mermaid')
-      .then(async m => {
-        const mermaid = m.default;
-        // htmlLabels must be off: sanitizeSvg (DOMPurify, svg profile) strips
-        // <foreignObject>, which is where mermaid puts HTML labels — with them
-        // on, every node/edge label vanishes and diagrams render blank.
-        mermaid.initialize({
-          startOnLoad: false, theme: 'neutral', securityLevel: 'strict',
-          htmlLabels: false, flowchart: { htmlLabels: false }, er: { useMaxWidth: true },
-        } as any);
-        try {
-          const { svg } = await mermaid.render(`wt-mmd-${++mermaidSeq}`, code);
-          if (alive) setSvg(sanitizeSvg(svg));
-        } catch {
-          if (alive) setFailed(true);
-        }
-      })
+    renderMermaid(code)
+      .then(out => { if (alive) setSvg(out); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [code]);

@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 # set that produced them.
 from app.services.generation_prompts import PROMPT_VERSION  # noqa: E402
 from app.services.latex_sanitizer import sanitize_content
+from app.services.mermaid_normalize import mermaid_lint, normalize_mermaid_content
 
 # Offline/test fallbacks only — live runs route via settings.generation_model /
 # settings.generation_light_model (see _model). Values mirror the config
@@ -994,7 +995,12 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
         if isinstance(part, dict):
             part["subtopic_id"] = cid
             part.pop("traceability_tag", None)  # always null / orchestrator-built
-    return {"opening": opening, "core": core, "closing": closing}
+    # Quote diagram labels before the validators see them, so diagram:compile
+    # judges the source the reader will actually render.
+    out, n_fixed = normalize_mermaid_content({"opening": opening, "core": core, "closing": closing})
+    if n_fixed:
+        logger.info("mermaid normalizer quoted labels in %d diagram(s) for %s", n_fixed, cid)
+    return out
 
 
 def _condense_core(core: dict) -> dict:
@@ -1135,6 +1141,11 @@ def _check_diagram_compile(core: dict) -> CheckResult:
         if vtype in ("table", "execution_trace_table"):
             if not (v.get("columns") and v.get("rows")):
                 bad.append(v.get("visual_id", vtype))
+        elif vtype.startswith("mermaid"):
+            # Source the reader cannot parse renders as raw text, so lint it
+            # here rather than counting the description alone as "compiles".
+            if not mermaid_lint(v.get("mermaid_code") or ""):
+                bad.append(v.get("visual_id", vtype))
         else:
             if not v.get("description"):
                 bad.append(v.get("visual_id", vtype))
@@ -1273,10 +1284,6 @@ def critique_and_polish_unit(client: Any, unit_output: dict, unit: dict, ctx: di
 
 # ── Slides deck: chunked generation + deterministic gate + critic ────────────
 
-_MERMAID_STARTS = ("graph", "flowchart", "sequenceDiagram", "stateDiagram",
-                   "erDiagram", "classDiagram")
-
-
 def _slides_digest(notes: dict) -> dict:
     """The deck prompt's working copy of the notes: full teaching content minus
     pipeline metadata (critique/validation/hashes) and the closing sections the
@@ -1321,18 +1328,14 @@ def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
         prior_titles += [str(s.get("title") or "") for s in chunk]
     for i, s in enumerate(slides):
         s["slide_no"] = i + 1
+    # Quote diagram labels before validate_slides_deck lints them.
+    slides, n_fixed = normalize_mermaid_content(slides)
+    if n_fixed:
+        logger.info("mermaid normalizer quoted labels in %d slide diagram(s) for %s",
+                    n_fixed, unit.get("concept_id", ""))
     return {"concept_id": unit.get("concept_id", ""),
             "inherited_content_type": unit.get("primary_content_type", "P1"),
             "running_example": running_example, "slides": slides}
-
-
-def _mermaid_lint(code: str) -> bool:
-    """Cheap structural lint — full compile needs a JS runtime, but the failure
-    modes we see are empty code, wrong header, or unbalanced brackets."""
-    c = (code or "").strip()
-    if not c.startswith(_MERMAID_STARTS):
-        return False
-    return all(c.count(a) == c.count(b) for a, b in (("[", "]"), ("(", ")"), ("{", "}")))
 
 
 def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
@@ -1367,7 +1370,7 @@ def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
 
     bad_mermaid = [s.get("slide_no") for s in slides
                    if str((s.get("visual") or {}).get("type") or "").startswith("mermaid")
-                   and not _mermaid_lint((s.get("visual") or {}).get("mermaid_code") or "")]
+                   and not mermaid_lint((s.get("visual") or {}).get("mermaid_code") or "")]
     checks.append(CheckResult(name="deck:mermaid_lint", passed=not bad_mermaid,
                               detail=f"slides {bad_mermaid}" if bad_mermaid else ""))
 
@@ -1385,8 +1388,12 @@ def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
     # Role coverage — the arc's required slides must exist; code concepts (P2/P5)
     # must carry an implementation slide. Placeholder leaks fail hard.
     roles = {s.get("role") for s in slides}
-    required = {"definition", "terminology", "practice", "quiz", "summary", "assignment"}
+    required = {"definition", "terminology", "practice", "quiz", "assignment"}
     missing = sorted(required - roles)
+    # The closing consolidation slide may be summary OR recall — the lean-deck
+    # prompt rule tells small-budget decks to keep only one of the two.
+    if not ({"summary", "recall"} & roles):
+        missing.append("summary|recall")
     checks.append(CheckResult(name="deck:role_coverage", passed=not missing,
                               detail=f"missing {missing}" if missing else ""))
     if unit.get("primary_content_type") in ("P2", "P5"):
@@ -2157,6 +2164,12 @@ def _upsert_artifact(db, job_id: str, topic_id: str, artifact_type: str, content
     if n_fixed:
         logger.warning("latex sanitizer repaired %d string(s) in %s artifact for topic %s",
                        n_fixed, artifact_type, topic_id)
+    # Last line of defence: the critic passes can reintroduce unquoted diagram
+    # labels after generation normalized them.
+    content, n_mmd = normalize_mermaid_content(content)
+    if n_mmd:
+        logger.warning("mermaid normalizer quoted labels in %d diagram(s) in %s artifact for topic %s",
+                       n_mmd, artifact_type, topic_id)
     row = {"job_id": job_id, "topic_id": topic_id, "type": artifact_type,
            "content": content, **fields}
     existing = (
@@ -2491,6 +2504,12 @@ def _upsert_concept(db, job_id, topic_id, concept_id, artifact_type, **fields) -
         if n_fixed:
             logger.warning("latex sanitizer repaired %d string(s) in %s/%s",
                            n_fixed, concept_id, artifact_type)
+        # Last line of defence: the critic passes can reintroduce unquoted
+        # diagram labels after generation normalized them.
+        fields["content"], n_mmd = normalize_mermaid_content(fields["content"])
+        if n_mmd:
+            logger.warning("mermaid normalizer quoted labels in %d diagram(s) in %s/%s",
+                           n_mmd, concept_id, artifact_type)
     # Materialize the revision-card count for student notes so Learn Home's
     # due-count never has to pull note content (see student.flashcard_count_for).
     if artifact_type == "student_notes" and isinstance(fields.get("content"), dict):
