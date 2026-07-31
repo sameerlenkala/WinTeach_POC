@@ -214,25 +214,38 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     # (2026-07); no live call path routes to them.
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
-    # GPT-5.6 family (GA 2026-07-09) + 5.4 light tiers — third-party-confirmed
-    # rates; re-verify against platform.openai.com/pricing at cutover.
+    # GPT-5.6 family (GA 2026-07-09) + 5.4 light tiers — verified 2026-07-31
+    # against developers.openai.com/api/docs/pricing (the earlier third-party
+    # rates over-billed terra 25% and luna 5×).
     "gpt-5.6-sol": (5.00, 30.00),
-    "gpt-5.6-terra": (2.50, 15.00),
-    "gpt-5.6-luna": (1.00, 6.00),
+    "gpt-5.6-terra": (2.00, 12.00),
+    "gpt-5.6-luna": (0.20, 1.20),
     "gpt-5.4-mini": (0.75, 4.50),
     "gpt-5.4-nano": (0.20, 1.25),
     "gpt-5.4-nano-2026-03-17": (0.20, 1.25),  # dated snapshot, same rates
 }
+# Unknown model names bill at terra (the priciest tier the key can reach), not
+# the configured default — so a new routing entry can never silently under-bill.
 _DEFAULT_PRICING = MODEL_PRICING["gpt-5.6-terra"]
+
+
+def _configured_model() -> str:
+    """The live heavy-generation model, for cost defaults; mirrors config."""
+    try:
+        from app.core.config import settings
+        return settings.generation_model
+    except Exception:  # pragma: no cover - settings unavailable offline
+        return "gpt-5.6-luna"
 
 # Back-compat aliases for older call sites.
 GPT4O_INPUT_PER_1M = MODEL_PRICING["gpt-4o"][0]
 GPT4O_OUTPUT_PER_1M = MODEL_PRICING["gpt-4o"][1]
 
 
-def usd_cost(prompt_tokens: int, completion_tokens: int, model: str = "gpt-5.6-terra") -> float:
-    """USD cost for a token spend at the given model's rates."""
-    rate_in, rate_out = MODEL_PRICING.get(model, _DEFAULT_PRICING)
+def usd_cost(prompt_tokens: int, completion_tokens: int, model: str | None = None) -> float:
+    """USD cost for a token spend at the given model's rates. When no model is
+    named (upfront estimates), rates follow the configured generation model."""
+    rate_in, rate_out = MODEL_PRICING.get(model or _configured_model(), _DEFAULT_PRICING)
     return round((prompt_tokens or 0) / 1e6 * rate_in
                  + (completion_tokens or 0) / 1e6 * rate_out, 4)
 

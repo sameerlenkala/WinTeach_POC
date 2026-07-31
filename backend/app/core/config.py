@@ -47,16 +47,19 @@ class Settings(BaseSettings):
     # Generation model routing — heavy nodes author student-facing content;
     # light nodes do mechanical repairs (verb fixes, TLO retagging, subtopic
     # splitting) and OCR transcription. Override per deployment via env.
-    # Validated on the WinTeach pipeline (2026-07-12 canary, concept C1):
-    # terra shipped 17/20 vs gpt-4o 9/20 and passed a gate gpt-4o failed; luna
-    # scored 14/20 at ~40% of terra's cost. terra rejects `temperature` (the
-    # llm_compat shim drops it), so the pipeline's temperature tuning is inert
-    # on the heavy lane — acceptable given the quality result.
-    generation_model: str = "gpt-5.6-terra"
-    generation_light_model: str = "gpt-5.4-nano"
-    # OCR must run on a model with confirmed image input. Empty = use the light
-    # model. Pinned to luna because gpt-5.4-nano's vision support is unverified.
-    ocr_model: str = "gpt-5.6-luna"
+    # Routing history:
+    #  - 2026-07-12 canary (concept C1, n=20): terra 17/20, luna 14/20,
+    #    gpt-4o 9/20 (since revoked). Terra won on quality.
+    #  - 2026-07-31: defaults switched to luna on verified pricing — luna runs
+    #    at ~10% of terra's cost ($0.20/$1.20 vs $2.00/$12.00 per 1M in/out),
+    #    not the ~40% the stale rate table implied. Luna is also confirmed
+    #    multimodal, so one model now covers heavy + light + OCR lanes.
+    #    Quality escape hatch: set GENERATION_MODEL=gpt-5.6-terra to restore
+    #    the 17/20 heavy lane; no code change needed.
+    # Both terra and luna reject `temperature` (the llm_compat shim drops it),
+    # so the pipeline's temperature tuning is inert on gpt-5.6 lanes.
+    generation_model: str = "gpt-5.6-luna"
+    generation_light_model: str = "gpt-5.6-luna"
 
     # App
     frontend_url: str = "http://localhost:5173"

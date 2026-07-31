@@ -31,7 +31,7 @@ Deploy the **backend first** — you need its public URL to configure the fronte
    | `FRONTEND_URL` | Vercel URL from step 2 below (add after that deploy exists) |
    | `DEMO_LOGIN_ENABLED` | `false` ← **required for any real deployment** |
 
-   Do **not** set `GENERATION_MODEL` / `OCR_MODEL` — the code defaults (terra / nano / luna) already match the key's access.
+   Do **not** set `GENERATION_MODEL` — the code default (gpt-5.6-luna on every lane) already matches the key's access. Set `GENERATION_MODEL=gpt-5.6-terra` only if heavy-lane quality needs a lift. (`OCR_MODEL` no longer exists; luna is multimodal.)
 5. Deploy. Confirm `https://<service>.up.railway.app/health` returns `{"status":"ok"}`.
 
 ## 2. Frontend → Vercel (new account)

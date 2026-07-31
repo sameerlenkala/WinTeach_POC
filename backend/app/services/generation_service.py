@@ -49,8 +49,8 @@ from app.services.mermaid_normalize import mermaid_lint, normalize_mermaid_conte
 # Offline/test fallbacks only — live runs route via settings.generation_model /
 # settings.generation_light_model (see _model). Values mirror the config
 # defaults; the API key has no access to gpt-4o / gpt-4o-mini anymore.
-MODEL = "gpt-5.6-terra"
-LIGHT_MODEL = "gpt-5.4-nano"
+MODEL = "gpt-5.6-luna"
+LIGHT_MODEL = "gpt-5.6-luna"
 
 
 def _model(light: bool = False) -> str:

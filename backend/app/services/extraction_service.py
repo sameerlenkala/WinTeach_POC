@@ -41,20 +41,12 @@ class EncryptedPDFError(ValueError):
 
 
 def _light_model() -> str:
-    """The light generation model (structured extraction)."""
+    """The light generation model (structured extraction + OCR). OCR needs
+    image input — the default (gpt-5.6-luna) is confirmed multimodal; keep
+    that in mind before overriding GENERATION_LIGHT_MODEL."""
     try:
         from app.core.config import settings
         return settings.generation_light_model
-    except Exception:  # pragma: no cover
-        return "gpt-5.4-nano"  # mirror the config default
-
-
-def _ocr_model() -> str:
-    """OCR needs a model with confirmed image input. OCR_MODEL pins it
-    explicitly; otherwise the light model is assumed multimodal."""
-    try:
-        from app.core.config import settings
-        return settings.ocr_model or settings.generation_light_model
     except Exception:  # pragma: no cover
         return "gpt-5.6-luna"  # mirror the config default
 
@@ -115,7 +107,7 @@ def ocr_scanned_pdf(content: bytes, max_pages: int = _OCR_MAX_PAGES) -> str:
             pix = page.get_pixmap(dpi=_OCR_DPI)
             b64 = base64.b64encode(pix.tobytes("png")).decode()
             resp = llm_compat.create_chat_completion(
-                client, model=_ocr_model(),
+                client, model=_light_model(),  # luna: confirmed image input
                 messages=[{"role": "user", "content": [
                     {"type": "text", "text": _OCR_INSTRUCTION},
                     {"type": "image_url",

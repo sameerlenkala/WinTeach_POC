@@ -19,7 +19,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-5.6-terra"   # offline fallback only — mirrors the settings.generation_model default
+MODEL = "gpt-5.6-luna"   # offline fallback only — mirrors the settings.generation_model default
 
 # Input cap for P1 — ~10k tokens. The old 12k-char cap (~3k tokens) silently
 # dropped the later units of long syllabi on a 128k-context model.
