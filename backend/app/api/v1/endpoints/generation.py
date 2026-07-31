@@ -207,9 +207,13 @@ def _job_detail(db: Client, job: dict) -> dict:
         db.table("concept_artifacts")
         # grounded_in: provenance stamp pulled out of the content JSON so the
         # studio can show which concepts were grounded without shipping content.
+        # gate_passed drives the studio's gate-failed badge + approve blocking;
+        # model_used distinguishes luna artifacts from terra escalations.
         # topic_id + updated_at drive stale-generation reconciliation below.
         .select("topic_id,concept_id,artifact_type,status,approval_status,updated_at,"
-                "cost_usd,token_count,error,grounded_in:content->grounded_in")
+                "cost_usd,token_count,error,model_used,"
+                "gate_passed:content->validation->all_pass,"
+                "grounded_in:content->grounded_in")
         .eq("topic_id", topic_id).execute().data or []
     )
     # Orphaned 'generating' rows (worker died with its process) would otherwise

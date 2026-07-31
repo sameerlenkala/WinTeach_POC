@@ -17,6 +17,7 @@ LLM node runners lazy-import OpenAI so this module imports cleanly offline.
 
 from __future__ import annotations
 
+import contextvars
 import copy
 import hashlib
 import json
@@ -52,15 +53,33 @@ from app.services.mermaid_normalize import mermaid_lint, normalize_mermaid_conte
 MODEL = "gpt-5.6-luna"
 LIGHT_MODEL = "gpt-5.6-luna"
 
+# Gate-failure escalation rebinds the heavy lane for one rerun (see
+# generate_concept_artifact). Light-lane repairs stay on the light model even
+# mid-escalation — they're mechanical and were never the failure mode.
+_MODEL_OVERRIDE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "generation_model_override", default=None)
+
 
 def _model(light: bool = False) -> str:
     """Per-node model routing: heavy nodes author student-facing content; light
     nodes do mechanical repairs (verb fixes, TLO retagging, subtopic splits)."""
+    if not light:
+        override = _MODEL_OVERRIDE.get()
+        if override:
+            return override
     try:
         from app.core.config import settings
         return settings.generation_light_model if light else settings.generation_model
     except Exception:  # pragma: no cover - settings unavailable offline
         return LIGHT_MODEL if light else MODEL
+
+
+def _escalation_model() -> str:
+    try:
+        from app.core.config import settings
+        return settings.generation_escalation_model
+    except Exception:  # pragma: no cover - settings unavailable offline
+        return ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2621,6 +2640,9 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
     ctx = _load_topic_context(db, course_id, topic_id)
     meter_reset()
 
+    # Each branch defines run_once() so a blocking-gate failure can rerun the
+    # whole node on the escalation model. Retrieval, prior-term collection and
+    # the sibling-notes guard happen once — they don't depend on the model.
     if artifact_type == "student_notes":
         prev, nxt = _neighbors(plan, concept_id)
         grounding: list[dict] = []
@@ -2628,64 +2650,111 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
         if tier_map:
             from app.services import material_service as ms
             grounding = ms.retrieve_chunks(db, tier_map, _concept_query_terms(plan, unit))
-        out = gen_notes_unit(client, ctx, plan, unit, prev_title=prev, next_title=nxt,
-                             prior_terms=_prior_terms(db, topic_id, plan, concept_id),
-                             grounding=grounding or None)
-        beat()
-        v = validate_and_expand_unit(client, out, unit, ctx)
-        log_check_outcomes(job_id, f"notes:{concept_id}", v, db=db)
-        beat()
-        critique = critique_and_polish_unit(client, out, unit, ctx)
-        if critique.get("polished"):
-            # Polish can shrink fields below the word minimums — re-gate and
-            # re-expand so the stored validation matches the shipped note.
+        prior = _prior_terms(db, topic_id, plan, concept_id)
+
+        def run_once() -> dict:
+            out = gen_notes_unit(client, ctx, plan, unit, prev_title=prev, next_title=nxt,
+                                 prior_terms=prior, grounding=grounding or None)
             beat()
             v = validate_and_expand_unit(client, out, unit, ctx)
-        content = {**out, "unit_hash": canonical_hash(out),
-                   "critique": critique,
-                   "validation": {"all_pass": v.all_pass,
-                                  "failures": [c.model_dump() for c in v.failures]}}
-        if grounding:
-            g = grounding_check(out, grounding)
-            logger.info("validator job=%s node=notes:%s check=%s passed=%s %s",
-                        job_id, concept_id, g.name, g.passed, g.detail)
-            content["validation"]["grounding"] = g.model_dump()
-            content["grounded_in"] = _grounded_stamp(db, tier_map, grounding)
+            log_check_outcomes(job_id, f"notes:{concept_id}", v, db=db)
+            beat()
+            critique = critique_and_polish_unit(client, out, unit, ctx)
+            if critique.get("polished"):
+                # Polish can shrink fields below the word minimums — re-gate and
+                # re-expand so the stored validation matches the shipped note.
+                beat()
+                v = validate_and_expand_unit(client, out, unit, ctx)
+            content = {**out, "unit_hash": canonical_hash(out),
+                       "critique": critique,
+                       "validation": {"all_pass": v.all_pass,
+                                      "failures": [c.model_dump() for c in v.failures]}}
+            if grounding:
+                g = grounding_check(out, grounding)
+                logger.info("validator job=%s node=notes:%s check=%s passed=%s %s",
+                            job_id, concept_id, g.name, g.passed, g.detail)
+                content["validation"]["grounding"] = g.model_dump()
+                content["grounded_in"] = _grounded_stamp(db, tier_map, grounding)
+            return content
     else:
         notes = _concept_row(db, topic_id, concept_id, "student_notes").get("content")
         if not notes:
             _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
                             status="error", error="Generate this concept's Notes first.")
             return
-        from app.services import generation_prompts as p
         if artifact_type == "slides":
-            content = gen_concept_slides(client, unit, ctx, notes, heartbeat=beat)
-            dv = validate_slides_deck(content, unit)
-            log_check_outcomes(job_id, f"slides:{concept_id}", dv, db=db)
-            beat()
-            content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
-            content["validation"] = {"all_pass": dv.all_pass,
-                                     "failures": [c.model_dump() for c in dv.failures]}
+            def run_once() -> dict:
+                content = gen_concept_slides(client, unit, ctx, notes, heartbeat=beat)
+                dv = validate_slides_deck(content, unit)
+                log_check_outcomes(job_id, f"slides:{concept_id}", dv, db=db)
+                beat()
+                content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
+                content["validation"] = {"all_pass": dv.all_pass,
+                                         "failures": [c.model_dump() for c in dv.failures]}
+                return content
         else:
-            from app.schemas import notes_json_schemas as njs  # lazy
-            content = _chat_json(client, *p.build_concept_quiz_prompt(unit, ctx, notes),
-                                 temperature=0.4, schema=njs.CONCEPT_QUIZ_SCHEMA,
-                                 schema_name="concept_quiz")
-            content = normalize_quiz(content)
-            qv = validate_quiz(content, unit)
-            log_check_outcomes(job_id, f"quiz:{concept_id}", qv, db=db)
-            content["validation"] = {"all_pass": qv.all_pass,
-                                     "failures": [c.model_dump() for c in qv.failures]}
+            def run_once() -> dict:
+                from app.services import generation_prompts as p
+                from app.schemas import notes_json_schemas as njs  # lazy
+                content = _chat_json(client, *p.build_concept_quiz_prompt(unit, ctx, notes),
+                                     temperature=0.4, schema=njs.CONCEPT_QUIZ_SCHEMA,
+                                     schema_name="concept_quiz")
+                content = normalize_quiz(content)
+                qv = validate_quiz(content, unit)
+                log_check_outcomes(job_id, f"quiz:{concept_id}", qv, db=db)
+                content["validation"] = {"all_pass": qv.all_pass,
+                                         "failures": [c.model_dump() for c in qv.failures]}
+                return content
+
+    content = run_once()
+    model_used = _model()
+    esc = _escalation_model()
+    if not _gate_ok(content) and esc and esc != model_used:
+        logger.warning("blocking gates failed on %s for %s/%s — escalating to %s",
+                       model_used, concept_id, artifact_type, esc)
+        beat()
+        token = _MODEL_OVERRIDE.set(esc)
+        try:
+            retry = run_once()
+        finally:
+            _MODEL_OVERRIDE.reset(token)
+        # Keep the escalated attempt when it passes or at least fails less; if
+        # it somehow fails harder, ship the original so escalation can only help.
+        if _gate_ok(retry) or _blocking_fail_count(retry) <= _blocking_fail_count(content):
+            content, model_used = retry, esc
 
     content["prompt_version"] = PROMPT_VERSION
-    p_tok, c_tok, cost = meter_read()
+    p_tok, c_tok, cost = meter_read()  # totals across both attempts when escalated
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
                     status="ready", approval_status="pending", content=content,
-                    token_count=p_tok + c_tok, cost_usd=cost, error=None)
+                    token_count=p_tok + c_tok, cost_usd=cost, error=None,
+                    model_used=model_used)
     _add_job_cost(db, job_id, p_tok + c_tok, cost)
 
 
+def _gate_ok(content: dict) -> bool:
+    return bool((content.get("validation") or {}).get("all_pass"))
+
+
+def _blocking_fail_count(content: dict) -> int:
+    fails = (content.get("validation") or {}).get("failures") or []
+    return sum(1 for f in fails if f.get("blocking"))
+
+
 def approve_concept_artifact(db, user, topic_id, concept_id, artifact_type) -> dict:
+    # Publish floor: an artifact whose blocking gates failed (even after
+    # escalation) cannot be approved, so it can never reach students — the
+    # student endpoints only serve approval_status='approved'. all_pass=None
+    # (pre-validation artifacts) stays approvable; only a recorded False blocks.
+    row = _concept_row(db, topic_id, concept_id, artifact_type)
+    v = (row.get("content") or {}).get("validation") or {}
+    if v.get("all_pass") is False:
+        from fastapi import HTTPException
+        names = ", ".join(f.get("name", "?") for f in (v.get("failures") or [])
+                          if f.get("blocking")) or "blocking checks"
+        raise HTTPException(status_code=409,
+                            detail=f"Quality gates failed ({names}) — regenerate or revise "
+                                   "until gates pass before approving.")
     _upsert_concept(db, None, topic_id, concept_id, artifact_type, approval_status="approved")
     return {"concept_id": concept_id, "artifact_type": artifact_type, "approval_status": "approved"}
 
@@ -2815,7 +2884,8 @@ def revise_concept_artifact(db, job_id, topic_id, concept_id, artifact_type, ins
     p_tok, c_tok, cost = meter_read()
     _upsert_concept(db, job_id, topic_id, concept_id, artifact_type,
                     status="ready", approval_status="pending", content=revised,
-                    token_count=p_tok + c_tok, cost_usd=cost, error=None)
+                    token_count=p_tok + c_tok, cost_usd=cost, error=None,
+                    model_used=_model())
     _add_job_cost(db, job_id, p_tok + c_tok, cost)
 
 

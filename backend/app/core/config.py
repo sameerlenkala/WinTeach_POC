@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     # so the pipeline's temperature tuning is inert on gpt-5.6 lanes.
     generation_model: str = "gpt-5.6-luna"
     generation_light_model: str = "gpt-5.6-luna"
+    # When a concept artifact fails its blocking gates, the whole node is rerun
+    # once on this model (2026-07-31: luna's first live run shipped 9/10 clean;
+    # the one failure had three blocking gate misses terra is expected to fix).
+    # Empty string disables escalation. Must differ from generation_model to
+    # have any effect — same-model reruns are not retried.
+    generation_escalation_model: str = "gpt-5.6-terra"
 
     # App
     frontend_url: str = "http://localhost:5173"
