@@ -47,15 +47,31 @@ const FENCE_RE = /(`{2,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n?([\s\S]*?)\1/;
 // Tags accepted on the degenerate ``…`` variant — a real ``inline span`` whose
 // first word merely looks tag-like must stay inline code.
 const FENCE_LANGS = /^(python|py|sql|java|c|cpp|c\+\+|cs|csharp|js|javascript|ts|typescript|html|css|json|bash|sh|shell|r|go|rust|kotlin|swift|php|ruby|matlab|verilog|vhdl|asm|pseudocode|text)$/i;
+// An opening ```lang fence whose closer never arrives — treat everything after
+// it as code (CommonMark behavior) instead of leaking literal backticks.
+const OPEN_FENCE_RE = /(`{3,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n([\s\S]+)$/;
+// Inside a fenced block a two-char "\n" is ambiguous: double-escaped newlines
+// (unescape) vs. code that legitimately contains "\n" like printf("\n") (keep).
+// Real newlines present → the block is already multi-line, keep the literals.
+const unescapeCodeNL = (s: string) => (s.includes('\n') ? s : s.replace(/\\n/g, '\n'));
+// Models escape markdown-active characters inside JSON strings (\_\_init\_\_,
+// \*args); this renderer has no underscore emphasis, so the backslashes would
+// otherwise display literally.
+const unescapeMd = (s: string) => s.replace(/\\([_*`#])/g, '$1');
 function inline(text: string, key = 'k'): ReactNode[] {
-  const m = text.match(FENCE_RE);
+  let m = text.match(FENCE_RE);
   // ``…`` is only a fence when it spans lines or names a real language.
-  if (m && !(m[1].length === 2 && !/\n/.test(m[3]) && !FENCE_LANGS.test(m[2]))) {
+  if (m && m[1].length === 2 && !/\n/.test(m[3]) && !FENCE_LANGS.test(m[2])) m = null;
+  m ??= text.match(OPEN_FENCE_RE);
+  if (m) {
     const idx = m.index!;
-    const code = m[3].trim();
+    const code = unescapeCodeNL(m[3].trim());
+    const fenced = !code ? []
+      : /^mermaid$/i.test(m[2]) ? [<Mermaid key={`${key}f`} code={code} />]
+        : [<Code key={`${key}f`} code={code} language={m[2] || null} />];
     return [
       ...(idx > 0 ? inline(text.slice(0, idx), `${key}a`) : []),
-      ...(code ? [<Code key={`${key}f`} code={code} language={m[2] || null} />] : []),
+      ...fenced,
       ...inline(text.slice(idx + m[0].length), `${key}b`),
     ];
   }
@@ -68,7 +84,7 @@ function inline(text: string, key = 'k'): ReactNode[] {
     };
     if (seg.startsWith('$$') && seg.endsWith('$$') && seg.length > 4) return math(seg.slice(2, -2), true);
     if (seg.startsWith('$') && seg.endsWith('$') && seg.length > 2) return math(seg.slice(1, -1), false);
-    if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) return <strong key={k}>{seg.slice(2, -2)}</strong>;
+    if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) return <strong key={k}>{unescapeMd(seg.slice(2, -2))}</strong>;
     if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
       const inner = seg.slice(1, -1);
       // Models sometimes wrap math in `code` fences instead of $…$; a real
@@ -79,24 +95,39 @@ function inline(text: string, key = 'k'): ReactNode[] {
       }
       return <code key={k}>{inner}</code>;
     }
-    if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) return <em key={k}>{seg.slice(1, -1)}</em>;
-    return <span key={k}>{seg}</span>;
+    if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) return <em key={k}>{unescapeMd(seg.slice(1, -1))}</em>;
+    return <span key={k}>{unescapeMd(seg)}</span>;
   });
 }
 
 const CALLOUTS: Record<string, { label: string; color: string }> = {
-  'tip': { label: 'Tip', color: '#4ade80' },
-  'warning': { label: 'Warning', color: '#fbbf24' },
+  'tip': { label: 'Tip', color: 'var(--st-green)' },
+  'warning': { label: 'Warning', color: 'var(--st-amber)' },
   'key idea': { label: 'Key idea', color: 'var(--st-lime-text)' },
-  'recall': { label: 'Recall', color: '#60a5fa' },
+  'recall': { label: 'Recall', color: 'var(--st-blue)' },
   'exam tip': { label: 'Exam tip', color: 'var(--st-violet)' },
   'note': { label: 'Note', color: 'var(--st-text-3)' },
 };
 const CALLOUT_RE = /^>\s*(tip|warning|key idea|recall|exam tip|note)\s*[:—-]\s*/i;
 
 function Rich({ text }: { text: unknown }) {
-  const str = unescapeNL(asText(text));
-  if (!str.trim()) return null;
+  // Fences are carved out BEFORE newline unescaping and paragraph splitting —
+  // prose-level \n handling must never rewrite (or blank-line-split) a code block.
+  const raw = asText(text);
+  if (!raw.trim()) return null;
+  const fm = raw.match(FENCE_RE) ?? raw.match(OPEN_FENCE_RE);
+  if (fm && !(fm[1].length === 2 && !/\n/.test(fm[3]) && !FENCE_LANGS.test(fm[2]))) {
+    const idx = fm.index!;
+    const code = unescapeCodeNL(fm[3].trim());
+    return (
+      <>
+        {idx > 0 && <Rich text={raw.slice(0, idx)} />}
+        {code && (/^mermaid$/i.test(fm[2]) ? <Mermaid code={code} /> : <Code code={code} language={fm[2] || null} />)}
+        <Rich text={raw.slice(idx + fm[0].length)} />
+      </>
+    );
+  }
+  const str = unescapeNL(raw);
   const paras = str.split(/\n\s*\n/).filter(p => p.trim());
   return (
     <>
@@ -506,7 +537,10 @@ function buildNotesPages(content: any): Page[] {
     add('code', code.language_or_system || 'In practice',
       code.type === 'formal_math' ? 'Formalization' : code.type === 'pseudocode' ? 'Pseudocode' : 'The code', (
         <>
-          <Code code={code.content} language={code.language_or_system} output={code.sample_output} />
+          {/* REPL transcripts already show each result inline after its >>> —
+              suppress the duplicate Output panel (QA issue #1). */}
+          <Code code={code.content} language={code.language_or_system}
+                output={/^\s*(>>>|\$|In \[\d+\]:)\s/m.test(code.content) ? null : code.sample_output} />
           {code.explanation && <div style={{ marginTop: 14 }}><Pts value={code.explanation} /></div>}
           {hasGrid && (
             <>
@@ -1571,30 +1605,35 @@ function SlidesPlayer({ content, hasQuiz, onQuiz, onNotes, onSeen }: {
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 11 }}>
                 {layout === 'myth_reality' ? (
                   <>
-                    {tintCard('✗ Myth', '#fb7185', <>
+                    {tintCard('✗ Myth', 'var(--st-red)', <>
                       {s.myth && <div style={{ font: '600 14px/1.5 var(--st-sans)', color: 'var(--st-text)', marginBottom: 6 }}>{inline(asText(s.myth), `my${i}`)}</div>}
                       {renderBullets(bullets.slice(0, half), `s${i}m`)}
                     </>)}
-                    {tintCard('✓ Reality', '#4ade80', <>
+                    {tintCard('✓ Reality', 'var(--st-green)', <>
                       {s.reality && <div style={{ font: '600 14px/1.5 var(--st-sans)', color: 'var(--st-text)', marginBottom: 6 }}>{inline(asText(s.reality), `re${i}`)}</div>}
                       {renderBullets(bullets.slice(half), `s${i}r`)}
                     </>)}
                   </>
                 ) : layout === 'two_column' ? (
-                  <>
-                    {tintCard(asText(s.left_heading) || 'Advantages', '#4ade80', <>{renderBullets(s.left_bullets ?? [], `s${i}l`)}</>)}
-                    {tintCard(asText(s.right_heading) || 'Limitations', '#fb7185', <>{renderBullets(s.right_bullets ?? [], `s${i}rt`)}</>)}
-                  </>
+                  // Older decks parked the points in body_blocks — fall back to
+                  // a plain list rather than two labelled empty boxes. (Not split
+                  // in half: guessing advantage vs limitation would mislabel.)
+                  (s.left_bullets?.length || s.right_bullets?.length) ? (
+                    <>
+                      {tintCard(asText(s.left_heading) || 'Advantages', 'var(--st-green)', <>{renderBullets(s.left_bullets ?? [], `s${i}l`)}</>)}
+                      {tintCard(asText(s.right_heading) || 'Limitations', 'var(--st-red)', <>{renderBullets(s.right_bullets ?? [], `s${i}rt`)}</>)}
+                    </>
+                  ) : <>{renderBullets(bullets, `s${i}b`)}</>
                 ) : layout === 'terminology' ? (
                   (s.terms ?? []).map((t: any, ti: number) => (
-                    <div key={ti} style={{ borderRadius: 14, padding: '10px 14px', background: 'var(--st-card, rgba(255,255,255,.04))', border: '1px solid var(--st-border-2)' }}>
+                    <div key={ti} style={{ borderRadius: 14, padding: '10px 14px', background: 'var(--st-card)', border: '1px solid var(--st-border-2)' }}>
                       <span style={{ font: '700 13.5px var(--st-sans)', color: 'var(--st-text)' }}>{inline(asText(t?.term), `tm${i}${ti}`)}</span>
                       <div style={{ font: '450 13px/1.55 var(--st-sans)', color: 'var(--st-text-2)', marginTop: 2 }}>{inline(asText(t?.definition), `td${i}${ti}`)}</div>
                     </div>
                   ))
                 ) : layout === 'definition' && s.definition_core ? (
                   <>
-                    <div style={{ borderRadius: 14, padding: '13px 16px', background: 'rgba(205,244,99,.08)', borderLeft: '3px solid var(--st-lime)' }}>
+                    <div style={{ borderRadius: 14, padding: '13px 16px', background: 'color-mix(in oklab, var(--st-lime) 9%, transparent)', borderLeft: '3px solid var(--st-lime)' }}>
                       <div style={{ font: '600 14.5px/1.55 var(--st-sans)', color: 'var(--st-text)' }}>{inline(asText(s.definition_core), `dc${i}`)}</div>
                     </div>
                     {renderBullets(bullets, `s${i}b`)}
@@ -1618,7 +1657,8 @@ function SlidesPlayer({ content, hasQuiz, onQuiz, onNotes, onSeen }: {
               {s.takeaway && (
                 <div style={{
                   marginTop: 14, padding: '10px 14px', borderRadius: 14, flexShrink: 0,
-                  background: 'rgba(205,244,99,.1)', border: '1px solid rgba(205,244,99,.3)',
+                  background: 'color-mix(in oklab, var(--st-lime) 10%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--st-lime) 30%, transparent)',
                   font: '600 13px/1.5 var(--st-sans)', color: 'var(--st-lime-text)',
                 }}>
                   ★ {inline(asText(s.takeaway), `tk${i}`)}
@@ -1634,7 +1674,7 @@ function SlidesPlayer({ content, hasQuiz, onQuiz, onNotes, onSeen }: {
           {slides.length <= 12 ? slides.map((_, i) => (
             <span key={i} style={{
               width: i === idx ? 18 : 6, height: 6, borderRadius: 99, transition: 'width .25s, background .25s',
-              background: i === idx ? 'var(--st-lime)' : 'rgba(255,255,255,.2)',
+              background: i === idx ? 'var(--st-lime)' : 'var(--st-border-2)',
             }} />
           )) : (
             <span style={{ font: '700 13px var(--st-display)', color: 'var(--st-text-2)', fontVariantNumeric: 'tabular-nums' }}>

@@ -1111,10 +1111,15 @@ def validate_notes_unit(unit_output: dict, unit: dict, ctx: dict) -> ValidationR
                               detail="code content required but missing" if code_needed and not cof.get("content") else ""))
     # SHOW THE OUTPUT (advisory) — running code must be paired with its result;
     # the observed failure mode is code blocks shipping with sample_output null.
+    # REPL/interactive transcripts carry their output inline after each prompt,
+    # so a separate sample_output would duplicate the block — exempt them.
+    # Prompt markers kept in sync with the reader's isReplTranscript.
+    code_text = str(cof.get("content") or "")
+    is_repl = bool(re.search(r"^\s*(>>>|\$|In \[\d+\]:)\s", code_text, re.M))
     has_code = bool(cof.get("content")) and cof.get("type") in ("code", "pseudocode")
     checks.append(CheckResult(name="output:sample_shown",
-                              passed=(not has_code) or bool(cof.get("sample_output")),
-                              detail="code present but sample_output missing" if has_code and not cof.get("sample_output") else "",
+                              passed=(not has_code) or is_repl or bool(cof.get("sample_output")),
+                              detail="code present but sample_output missing" if has_code and not is_repl and not cof.get("sample_output") else "",
                               blocking=False))
     et = _get_path(core, ("deep_dive", "execution_trace")) or {}
     checks.append(CheckResult(name="flag:execution_trace",
@@ -1444,6 +1449,18 @@ def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
                               passed=bool(slides) and slides[0].get("layout") == "statement",
                               detail="" if slides and slides[0].get("layout") == "statement"
                               else f"first layout={slides[0].get('layout') if slides else None}"))
+    # The title slide's big line must be the subtopic name itself (the hook is
+    # its subtitle) — a punchy claim as the title orphans the deck from the
+    # syllabus entry it is opened from.
+    def _norm_title(t: str) -> str:
+        return re.sub(r"\s+", " ", t).strip().strip(".!?").casefold()
+    cname = _norm_title(str(unit.get("concept_name") or ""))
+    t0 = _norm_title(str(slides[0].get("title") or "")) if slides else ""
+    title_ok = bool(cname) and cname in t0
+    checks.append(CheckResult(name="deck:title_is_subtopic", passed=title_ok,
+                              detail="" if title_ok else
+                              f"first title {(slides[0].get('title') if slides else None)!r}"
+                              f" is not the subtopic name {unit.get('concept_name')!r}"))
     checks.append(CheckResult(name="deck:ends_with_assignment",
                               passed=bool(slides) and slides[-1].get("role") == "assignment",
                               detail="" if slides and slides[-1].get("role") == "assignment"
@@ -1452,6 +1469,14 @@ def validate_slides_deck(content: dict, unit: dict) -> ValidationResult:
                               passed=any(s.get("layout") == "myth_reality" for s in slides),
                               detail="no misconception slide" if not any(
                                   s.get("layout") == "myth_reality" for s in slides) else ""))
+
+    # two_column renders ONLY left/right bullets — content parked in body_blocks
+    # shows as two labelled empty boxes, so both columns must actually be filled.
+    empty_cols = [s.get("slide_no") for s in slides if s.get("layout") == "two_column"
+                  and not ([b for b in (s.get("left_bullets") or []) if str(b).strip()]
+                           and [b for b in (s.get("right_bullets") or []) if str(b).strip()])]
+    checks.append(CheckResult(name="deck:two_column_filled", passed=not empty_cols,
+                              detail=f"slides {empty_cols} have empty columns" if empty_cols else ""))
 
     bad_mermaid = [s.get("slide_no") for s in slides
                    if str((s.get("visual") or {}).get("type") or "").startswith("mermaid")
@@ -2787,6 +2812,10 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
                 # Critic patches can reintroduce inline MCQ options — re-repair
                 # so the stored deck always matches what the gate checked.
                 _normalize_slide_mcq(content.get("slides") or [])
+                # Critic patches and the MCQ repair change the deck after the
+                # first gate run — re-gate so the stored verdict matches the
+                # shipped deck (a repaired deck must not stay "gate failed").
+                dv = validate_slides_deck(content, unit)
                 content["validation"] = {"all_pass": dv.all_pass,
                                          "failures": [c.model_dump() for c in dv.failures]}
                 return content
@@ -3133,8 +3162,11 @@ def faculty_dashboard(db, user: dict) -> dict:
     def topic_roll(tid: str) -> dict:
         ct = plan_total.get(tid, 0)
         cas = ca_by_topic.get(tid, [])
-        ready = sum(1 for c in cas if c["status"] == "ready") + ta_ready.get(tid, 0)
+        ready = sum(1 for c in cas if c["status"] == "ready"
+                    and c["artifact_type"] in _CONCEPT_TYPES) + ta_ready.get(tid, 0)
         total = ct * 3 + len(_TOPIC_CONTENT_TYPES) if ct else 0
+        if total:
+            ready = min(ready, total)
         job = job_by_topic.get(tid, {})
         return {"ct": ct, "ready": ready, "total": total,
                 "job_status": job.get("status"), "cost": float(job.get("cost_usd") or 0),
@@ -3152,8 +3184,17 @@ def faculty_dashboard(db, user: dict) -> dict:
         c_ready = c_total = c_complete = 0
         if c.get("status") == "draft" and draft_target is None:
             draft_target = {"course_id": c["id"]}
+        # Same unplanned-topic estimate as course_progress: without it a course
+        # with only some topics planned reads 100% on the dashboard too.
+        rolls = {t["id"]: topic_roll(t["id"]) for t in topics_of[c["id"]]}
+        planned_cts = [r["ct"] for r in rolls.values() if r["ct"]]
+        if planned_cts and len(planned_cts) < len(rolls):
+            est = max(1, round(sum(planned_cts) / len(planned_cts))) * 3 + len(_TOPIC_CONTENT_TYPES)
+            for r in rolls.values():
+                if not r["ct"]:
+                    r["total"] = est
         for t in topics_of[c["id"]]:
-            r = topic_roll(t["id"])
+            r = rolls[t["id"]]
             art_ready += r["ready"]; art_total += r["total"]; cost += r["cost"]
             pending_approval += r["pending_approval"]
             c_ready += r["ready"]; c_total += r["total"]
@@ -3239,7 +3280,13 @@ def course_progress(db, course_id: str) -> list[dict]:
         topic_ready = sum(1 for a in topic_arts
                           if a["type"] in _TOPIC_CONTENT_TYPES and a["review_status"] == "ready")
         artifact_total = (concept_total * 3 + len(_TOPIC_CONTENT_TYPES)) if concept_total else 0
-        artifact_ready = sum(1 for c in cas if c["status"] == "ready") + topic_ready
+        # Only the three counted concept types feed the numerator — a stray or
+        # legacy artifact_type row must not push ready past total (the courses
+        # list treats ready >= total as "topic complete").
+        artifact_ready = sum(1 for c in cas if c["status"] == "ready"
+                             and c["artifact_type"] in _CONCEPT_TYPES) + topic_ready
+        if artifact_total:
+            artifact_ready = min(artifact_ready, artifact_total)
         out.append({
             "topic_id": tid,
             "phase": (job or {}).get("phase"),
@@ -3253,4 +3300,16 @@ def course_progress(db, course_id: str) -> list[dict]:
             "cost_usd": (job or {}).get("cost_usd") or 0,
             "est_cost_usd": (job or {}).get("est_cost_usd"),
         })
+    # An unplanned topic has no concept inventory, so its true denominator is
+    # unknown — before this estimate it contributed 0/0 and vanished from the
+    # course %, letting a course with whole topics ungenerated read "100% Gen".
+    # Estimate it from the planned topics' average deck size instead.
+    planned = [r for r in out if r["concept_total"]]
+    if planned and len(planned) < len(out):
+        avg_ct = max(1, round(sum(r["concept_total"] for r in planned) / len(planned)))
+        est_total = avg_ct * 3 + len(_TOPIC_CONTENT_TYPES)
+        for r in out:
+            if not r["concept_total"]:
+                r["artifact_total"] = est_total
+                r["artifact_total_estimated"] = True
     return out

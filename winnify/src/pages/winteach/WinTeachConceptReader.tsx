@@ -201,7 +201,10 @@ function renderInline(text: string, katex: any | null, keyBase: string): React.R
       catch { return <span key={key}>{seg}</span>; }
     }
     if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) {
-      return <strong key={key} style={{ color: W.text, fontWeight: 600 }}>{seg.slice(2, -2)}</strong>;
+      // Inherit the surrounding color: bold runs sit on every slide surface,
+      // including white-on-brand statement slides and dark code slides, where
+      // a fixed near-black token disappears into the background.
+      return <strong key={key} style={{ color: 'inherit', fontWeight: 600 }}>{unescapeMd(seg.slice(2, -2))}</strong>;
     }
     if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
       const inner = seg.slice(1, -1);
@@ -217,11 +220,21 @@ function renderInline(text: string, katex: any | null, keyBase: string): React.R
       return <code key={key} style={{ fontFamily: MONO, fontSize: '0.88em', background: W.surfaceMuted, border: `1px solid ${W.border}`, borderRadius: 4, padding: '1px 5px', color: W.text }}>{inner}</code>;
     }
     if (seg.startsWith('*') && seg.endsWith('*') && seg.length > 2) {
-      return <em key={key}>{seg.slice(1, -1)}</em>;
+      return <em key={key}>{unescapeMd(seg.slice(1, -1))}</em>;
     }
-    return <span key={key}>{seg}</span>;
+    return <span key={key}>{unescapeMd(seg)}</span>;
   });
 }
+
+// Models escape markdown-active characters inside JSON strings (\_\_init\_\_,
+// \*args); this renderer has no underscore emphasis, so the backslashes would
+// otherwise display literally.
+const unescapeMd = (s: string) => s.replace(/\\([_*`#])/g, '$1');
+
+// Interactive/REPL transcripts (>>> / $ / In [1]:) carry each result inline —
+// mirrors the backend's output:sample_shown exemption.
+export const isReplTranscript = (code: unknown): boolean =>
+  typeof code === 'string' && /^\s*(>>>|\$|In \[\d+\]:)\s/m.test(code);
 
 // Typed callouts — paragraphs starting "> Tip:", "> Warning:", etc. render as
 // colored aside cards (the notes prompt asks for 1–3 per subtopic).
@@ -254,6 +267,10 @@ const FENCE_RE = /(`{2,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n?([\s\S]*?)\1/;
 const FENCE_LANGS = /^(python|py|sql|java|c|cpp|c\+\+|cs|csharp|js|javascript|ts|typescript|html|css|json|bash|sh|shell|r|go|rust|kotlin|swift|php|ruby|matlab|verilog|vhdl|asm|pseudocode|text)$/i;
 
 type FenceSeg = { code: string; lang: string } | { text: string };
+// An opening ```lang fence whose closer never arrives — treat everything after
+// it as code (CommonMark behavior) instead of leaking literal backticks into
+// the paragraph, where the single-backtick inline rule then mis-pairs.
+const OPEN_FENCE_RE = /(`{3,4})([A-Za-z0-9_+#-]*)[ \t]*\r?\n([\s\S]+)$/;
 function splitFences(str: string): FenceSeg[] {
   const out: FenceSeg[] = [];
   let rest = str;
@@ -268,21 +285,37 @@ function splitFences(str: string): FenceSeg[] {
     if (code) out.push({ code, lang: m[2] || '' });
     rest = rest.slice(idx + m[0].length);
   }
-  if (rest) out.push({ text: rest });
+  const open = rest.match(OPEN_FENCE_RE);
+  if (open && open[3].trim()) {
+    if (open.index! > 0) out.push({ text: rest.slice(0, open.index!) });
+    out.push({ code: open[3].trim(), lang: open[2] || '' });
+  } else if (rest) {
+    out.push({ text: rest });
+  }
   return out;
 }
 
+// Inside a fenced block a two-char "\n" is ambiguous: double-escaped newlines
+// (unescape) vs. code that legitimately contains "\n" like printf("\n") (keep).
+// Real newlines present → the block is already multi-line, keep the literals.
+const unescapeCodeNL = (s: string) => (s.includes('\n') ? s : s.replace(/\\n/g, '\n'));
+
 export function RichText({ text, inline }: { text: any; inline?: boolean }) {
-  const str = unescapeNL(typeof text === 'string' ? text : text == null ? '' : String(text));
+  // Fences are split BEFORE newline unescaping so prose-level \n handling
+  // can never rewrite the inside of a code block.
+  const raw = typeof text === 'string' ? text : text == null ? '' : String(text);
+  const str = unescapeNL(raw);
   // Load KaTeX for real $…$ math OR LaTeX mis-wrapped in `code` fences.
   const katex = useKatex(/\$[^$]/.test(str) || /`[^`\n]*\\[a-zA-Z][^`\n]*`/.test(str));
-  if (!str) return null;
-  const fenceSegs = splitFences(str);
+  if (!raw) return null;
+  const fenceSegs = splitFences(raw);
   if (fenceSegs.some(s => 'code' in s)) {
     return (
       <>
         {fenceSegs.map((seg, i) => 'code' in seg
-          ? <div key={i} style={{ margin: '8px 0' }}><CodeBlock code={seg.code} language={seg.lang || null} /></div>
+          ? (/^mermaid$/i.test(seg.lang)
+            ? <div key={i} style={{ margin: '8px 0' }}><MermaidBlock code={unescapeCodeNL(seg.code)} /></div>
+            : <div key={i} style={{ margin: '8px 0' }}><CodeBlock code={unescapeCodeNL(seg.code)} language={seg.lang || null} /></div>)
           : <RichText key={i} text={seg.text} inline={inline} />)}
       </>
     );
@@ -996,7 +1029,9 @@ function NotesArticle({ content }: { content: any }) {
       {code?.applicable && code?.content && (
         <Section n={++n} title={`${code.type === 'formal_math' ? 'Formalization' : code.type === 'pseudocode' ? 'Pseudocode' : 'Code'}${code.language_or_system ? ` — ${code.language_or_system}` : ''}`}>
           <CodeBlock code={code.content} language={code.language_or_system} />
-          {code.sample_output && (
+          {/* REPL transcripts already show each result inline after its >>> —
+              a separate Output panel would duplicate the block (QA issue #1). */}
+          {code.sample_output && !isReplTranscript(code.content) && (
             <div style={{ marginTop: 10 }}>
               <div style={{ fontFamily: W.fontDisplay, fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>
                 Output
@@ -1337,6 +1372,9 @@ function SlideCard({ s, index, total, present }: { s: any; index: number; total:
               <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: present ? 42 : 27, lineHeight: 1.22, letterSpacing: '-0.02em', color: '#fff', maxWidth: '90%' }}>
                 <RichText inline text={s.title} />
               </div>
+              {/* Title slides carry their hook line as body_blocks[0] — the
+                  subtitle under the verbatim subtopic name. */}
+              {bullets[0] && <div style={{ marginTop: present ? 16 : 10, fontSize: present ? 23 : 16, fontWeight: 500, color: 'rgba(255,255,255,.92)', lineHeight: 1.45, maxWidth: '85%' }}><RichText inline text={bullets[0]} /></div>}
               {s.takeaway && <div style={{ marginTop: present ? 22 : 14, fontSize: present ? 20 : 14.5, color: 'rgba(255,255,255,.85)', lineHeight: 1.55, maxWidth: '80%' }}><RichText inline text={s.takeaway} /></div>}
             </div>
           ) : (
@@ -1378,7 +1416,12 @@ function SlideCard({ s, index, total, present }: { s: any; index: number; total:
                     <SlideBullets items={bullets} small />
                   </>
                 ) : layout === 'two_column' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, flex: 1 }}>
+                  // Older decks parked the points in body_blocks instead of the
+                  // columns — fall back to a plain list rather than two labelled
+                  // empty boxes. (Not split in half: guessing which bullet is an
+                  // advantage vs a limitation would mislabel content.)
+                  ((s.left_bullets?.length || s.right_bullets?.length)
+                  ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, flex: 1 }}>
                     <div style={{ borderRadius: 10, padding: '13px 16px', background: W.greenBg, borderTop: '3px solid var(--status-green)' }}>
                       <div style={{ fontFamily: W.fontDisplay, fontWeight: 700, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: W.greenFg, marginBottom: 6 }}>{s.left_heading ?? 'Advantages'}</div>
                       <SlideBullets items={s.left_bullets ?? []} small />
@@ -1388,6 +1431,7 @@ function SlideCard({ s, index, total, present }: { s: any; index: number; total:
                       <SlideBullets items={s.right_bullets ?? []} small />
                     </div>
                   </div>
+                  : <SlideBullets items={bullets} small={!present} big={present} />)
                 ) : layout === 'headed_bullets' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {(s.sections ?? []).map((sec: any, si: number) => (
@@ -1504,7 +1548,10 @@ function SlideShow({ slides, onClose }: { slides: any[]; onClose: () => void }) 
   const reserve = showNotes && notes ? 300 : 200;
   const slideWidth = `min(900px, 82vw, calc((100vh - ${reserve}px) * 16 / 9))`;
   return createPortal(
-    <div onClick={onClose} style={{
+    // The portal lands on document.body, OUTSIDE the console's .wt-pro token
+    // scope — without re-applying the class here, every var(--brand)/var(--card)
+    // inside SlideCard resolves to the root DS palette while presenting.
+    <div className="wt-pro" onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(9,11,20,.94)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '20px 24px',
     }}>

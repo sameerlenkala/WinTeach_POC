@@ -28,6 +28,11 @@
   --st-violet: #a78bfa;
   --st-aqua: #5eead4;
   --st-red: #fb7185;
+  --st-green: #4ade80;
+  --st-amber: #fbbf24;
+  --st-blue: #60a5fa;
+  /* Solid card fill one step under glass — terminology tiles etc. */
+  --st-card: rgba(255, 255, 255, 0.04);
   --st-menu: #14161f;
   /* type */
   --st-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
@@ -69,6 +74,10 @@ html[data-st-theme="light"] .studio {
   --st-violet: #6d3df0;
   --st-aqua: #0d9488;
   --st-red: #e11d48;
+  --st-green: #15803d;
+  --st-amber: #b45309;
+  --st-blue: #1d4ed8;
+  --st-card: rgba(255, 255, 255, 0.65);
   --st-menu: #ffffff;
   color-scheme: light;
 }

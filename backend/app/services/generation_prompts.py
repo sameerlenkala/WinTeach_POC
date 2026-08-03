@@ -569,7 +569,10 @@ REGISTER expected; your content must be about THIS subtopic, never these topics:
 SHOW THE OUTPUT: whenever code runs, students must SEE the result. Fill
 code_or_formalization.sample_output with the actual output — the result table (as
 compact text), printed lines, or the error message a failing variant produces. A student
-who never sees the effect has not been taught the effect. null only when nothing runs.
+who never sees the effect has not been taught the effect. null only when nothing runs —
+OR when the code is an interactive/REPL transcript (>>> prompts, shell sessions) where
+each result already appears inline after its input: repeating it in sample_output is
+pure duplication, so set sample_output to null there.
 
 PAUSE AND THINK: after teaching the mechanism, write 1–2 self-check questions a careful
 reader should NOW be able to answer (not trivia), each with a 30–60 word answer that
@@ -673,7 +676,7 @@ Output ONLY this JSON — no explanation, no markdown:
       "applicable": true, "type": "code|pseudocode|formal_math|na_conceptual",
       "language_or_system": "e.g. Python 3.11 or null", "content": "code/pseudocode/proof or null",
       "explanation": ["key insight about the code/formula", "point 2", "point 3"],
-      "sample_output": "the actual output/result table/error the code produces, or null",
+      "sample_output": "the actual output/result table/error the code produces; null when nothing runs or the content is a REPL/interactive transcript whose results already appear inline",
       "complexity_grid": {{"best_case_time": "O(..) or N/A", "worst_case_time": "O(..) or N/A", "average_case_time": "O(..) or N/A", "space_complexity": "O(..) or N/A", "justification": "text or N/A"}}
     }},
     "execution_trace": {{
@@ -941,6 +944,9 @@ RUBRIC — score each dimension 0 (fails), 1 (acceptable), 2 (gold):
 6. output_shown — running code is accompanied by its actual output/result/error.
    Score 2 when the note legitimately has no runnable code
    (code_or_formalization.applicable = false) — do not punish conceptual notes.
+   Also score 2 when the code is a REPL/interactive transcript whose results
+   already appear inline after each input — a separate sample_output there would
+   be duplication, not teaching.
 7. callouts_used — 1–3 genuine Tip/Warning/Key idea/Exam tip callouts where needed.
 8. takeaway_compression — takeaways are compressed insights, not restatements.
 9. no_redundancy — 0 when a section copies another's sentences near-verbatim, or a worked
@@ -1027,10 +1033,13 @@ slides whose condition is marginal. Never skip: title, outcomes, definition, one
 worked example, one misconception, quiz, assignment.
 
 PHASE 1 — INTRODUCTION
- 1.1 Title [statement]: title = the subtopic name itself; kicker = course name;
-     takeaway = the ACTUAL program/semester from the course context plus Bloom level
-     and proficiency target (e.g. "B.Tech CSE · Sem 4 · L2 · Describe") — never the
-     literal word "Program". No CO/TLO ids.
+ 1.1 Title [statement]: title = the subtopic name VERBATIM — never a rephrasing,
+     never a punchy claim (the hook lives in the subtitle, not the title);
+     body_blocks = exactly ONE hook line — a stake, ≤14 words (e.g. "One wrong
+     WHERE clause can delete every order you have"), rendered as the subtitle;
+     kicker = course name; takeaway = the ACTUAL program/semester from the course
+     context plus Bloom level and proficiency target (e.g. "B.Tech CSE · Sem 4 ·
+     L2 · Describe") — never the literal word "Program". No CO/TLO ids.
  1.2 Learning Outcomes & Prerequisites [headed_bullets]: two sections —
      "Learning Outcomes" (3–5, action verbs) and "Prerequisites" (2–4, or
      "No specific prerequisites required"). Always both sections.
@@ -1059,7 +1068,9 @@ PHASE 4 — WORKED EXAMPLES (may be your own; grade the difficulty)
      setup → steps → key insight); otherwise [bullets].
  4.4 Case Study [bullets]: optional — only with substantive real-world content.
 PHASE 5 — ANALYSIS
- 5.1 Advantages vs Limitations [two_column]: 4–5 points per column.
+ 5.1 Advantages vs Limitations [two_column]: 4–5 points per column — the points go
+     in left_bullets/right_bullets (NEVER body_blocks; the two_column renderer
+     shows only the columns, so bullets left in body_blocks display as empty boxes).
  5.2 Complexity [visual table]: headers ["Metric","Value","Notes"] — ONLY if 3+
      measurable values; otherwise append "Time/Space complexity: …" bullets to 5.4.
  5.3 Comparison [visual table]: ["Aspect", concept, "Alternative"], 5–7 rows.
@@ -1094,7 +1105,8 @@ SLIDE RULES
 - Face limit: ≤7 bullets, ≤16 words each, complete sentences. NEVER paragraphs on the
   face. **Bold** the key term per bullet; $...$ LaTeX for math; `code` for identifiers.
 - layout selects the renderer:
-  "statement"      — one big line (the title), optional kicker + takeaway.
+  "statement"      — one big line (the title), optional one-line subtitle in
+                     body_blocks[0], optional kicker + takeaway.
   "bullets"        — title + body_blocks.
   "headed_bullets" — title + sections:[{{"heading","bullets":[…]}}].
   "definition"     — title + definition_core (highlighted) + body_blocks elaboration.
@@ -1127,8 +1139,9 @@ code_or_formalization.sample_output — never invent output that contradicts it.
 Phase 7's quiz must NOT reuse the notes' practice_questions — write fresh items.
 
 GOLD-STANDARD FRAGMENTS — match this register (content must be about THIS concept):
-- Hook title: "One wrong WHERE clause can delete every order you have" — a stake,
-  ≤14 words. NOT "Introduction to DML Operations".
+- Hook line (the title slide's subtitle — slide 1's title itself stays the verbatim
+  subtopic name): "One wrong WHERE clause can delete every order you have" — a
+  stake, ≤14 words. NOT "In this deck we introduce DML Operations".
 - Myth/Reality: myth = "DELETE removes the table itself", reality = "DELETE removes
   rows; the table and its schema survive — DROP removes the table" — both one line,
   precise, exam-relevant.

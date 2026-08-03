@@ -6,6 +6,7 @@ Self-Learning module (P1+P2) extends this with: Learn Home (resume + due-cards),
 quiz attempt history, flashcard SRS, computed mastery, revision hub, analytics."""
 
 import hashlib
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -19,6 +20,11 @@ router = APIRouter(prefix="/student", tags=["Student"])
 
 # SM-2-lite: bucket 0..4 → days until the card is due again.
 SRS_INTERVALS_DAYS = [0, 1, 3, 7, 21]
+
+# Revision Hub deals at most this many cards per TOPIC — the raw union of
+# flashcards + glossary + definitions + recall prompts easily exceeds 20 per
+# subtopic, which buries the must-know items under hundreds of cards.
+MAX_TOPIC_REVISION_CARDS = 20
 
 
 def _now() -> datetime:
@@ -527,12 +533,16 @@ def _due_by_course(db: Client, uid: str, courses: list[dict],
         total_due = 0
         for u in c.get("units") or []:
             for t in u.get("topics") or []:
+                topic_due = 0
                 for cid, cnt in (counts.get(t["id"]) or {}).items():
                     if not cnt:
                         continue
                     scope = f"{t['id']}:{cid}:"
                     unseen = max(cnt - seen.get(scope, 0), 0)
-                    total_due += unseen + due_reviewed.get(scope, 0)
+                    topic_due += unseen + due_reviewed.get(scope, 0)
+                # The hub deals at most MAX_TOPIC_REVISION_CARDS per topic —
+                # clamp the chip so it never promises more than can be dealt.
+                total_due += min(topic_due, MAX_TOPIC_REVISION_CARDS)
         out[c["id"]] = total_due
     return out
 
@@ -808,6 +818,13 @@ def _concept_prefix(topic_id: str, concept_id: str) -> str:
     return f"{topic_id}:{concept_id}:"
 
 
+def _concept_order(concept_id: str) -> tuple[int, str]:
+    """Natural sort for plan concept ids (C1, C2, … C10) so the revision
+    round-robin walks the topic in teaching order, not string order."""
+    m = re.search(r"\d+", concept_id or "")
+    return (int(m.group()) if m else 10**6, concept_id or "")
+
+
 @router.get("/revision/{course_id}")
 def revision_hub(course_id: str, user: dict = Depends(get_current_user),
                  db: Client = Depends(get_db)):
@@ -845,27 +862,11 @@ def revision_hub(course_id: str, user: dict = Depends(get_current_user),
     # Notes generated before the prior-terms exclusion repeat glossary terms
     # across subtopics; dedupe fronts course-wide so the deck deals each once.
     seen_fronts: set[str] = set()
+    notes_by_topic: dict[str, list[dict]] = {}
     for row in notes:
-        cid, tid = row["concept_id"], row["topic_id"]
-        content = row.get("content") or {}
-        closing = (content.get("closing") or {}).get("sections") or {}
-        # Flashcards: prefer generated cards; fall back to glossary + definitions
-        # + recall prompts (mirrors the reader's buildFlashcards) so notes
-        # predating the flashcard_section still populate the deck.
-        cards = _flashcards_from_closing(closing)
-        for card in cards:
-            f = card["front"].strip().casefold()
-            if f in seen_fronts:
-                continue
-            seen_fronts.add(f)
-            key = _card_key(tid, cid, card["front"])
-            st = srs.get(key)
-            if st is None or (st.get("due_at") or now_iso) <= now_iso:
-                due_cards.append({"card_key": key, "front": card["front"],
-                                  "back": card.get("back", ""),
-                                  "concept_id": cid, "topic_id": tid,
-                                  "topic_title": topic_title.get(tid, ""),
-                                  "bucket": (st or {}).get("bucket", 0)})
+        notes_by_topic.setdefault(row["topic_id"], []).append(row)
+        tid = row["topic_id"]
+        closing = ((row.get("content") or {}).get("closing") or {}).get("sections") or {}
         # Formula sheet.
         for f in (closing.get("revision_section") or {}).get("important_formulas") or []:
             formulas.append({"topic_title": topic_title.get(tid, ""),
@@ -879,6 +880,47 @@ def revision_hub(course_id: str, user: dict = Depends(get_current_user),
                                       "question": q["question"],
                                       "answer": q.get("answer_explanation", ""),
                                       "bloom_level": q.get("bloom_level")})
+
+    # Flashcards, capped at MAX_TOPIC_REVISION_CARDS per topic. Each note's
+    # cards come priority-ordered from _flashcards_from_closing (generated
+    # flashcards, then glossary, definitions, recall prompts), so a round-robin
+    # across the topic's concepts keeps every concept's MOST important cards
+    # instead of exhausting one concept's glossary before the next one starts.
+    for tid in tids:
+        per_concept = []
+        for row in sorted(notes_by_topic.get(tid) or [],
+                          key=lambda r: _concept_order(r["concept_id"])):
+            closing = ((row.get("content") or {}).get("closing") or {}).get("sections") or {}
+            per_concept.append((row["concept_id"], _flashcards_from_closing(closing)))
+        ptrs = [0] * len(per_concept)
+        dealt = 0
+        while dealt < MAX_TOPIC_REVISION_CARDS:
+            progressed = False
+            for j, (cid, cards) in enumerate(per_concept):
+                card = None
+                while ptrs[j] < len(cards):
+                    cand = cards[ptrs[j]]
+                    ptrs[j] += 1
+                    if cand["front"].strip().casefold() not in seen_fronts:
+                        card = cand
+                        break
+                if card is None:
+                    continue
+                progressed = True
+                seen_fronts.add(card["front"].strip().casefold())
+                dealt += 1
+                key = _card_key(tid, cid, card["front"])
+                st = srs.get(key)
+                if st is None or (st.get("due_at") or now_iso) <= now_iso:
+                    due_cards.append({"card_key": key, "front": card["front"],
+                                      "back": card.get("back", ""),
+                                      "concept_id": cid, "topic_id": tid,
+                                      "topic_title": topic_title.get(tid, ""),
+                                      "bucket": (st or {}).get("bucket", 0)})
+                if dealt >= MAX_TOPIC_REVISION_CARDS:
+                    break
+            if not progressed:
+                break
 
     approved = _approved_map(db, tids)
     prog = _progress_rows(db, uid, course_id=course_id)

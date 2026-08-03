@@ -47,6 +47,8 @@ export interface ConceptArtifactState {
   model_used?: string | null;
   /** Blocking-gate verdict from content.validation.all_pass; false blocks Approve. Null on pre-validation artifacts. */
   gate_passed?: boolean | null;
+  /** Per-check gate outcomes from content.validation.failures — lets the tile say WHICH gate failed. */
+  gate_failures?: { name?: string; detail?: string; blocking?: boolean }[] | null;
   /** Grounding provenance: which materials/chunks fed this artifact's prompt. */
   grounded_in?: { material_id: string; content_hash?: string | null; chunk_ids?: string[] }[] | null;
 }

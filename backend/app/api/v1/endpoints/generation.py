@@ -213,6 +213,7 @@ def _job_detail(db: Client, job: dict) -> dict:
         .select("topic_id,concept_id,artifact_type,status,approval_status,updated_at,"
                 "cost_usd,token_count,error,model_used,"
                 "gate_passed:content->validation->all_pass,"
+                "gate_failures:content->validation->failures,"
                 "grounded_in:content->grounded_in")
         .eq("topic_id", topic_id).execute().data or []
     )

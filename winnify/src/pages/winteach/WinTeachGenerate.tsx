@@ -227,11 +227,15 @@ function ConceptTile({ jobId, conceptId, type, state, locked, onChanged, onView 
         </div>
         <b style={{ fontFamily: W.fontDisplay, fontWeight: 600, fontSize: 13, color: W.text }}>{CONCEPT_LABEL[type]}</b>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center' }}>
-          {gateFailed && status === 'ready' && (
-            <span title="Blocking quality gates failed — content is viewable for review but cannot be approved. Regenerate or revise.">
-              <Badge variant="red">Gate failed</Badge>
-            </span>
-          )}
+          {gateFailed && status === 'ready' && (() => {
+            const names = (state?.gate_failures ?? [])
+              .filter(f => f.blocking && f.name).map(f => f.name).join(', ');
+            return (
+              <span title={`Blocking quality gates failed${names ? ` (${names})` : ''} — content is viewable for review but cannot be approved. Regenerate or revise.`}>
+                <Badge variant="red">{names ? `Gate failed: ${names}` : 'Gate failed'}</Badge>
+              </span>
+            );
+          })()}
           {statusBadge(status, approved)}
         </div>
       </div>
