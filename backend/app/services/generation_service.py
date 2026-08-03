@@ -1034,12 +1034,18 @@ def gen_notes_unit(client: Any, ctx: dict, plan: dict, unit: dict, *,
 
 def _condense_core(core: dict) -> dict:
     """A bounded summary of the Core output for the Closing prompt (consistency,
-    not the limit of what the model knows)."""
+    not the limit of what the model knows). mistakes_covered exists so the
+    closing's Wrong-Way/Right-Way section can AVOID re-teaching mistakes the
+    core already covered — without it the closing model is blind to them and
+    re-derives the same ones (the critic's recurring no_redundancy flag)."""
     fd = _flatten_text(_get_path(core, ("core_concept", "formal_definition")))
+    mistakes = _get_path(core, ("practical_understanding", "common_mistakes")) or []
     return {
         "formal_definition": fd[:400],
         "new_terms_introduced": core.get("new_terms_introduced", []),
         "advantages": _get_path(core, ("practical_understanding", "advantages")) or [],
+        "mistakes_covered": [str(m.get("mistake"))[:160] for m in mistakes
+                             if isinstance(m, dict) and m.get("mistake")][:6],
     }
 
 

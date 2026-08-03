@@ -17,7 +17,7 @@ from app.schemas import content_types as ct
 # stamped on generated artifacts (excluded from content hashing) and attached
 # to validator telemetry so pass-rate regressions attribute to the prompt edit
 # that caused them.
-PROMPT_VERSION = "1.4.0"
+PROMPT_VERSION = "1.4.1"
 
 
 # ── §7.0 Global system preamble (prepend to every artifact prompt) ────────────
@@ -757,12 +757,17 @@ Industry skills this lesson connects to: {industry_skills}
 Summary of what was taught (for consistency):
 {condensed_core}
 
-COMMON MISTAKES: 3–5 Wrong-Way / Right-Way pairs, each DISTINCT. Show the wrong approach
-concretely, why it fails, the right way, and why it works.
+COMMON MISTAKES: 3–5 Wrong-Way / Right-Way pairs, each DISTINCT — and NONE repeating the
+mistakes the lesson body already taught (listed as mistakes_covered in the summary
+below). Closing mistakes are NEW failure modes: integration-level errors, exam traps,
+cross-concept confusions. Show the wrong approach concretely, why it fails, the right
+way, and why it works.
 
-REVISION SECTION: key_takeaways (3–5 distinct one-liners); important_formulas (or []);
-important_definitions (2–4, crisp one-liners); active_recall_prompts (2–4, each with a real
-60–100 word answer_explanation that teaches).
+REVISION SECTION: key_takeaways (3–5 compressed INSIGHTS — a consequence, contrast, or
+"so-what" the student should carry out of the lesson; never a definition, those live in
+important_definitions and the glossary); important_formulas (or []); important_definitions
+(2–4, crisp one-liners); active_recall_prompts (2–4, each with a real 60–100 word
+answer_explanation that teaches).
 
 GLOSSARY: one entry per new term this lesson introduced — formal_definition,
 simple_explanation, used_in ["{subtopic_id}"], related_terms. If none, output empty terms.
@@ -782,6 +787,19 @@ question) and "back" (a precise 1–2 sentence answer). Mix: 2–3 definition ca
 X?"), 2–3 concept cards ("What does X ensure / how does X work?"), 1–2 application/trap
 cards ("When would you use X?" / "What happens if …?"). No trivial cards, no yes/no cards;
 every card independently useful for exam revision; do NOT repeat active_recall_prompts.
+
+NO-REPETITION RULE (a reviewer scores no_redundancy on this): the closing sections serve
+DIFFERENT jobs — the same fact must never appear twice in different clothes. A flashcard
+back that paraphrases a key_takeaway (or vice versa) is a duplicate: rewrite one of them
+to cover a different fact or a different angle on it. Takeaways compress what the facts
+MEAN; cards test what the facts ARE; recall prompts make the student reconstruct HOW they
+work. The three definition surfaces each phrase a term for THEIR job — glossary
+formal_definition (formal), important_definitions (exam-recall one-liner, only the 2–4
+highest-stakes terms, in fresh wording), definition-card backs (the distinguishing
+feature that separates the term from its neighbours) — copying one sentence across
+surfaces is a duplicate. Before emitting, scan key_takeaways + flashcard backs +
+answer_explanations together and eliminate near-identical sentences — the summary above
+is what you are consolidating, not sentences to re-emit.
 
 MATH NOTATION: wrap all mathematical notation (formulas, Big-O, expressions) in LaTeX
 delimiters — $...$ inline, $$...$$ display — including every important_formulas entry.
@@ -925,7 +943,12 @@ RUBRIC — score each dimension 0 (fails), 1 (acceptable), 2 (gold):
    (code_or_formalization.applicable = false) — do not punish conceptual notes.
 7. callouts_used — 1–3 genuine Tip/Warning/Key idea/Exam tip callouts where needed.
 8. takeaway_compression — takeaways are compressed insights, not restatements.
-9. no_redundancy — no section restates another in different words.
+9. no_redundancy — 0 when a section copies another's sentences near-verbatim, or a worked
+   example re-walks the same mechanism an earlier example already walked with different
+   nouns; 1 when sections revisit the same facts but each adds a new angle; 2 when every
+   section does a distinct job. The format intentionally re-tests taught content in the
+   glossary / flashcards / practice questions — role-appropriate re-coverage in fresh
+   wording is NOT redundancy; punish copies, not consolidation.
 10. scope_discipline — nothing from scope_out is explained; all scope_in items covered.
 
 For every dimension scored 0 or 1, name the EXACT section path and what to change.
