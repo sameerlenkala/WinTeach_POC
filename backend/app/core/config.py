@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     # Empty string disables escalation. Must differ from generation_model to
     # have any effect — same-model reruns are not retried.
     generation_escalation_model: str = "gpt-5.6-terra"
+    # The Topic Plan is the root artifact: its concept inventory, TLO set and
+    # session allocation are consumed verbatim by every downstream artifact,
+    # and the deterministic plan gates check structure, not planning quality.
+    # One ~12K-token call per topic (< $0.10 on terra) steers the whole
+    # topic's output — the pipeline's best cost-per-leverage, so it stays on
+    # the premium tier while volume lanes run luna. Empty = follow
+    # generation_model.
+    generation_plan_model: str = "gpt-5.6-terra"
 
     # App
     frontend_url: str = "http://localhost:5173"

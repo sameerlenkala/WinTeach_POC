@@ -265,9 +265,12 @@ ARTIFACT_TOKEN_ESTIMATE: dict[str, tuple[int, int]] = {
 }
 
 
-def estimate_artifact_cost(artifact_type: str) -> float:
+def estimate_artifact_cost(artifact_type: str, model: str | None = None) -> float:
+    """Upfront estimate at the given model's rates; default follows the
+    configured generation model (the topic plan runs its own lane — callers
+    pass it explicitly)."""
     ins, outs = ARTIFACT_TOKEN_ESTIMATE.get(artifact_type, (3000, 2000))
-    return usd_cost(ins, outs)
+    return usd_cost(ins, outs, model)
 
 
 # ── Bloom band + verb bank (§10.3 Verb check, §7.0 invariant 3) ───────────────
