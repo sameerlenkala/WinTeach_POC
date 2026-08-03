@@ -1195,9 +1195,10 @@ approved notes for this concept (primary source):
 {notes}
 
 You are generating the deck in parts. Generate ONLY phases {phase_lo}–{phase_hi} now.
-Deck budget: {slide_lo}–{slide_hi} slides TOTAL across all phases — keep this chunk's
-share proportional so the assembled deck lands inside the budget.
-{thread_block}{prior_block}
+Slide quota for THIS chunk: {chunk_lo}–{chunk_hi} slides. This is a hard range —
+do not exceed it. ({n_so_far} slides already exist from earlier chunks; the
+assembled deck must land in {slide_lo}–{slide_hi} slides total.)
+{tail_block}{thread_block}{prior_block}
 Return ONLY JSON:
 {{"running_example": "one-sentence description of the deck's running example scenario",
 "slides": [{{
@@ -1227,6 +1228,7 @@ unused fields null/[] per slide."""
 
 def build_concept_slides_chunk_prompt(unit: dict, ctx: dict, notes: dict, *,
                                       phase_lo: int, phase_hi: int,
+                                      chunk_lo: int, chunk_hi: int, n_so_far: int,
                                       running_example: str | None,
                                       prior_titles: list[str]) -> tuple[str, str]:
     ct_ = unit.get("primary_content_type", "P1")
@@ -1237,10 +1239,27 @@ def build_concept_slides_chunk_prompt(unit: dict, ctx: dict, notes: dict, *,
                     "Establish the running example thread in this chunk and describe it in running_example.\n")
     prior_block = (f"Slides already generated (titles, for continuity — do not repeat them):\n{_j(prior_titles)}\n"
                    if prior_titles else "")
+    # The opening and closing chunks each carry gate-required roles — spelled
+    # out per chunk because a tight quota otherwise makes the model drop them
+    # (lean decks lost `terminology` up front and `summary|recall` at the tail,
+    # on luna AND terra alike).
+    if phase_lo == 1:
+        tail_block = ("Within the quota this chunk MUST include: the title slide "
+                      "(statement layout, FIRST), one definition slide, and one "
+                      "terminology slide. If the quota is tight, drop motivation/"
+                      "analogy slides — never definition or terminology.\n")
+    elif phase_hi >= 8:
+        tail_block = ("This is the CLOSING chunk. Within the quota it MUST include, in order: "
+                      "at least one practice slide; the quiz slide (question bullet plus four "
+                      'separate "A)".."D)" option bullets, one option per bullet); its answers '
+                      "slide; one summary OR recall slide; and the assignment slide LAST.\n")
+    else:
+        tail_block = ""
     user = _CONCEPT_SLIDES_CHUNK_USER.format(
         concept_name=unit.get("concept_name", ""), content_type=ct_, notes=_j(notes),
         phase_lo=phase_lo, phase_hi=phase_hi, slide_lo=lo, slide_hi=hi,
-        thread_block=thread_block, prior_block=prior_block)
+        chunk_lo=chunk_lo, chunk_hi=chunk_hi, n_so_far=n_so_far,
+        tail_block=tail_block, thread_block=thread_block, prior_block=prior_block)
     return system, user
 
 

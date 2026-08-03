@@ -1322,6 +1322,38 @@ def _slides_digest(notes: dict) -> dict:
     return d
 
 
+# Slide floor for the closing chunk: practice + quiz + answers + summary|recall
+# + assignment. The remainder-based quota may not squeeze below this or the
+# role-coverage gate becomes unsatisfiable.
+_SLIDES_TAIL_MIN = 5
+
+
+def _normalize_slide_mcq(slides: list[dict]) -> int:
+    """Split MCQ options inlined into one bullet ("A) x B) y C) z D) w") into
+    the separate A)–D) bullets the deck gate requires — a formatting slip both
+    models make that isn't worth failing (and escalating) a whole deck over.
+    Returns the number of slides repaired."""
+    fixed = 0
+    for s in slides:
+        if s.get("role") != "quiz":
+            continue
+        out: list = []
+        changed = False
+        for b in s.get("body_blocks") or []:
+            text = str(b)
+            if len(re.findall(r"[A-D]\)", text)) >= 2:
+                parts = [x.strip() for x in re.split(r"\s+(?=[A-D]\))", text) if x.strip()]
+                if len(parts) >= 2:
+                    out.extend(parts)
+                    changed = True
+                    continue
+            out.append(b)
+        if changed:
+            s["body_blocks"] = out
+            fixed += 1
+    return fixed
+
+
 def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
                        heartbeat=None) -> dict:
     """Generate one concept's deck in phase chunks (1–3, 4–6, 7–8): long single
@@ -1334,11 +1366,25 @@ def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
     slides: list[dict] = []
     running_example: str | None = None
     prior_titles: list[str] = []
-    for lo, hi in p.SLIDE_PHASE_CHUNKS:
+    lo, hi, _ = p.slide_budget(unit)
+    n_phases = p.SLIDE_PHASE_CHUNKS[-1][1]
+    for idx, (phase_lo, phase_hi) in enumerate(p.SLIDE_PHASE_CHUNKS):
         if heartbeat:
             heartbeat()
+        # Per-chunk quota computed here, not inferred by the model: telling each
+        # chunk only the deck total made every chunk over-produce "its share"
+        # (44% of luna decks overshot the count gate, never undershot). The
+        # closing chunk gets the exact remainder, floored so its required roles
+        # (practice, quiz + answers, summary|recall, assignment) always fit.
+        if idx == len(p.SLIDE_PHASE_CHUNKS) - 1:
+            c_lo = max(_SLIDES_TAIL_MIN, lo - len(slides))
+            c_hi = max(c_lo, hi - len(slides))
+        else:
+            target = round((lo + hi) / 2 * (phase_hi - phase_lo + 1) / n_phases)
+            c_lo, c_hi = max(2, target - 1), target + 1
         data = _chat_json(client, *p.build_concept_slides_chunk_prompt(
-            unit, ctx, notes, phase_lo=lo, phase_hi=hi,
+            unit, ctx, notes, phase_lo=phase_lo, phase_hi=phase_hi,
+            chunk_lo=c_lo, chunk_hi=c_hi, n_so_far=len(slides),
             running_example=running_example, prior_titles=prior_titles),
             temperature=0.5)
         chunk = [s for s in (data.get("slides") or []) if isinstance(s, dict)]
@@ -1347,6 +1393,10 @@ def gen_concept_slides(client: Any, unit: dict, ctx: dict, notes: dict,
         prior_titles += [str(s.get("title") or "") for s in chunk]
     for i, s in enumerate(slides):
         s["slide_no"] = i + 1
+    n_mcq = _normalize_slide_mcq(slides)
+    if n_mcq:
+        logger.info("mcq normalizer split inline options on %d quiz slide(s) for %s",
+                    n_mcq, unit.get("concept_id", ""))
     # Quote diagram labels before validate_slides_deck lints them.
     slides, n_fixed = normalize_mermaid_content(slides)
     if n_fixed:
@@ -2689,6 +2739,9 @@ def generate_concept_artifact(db, job_id, topic_id, concept_id, artifact_type) -
                 log_check_outcomes(job_id, f"slides:{concept_id}", dv, db=db)
                 beat()
                 content["critique"] = critique_and_polish_deck(client, content, unit, ctx)
+                # Critic patches can reintroduce inline MCQ options — re-repair
+                # so the stored deck always matches what the gate checked.
+                _normalize_slide_mcq(content.get("slides") or [])
                 content["validation"] = {"all_pass": dv.all_pass,
                                          "failures": [c.model_dump() for c in dv.failures]}
                 return content
