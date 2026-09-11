@@ -23,6 +23,7 @@ const SignIn = lazy(() => import('./pages/SignIn'));
 const SignUp = lazy(() => import('./pages/SignUp'));
 const SignUpInvite = lazy(() => import('./pages/SignUpInvite'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 // Student Studio
 const StudioLogin = lazy(() => import('./pages/studio/StudioLogin'));
@@ -196,6 +197,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
+          {/* Forgot-password landing (emailed link carries ?token=) — public, no chrome */}
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Legacy academic demo login — orphaned surface, folded into /signin */}
           <Route path="/academic/login" element={<Navigate to="/signin" replace />} />

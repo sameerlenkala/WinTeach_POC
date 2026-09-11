@@ -2,16 +2,17 @@
 // auth (JWT in winnify_token) via useAuth, but with the studio's own visual
 // language. Students land in /study (or ?next=<interrupted page>); other
 // roles are routed to their console. Includes an inline forgot-password flow
-// (code-verified, matching the main sign-in).
+// (emails a single-use reset link that lands on /reset-password?app=study).
 // Google OAuth is intentionally absent: it creates a Supabase session only,
 // not the backend JWT the student APIs authenticate with.
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, MailCheck, Sparkles } from 'lucide-react';
+import { authApi } from '@/api/auth';
 import { useAuth, ROLE_REDIRECT } from '@/contexts/AuthContext';
 import StudioFrame from './StudioFrame';
 
-type View = 'login' | 'forgot-email';
+type View = 'login' | 'forgot-email' | 'forgot-sent';
 
 export function StField({ id, label, type = 'text', value, onChange, autoComplete, autoFocus, right, inputMode }: {
   id: string; label: string; type?: string; value: string; onChange: (v: string) => void;
@@ -74,7 +75,24 @@ export default function StudioLogin() {
     }
   };
 
-  const backToLogin = () => { setView('login'); setError(''); };
+  const backToLogin = () => { setView('login'); setError(''); setForgotBusy(false); };
+
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const submitForgot = async (e: FormEvent) => {
+    e.preventDefault();
+    const target = forgotEmail.trim();
+    if (!target) return;
+    setError(''); setForgotBusy(true);
+    try {
+      await authApi.requestPasswordReset(target, 'study');
+      setView('forgot-sent');
+    } catch {
+      setError("Couldn't send the reset email right now. Please try again in a moment.");
+    } finally {
+      setForgotBusy(false);
+    }
+  };
 
   return (
     <StudioFrame>
@@ -137,7 +155,7 @@ export default function StudioLogin() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '-4px 4px 0' }}>
                 <button
                   type="button"
-                  onClick={() => { setView('forgot-email'); setError(''); }}
+                  onClick={() => { setView('forgot-email'); setForgotEmail(email); setError(''); }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: '600 13px var(--st-sans)', color: 'var(--st-text-2)' }}
                 >
                   Forgot password?
@@ -169,31 +187,46 @@ export default function StudioLogin() {
           </>
         )}
 
-        {/* ── FORGOT ──
-            Self-serve reset needs Supabase email recovery plus a route that
-            consumes the recovery session; neither exists yet, and the backend's
-            /auth/reset-password is demo-gated (404s in any real deployment).
-            Rather than walk a student through screens that end in a failure,
-            point them at the person who can actually reset it. */}
+        {/* ── FORGOT ── email → "check your inbox". The emailed link opens
+            /reset-password?app=study, which returns the student here. */}
         {view === 'forgot-email' && (
           <ForgotShell
             title="Reset your password"
-            sub="Password resets are handled by your institution."
+            sub="Enter the email you sign in with and we'll send you a link to set a new one."
             onBack={backToLogin}
             error={error}
           >
-            <div className="st-card" style={{ padding: '18px 18px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-                <KeyRound size={16} color="var(--st-aqua)" />
-                <span className="st-eyebrow">What to do</span>
-              </div>
-              <p style={{ font: '500 14px/1.65 var(--st-sans)', color: 'var(--st-text-2)', margin: 0 }}>
-                Message your training &amp; placement office or course faculty with the email you
-                sign in with. They can issue you a new password right away.
+            <form onSubmit={submitForgot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <StField id="st-forgot-email" label="Email" type="email" inputMode="email" value={forgotEmail}
+                onChange={setForgotEmail} autoComplete="email" autoFocus />
+              <button type="submit" className="st-cta" disabled={forgotBusy || !forgotEmail} style={{ marginTop: 2 }}>
+                {forgotBusy ? <Loader2 size={20} className="st-spin" /> : (
+                  <>Send reset link <ArrowRight size={19} strokeWidth={2.5} /></>
+                )}
+              </button>
+            </form>
+          </ForgotShell>
+        )}
+
+        {view === 'forgot-sent' && (
+          <ForgotShell
+            title="Check your email"
+            sub={`If ${forgotEmail.trim()} has a Winnify account, a reset link is on its way. It expires in 60 minutes — check spam if it doesn't show up.`}
+            onBack={backToLogin}
+            error=""
+          >
+            <div className="st-card" style={{ padding: '18px 18px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <MailCheck size={22} color="var(--st-aqua)" />
+              <p style={{ font: '500 14px/1.55 var(--st-sans)', color: 'var(--st-text-2)', margin: 0 }}>
+                Open the link on this phone and you'll come straight back to the studio sign-in.
               </p>
             </div>
             <button className="st-cta" onClick={backToLogin} style={{ marginTop: 16 }}>
               Back to sign in
+            </button>
+            <button type="button" onClick={() => { setView('forgot-email'); setError(''); }}
+              style={{ display: 'block', margin: '14px auto 0', background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: '600 13px var(--st-sans)', color: 'var(--st-text-2)' }}>
+              Use a different email
             </button>
           </ForgotShell>
         )}

@@ -30,6 +30,8 @@ Deploy the **backend first** — you need its public URL to configure the fronte
    | `OPENAI_API_KEY` | `sk-...` (key with gpt-5.6-terra/luna + gpt-5.4-nano access) |
    | `FRONTEND_URL` | Vercel URL from step 2 below (add after that deploy exists) |
    | `DEMO_LOGIN_ENABLED` | `false` ← **required for any real deployment** |
+   | `RESEND_API_KEY` | Resend → API Keys. Powers the forgot-password email. Without it reset requests are accepted but no email goes out. |
+   | `RESEND_FROM_EMAIL` | Verified sender, e.g. `Winnify <no-reply@winnify.ai>` (verify the domain under Resend → Domains first) |
 
    Do **not** set `GENERATION_MODEL` — the code default (gpt-5.6-luna on every lane) already matches the key's access. Set `GENERATION_MODEL=gpt-5.6-terra` only if heavy-lane quality needs a lift. (`OCR_MODEL` no longer exists; luna is multimodal.)
 5. Deploy. Confirm `https://<service>.up.railway.app/health` returns `{"status":"ok"}`.
@@ -58,6 +60,7 @@ No change needed. `backend/app/main.py` already allows any `https://*.vercel.app
 ## Pre-launch checklist
 
 - [ ] `DEMO_LOGIN_ENABLED=false` on Railway (hardcoded superadmin persona otherwise)
+- [ ] `backend/sql/15_password_resets.sql` applied to the Supabase project, and `RESEND_API_KEY` + a verified `RESEND_FROM_EMAIL` set (forgot-password emails)
 - [ ] `FRONTEND_URL` on Railway points at the live Vercel URL
 - [ ] `VITE_BACKEND_URL` on Vercel points at the live Railway URL
 - [ ] `/health` returns ok; frontend loads and can log in against the backend

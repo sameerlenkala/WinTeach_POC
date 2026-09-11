@@ -22,6 +22,12 @@ export const authApi = {
 
   listInvites: () => api.get<InviteResponse[]>('/auth/invites'),
 
-  resetPassword: (email: string, new_password: string) =>
-    api.post<{ success: boolean }>('/auth/reset-password', { email, new_password }),
+  // Forgot password — step 1 emails a single-use link (via Resend); the
+  // response is identical whether or not the email is registered.
+  requestPasswordReset: (email: string, app: 'web' | 'study' = 'web') =>
+    api.post<{ message: string }>('/auth/password-reset/request', { email, app }),
+
+  // Step 2 — the /reset-password page consumes the link's token.
+  confirmPasswordReset: (token: string, new_password: string) =>
+    api.post<{ success: boolean; email?: string }>('/auth/password-reset/confirm', { token, new_password }),
 };

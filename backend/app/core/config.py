@@ -84,5 +84,20 @@ class Settings(BaseSettings):
     # local/demo environments via DEMO_LOGIN_ENABLED=true.
     demo_login_enabled: bool = False
 
+    # Transactional email via Resend (https://resend.com). Used by the
+    # forgot-password flow. When RESEND_API_KEY is empty no email is sent: in
+    # demo mode the reset link is logged instead so local dev still works; in a
+    # real deployment the request is accepted but silently dropped (logged as
+    # an error) so the endpoint never reveals whether an account exists.
+    resend_api_key: str = ""
+    # Must be a verified sender on the Resend account (domain or single address).
+    resend_from_email: str = "Winnify <no-reply@winnify.ai>"
+    resend_reply_to: str = ""
+    # Reset tokens are single-use and expire after this many minutes.
+    password_reset_expiry_minutes: int = 60
+    # Per-email cap on reset requests inside a rolling hour (anti-abuse; the
+    # response is identical whether or not the cap was hit).
+    password_reset_max_per_hour: int = 5
+
 
 settings = Settings()  # type: ignore[call-arg]

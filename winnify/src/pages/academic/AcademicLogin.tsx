@@ -172,7 +172,7 @@ export default function AcademicLogin() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-small)', color: 'var(--text)' }}>Password</label>
-                <button type="button" style={{ fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', padding: 0 }}>
+                <button type="button" onClick={() => navigate('/signin?forgot=1')} style={{ fontSize: 'var(--fs-small)', color: 'var(--tint-brand-fg)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', padding: 0 }}>
                   Forgot password?
                 </button>
               </div>

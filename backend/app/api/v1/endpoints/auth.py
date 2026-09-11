@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from supabase import Client
 
@@ -15,8 +15,9 @@ from app.schemas.auth import (
     InviteRequest, InviteResponse,
     CreateUserRequest,
     MeResponse, UpdateMeRequest, ChangePasswordRequest,
+    PasswordResetRequest, PasswordResetConfirm,
 )
-from app.services import auth_service
+from app.services import auth_service, password_reset_service
 
 logger = logging.getLogger(__name__)
 
@@ -155,43 +156,22 @@ def create_user(
     return auth_service.create_user_directly(db, user, payload)
 
 
-class ResetPasswordRequest(BaseModel):
-    email: str
-    new_password: str
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+def password_reset_request(payload: PasswordResetRequest, background: BackgroundTasks,
+                           request: Request, db: Client = Depends(get_db)):
+    """Forgot-password step 1. Always answers 202 with the same message — the
+    account lookup, token mint and Resend send happen after the response so
+    neither the body nor the latency reveals whether the email is registered."""
+    app_hint = "study" if (payload.app or "").lower() == "study" else None
+    client_ip = request.client.host if request.client else None
+    background.add_task(password_reset_service.issue_reset, db, payload.email,
+                        app_hint, client_ip)
+    return {"message": password_reset_service.REQUEST_MESSAGE.format(
+        minutes=settings.password_reset_expiry_minutes)}
 
 
-@router.post("/reset-password")
-def reset_password(payload: ResetPasswordRequest, db: Client = Depends(get_db)):
-    """DEMO-ONLY convenience: sets a new password from just an email, with no
-    identity proof — an account-takeover primitive if ever exposed for real
-    users. Gated with the demo flag; signed-in users have /auth/change-password,
-    and a real forgot-password flow needs Supabase email recovery."""
-    if not settings.demo_login_enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    email = payload.email.lower().strip()
-
-    # Update demo account in-memory password
-    demo = _DEMO_ACCOUNTS.get(email) if settings.demo_login_enabled else None
-    if demo:
-        _DEMO_ACCOUNTS[email]["password"] = payload.new_password
-        # Also update in auth_service map
-        auth_service.update_demo_password(email, payload.new_password)
-        return {"success": True}
-
-    # Real Supabase user — update via admin API
-    try:
-        page = db.auth.admin.list_users()
-        user_map = {u.email: u.id for u in page}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Could not reach auth service")
-
-    if email not in user_map:
-        raise HTTPException(status_code=404, detail="No account found with that email")
-
-    try:
-        db.auth.admin.update_user_by_id(user_map[email], {"password": payload.new_password})
-    except Exception:
-        logger.exception("reset-password: admin update_user_by_id failed for %s", email)
-        raise HTTPException(status_code=500, detail="Failed to update password")
-
-    return {"success": True}
+@router.post("/password-reset/confirm")
+def password_reset_confirm(payload: PasswordResetConfirm, db: Client = Depends(get_db)):
+    """Forgot-password step 2: consume the emailed token and set the new
+    password. 400 on a bad/expired/used token, 422 on a weak password."""
+    return password_reset_service.confirm_reset(db, payload.token, payload.new_password)

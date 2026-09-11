@@ -78,3 +78,16 @@ class UpdateMeRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class PasswordResetRequest(BaseModel):
+    """Forgot-password step 1: request a reset email. `app` tells the link
+    which sign-in to return to afterwards (web /signin vs. mobile studio)."""
+    email: EmailStr
+    app: str | None = None  # "web" (default) | "study"
+
+
+class PasswordResetConfirm(BaseModel):
+    """Forgot-password step 2: consume the emailed token and set a new password."""
+    token: str
+    new_password: str

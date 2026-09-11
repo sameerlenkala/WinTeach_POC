@@ -46,7 +46,7 @@ const faqs: FAQ[] = [
   {
     id: 6,
     question: 'How do I reset my password?',
-    answer: "Go to the Sign In page and click 'Forgot password?'. Enter your registered email and we'll send a reset link. The link expires in 24 hours.",
+    answer: "Go to the Sign In page and click 'Forgot password?'. Enter your registered email and we'll send a reset link. The link is single-use and expires in 60 minutes.",
   },
   {
     id: 7,

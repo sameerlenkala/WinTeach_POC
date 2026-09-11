@@ -4,18 +4,18 @@
 // Course login card hands off to the mobile studio (/study/login); staff
 // roles route to their consoles. Account creation lives at /signup.
 import { useState, type FormEvent, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, ROLE_REDIRECT, type UserRole } from '@/contexts/AuthContext';
 import {
-  ArrowLeft, ArrowRight, Building2, CheckCircle2, Eye, EyeOff,
-  GraduationCap, KeyRound, Loader2, Lock, Mail, Rocket, ShieldCheck, Sparkles,
+  ArrowLeft, ArrowRight, Building2, Eye, EyeOff,
+  GraduationCap, Loader2, Lock, Mail, MailCheck, Rocket, Send, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { GoogleIcon } from '@/components/common/SocialIcons';
 import { authApi } from '@/api/auth';
 import logo from '@/assets/winnify-logo.png';
 import './auth/auth.css';
 
-type ForgotStep = 'email' | 'code' | 'reset' | 'done';
+type ForgotStep = 'email' | 'sent';
 
 export function WfHero() {
   return (
@@ -70,48 +70,37 @@ export default function SignIn() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Forgot password
-  const [forgotStep, setForgotStep] = useState<ForgotStep | null>(null);
+  // Forgot password — email → "check your inbox". The emailed link lands on
+  // /reset-password, which sets the new password. `?forgot=1` (from legacy
+  // login surfaces) opens the modal straight away.
+  const [params, setParams] = useSearchParams();
+  const [forgotStep, setForgotStep] = useState<ForgotStep | null>(
+    params.get('forgot') ? 'email' : null);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotCode, setForgotCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPw, setShowNewPw] = useState(false);
   const [forgotError, setForgotError] = useState('');
-  const [resetting, setResetting] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const startForgot = () => { setForgotStep('email'); setForgotEmail(email); setForgotError(''); };
-  const cancelForgot = () => { setForgotStep(null); setForgotCode(''); setNewPassword(''); setConfirmPassword(''); setForgotError(''); };
-
-  const handleForgotEmail = (e: FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail) { setForgotError('Enter your email.'); return; }
-    setForgotError('');
-    setForgotStep('code');
+  const cancelForgot = () => {
+    setForgotStep(null); setForgotError(''); setSending(false);
+    if (params.get('forgot')) { params.delete('forgot'); setParams(params, { replace: true }); }
   };
 
-  const handleForgotCode = (e: FormEvent) => {
+  const handleForgotEmail = useCallback(async (e: FormEvent) => {
     e.preventDefault();
-    if (forgotCode !== '0000') { setForgotError('Invalid code. Please try again.'); return; }
+    const target = forgotEmail.trim();
+    if (!target) { setForgotError('Enter your email.'); return; }
     setForgotError('');
-    setForgotStep('reset');
-  };
-
-  const handleForgotReset = useCallback(async (e: FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 6) { setForgotError('Password must be at least 6 characters.'); return; }
-    if (newPassword !== confirmPassword) { setForgotError('Passwords do not match.'); return; }
-    setForgotError('');
-    setResetting(true);
+    setSending(true);
     try {
-      await authApi.resetPassword(forgotEmail, newPassword);
-      setForgotStep('done');
+      await authApi.requestPasswordReset(target, 'web');
+      setForgotStep('sent');
     } catch {
-      setForgotError('Failed to update password. Please try again.');
+      setForgotError("Couldn't send the reset email right now. Please try again in a moment.");
     } finally {
-      setResetting(false);
+      setSending(false);
     }
-  }, [newPassword, confirmPassword, forgotEmail]);
+  }, [forgotEmail]);
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true); setError('');
@@ -154,81 +143,43 @@ export default function SignIn() {
             {forgotStep === 'email' && (
               <>
                 <h2 className="wf-h1" style={{ fontSize: 22 }}>Reset password</h2>
-                <p className="wf-sub">Enter your registered email.</p>
+                <p className="wf-sub">Enter your registered email and we'll send you a link to set a new password.</p>
                 {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
                 <form onSubmit={handleForgotEmail} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div className="wf-field">
                     <Mail size={16} />
-                    <input type="email" placeholder="you@institution.edu" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required autoFocus />
+                    <input type="email" placeholder="you@institution.edu" value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)} autoComplete="email" required autoFocus />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button type="button" onClick={cancelForgot} className="wf-ghost" style={{ flex: 1 }}>
                       <ArrowLeft size={15} /> Cancel
                     </button>
-                    <button type="submit" className="wf-cta" style={{ flex: 1 }}>Send code</button>
-                  </div>
-                </form>
-              </>
-            )}
-
-            {forgotStep === 'code' && (
-              <>
-                <h2 className="wf-h1" style={{ fontSize: 22 }}>Enter your code</h2>
-                <p className="wf-sub">Use the unique reset code provided by your institution.</p>
-                {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
-                <form onSubmit={handleForgotCode} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <input
-                    className="wf-code-input" type="text" inputMode="numeric" placeholder="0000"
-                    value={forgotCode} onChange={e => setForgotCode(e.target.value)} maxLength={4} required autoFocus
-                  />
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button type="button" onClick={() => setForgotStep('email')} className="wf-ghost" style={{ flex: 1 }}>
-                      <ArrowLeft size={15} /> Back
-                    </button>
-                    <button type="submit" className="wf-cta" style={{ flex: 1 }}><KeyRound size={16} /> Verify</button>
-                  </div>
-                </form>
-              </>
-            )}
-
-            {forgotStep === 'reset' && (
-              <>
-                <h2 className="wf-h1" style={{ fontSize: 22 }}>New password</h2>
-                <p className="wf-sub">At least 6 characters.</p>
-                {forgotError && <div className="wf-error" role="alert">{forgotError}</div>}
-                <form onSubmit={handleForgotReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div className="wf-field">
-                    <Lock size={16} />
-                    <input type={showNewPw ? 'text' : 'password'} placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required autoFocus />
-                    <button type="button" onClick={() => setShowNewPw(p => !p)} aria-label={showNewPw ? 'Hide password' : 'Show password'}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wf-faint)', display: 'flex', padding: 0 }}>
-                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    <button type="submit" disabled={sending} className="wf-cta" style={{ flex: 1 }}>
+                      {sending ? <Loader2 size={16} className="animate-spin" /> : <><Send size={15} /> Send link</>}
                     </button>
                   </div>
-                  <div className="wf-field">
-                    <Lock size={16} />
-                    <input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-                  </div>
-                  <button type="submit" disabled={resetting} className="wf-cta">
-                    {resetting && <Loader2 size={16} className="animate-spin" />}
-                    Set new password
-                  </button>
                 </form>
               </>
             )}
 
-            {forgotStep === 'done' && (
+            {forgotStep === 'sent' && (
               <div style={{ textAlign: 'center', padding: '6px 0' }}>
                 <div style={{
                   width: 62, height: 62, borderRadius: '50%', margin: '0 auto 14px',
-                  background: 'rgba(61,220,132,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(107,63,231,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <CheckCircle2 size={30} color="#0d8a4b" />
+                  <MailCheck size={30} color="var(--wf-violet)" />
                 </div>
-                <h2 className="wf-h1" style={{ fontSize: 22 }}>Password updated!</h2>
-                <p className="wf-sub">You can now sign in with your new password.</p>
-                <button onClick={() => { cancelForgot(); setPassword(newPassword); }} className="wf-cta">
-                  Back to sign in
+                <h2 className="wf-h1" style={{ fontSize: 22 }}>Check your email</h2>
+                <p className="wf-sub">
+                  If <b style={{ color: 'var(--wf-ink)' }}>{forgotEmail.trim()}</b> has a Winnify account, a reset
+                  link is on its way. It expires in 60 minutes — check spam if it doesn't show up.
+                </p>
+                <button onClick={cancelForgot} className="wf-cta">Back to sign in</button>
+                <button type="button" onClick={() => { setForgotStep('email'); setForgotError(''); }} className="wf-link"
+                  style={{ marginTop: 12, fontSize: 13 }}>
+                  Use a different email
                 </button>
               </div>
             )}
